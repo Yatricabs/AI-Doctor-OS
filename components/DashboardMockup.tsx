@@ -18,13 +18,13 @@ export default function DashboardMockup() {
     <div className="mt-16 relative mx-auto max-w-6xl">
       <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-3xl blur-xl opacity-20" />
 
-      <div className="relative rounded-2xl bg-[#0F172A]/90 border border-white/10 p-4 md:p-6 shadow-2xl backdrop-blur-2xl">
-        <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
-          <div className="flex items-center gap-2">
+      <div className="relative min-w-0 rounded-2xl bg-[#0F172A]/90 border border-white/10 p-4 md:p-6 shadow-2xl backdrop-blur-2xl">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div className="flex min-w-0 items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-red-500/80" />
             <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
             <div className="w-3 h-3 rounded-full bg-green-500/80" />
-            <span className="ml-4 text-xs font-mono text-slate-500">app.aidoctoros.com/workspace</span>
+            <span className="ml-2 truncate text-xs font-mono text-slate-500 sm:ml-4">app.aidoctoros.com/workspace</span>
           </div>
           <span className="text-xs px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 font-mono">
             Secure live node
@@ -49,8 +49,8 @@ export default function DashboardMockup() {
             ))}
           </div>
 
-          <div className="md:col-span-3 space-y-4">
-            <div className="flex justify-between items-center bg-slate-900/30 p-4 rounded-xl border border-white/5">
+          <div className="min-w-0 space-y-4 md:col-span-3">
+            <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-white/5 bg-slate-900/30 p-4 sm:flex-row sm:items-center">
               <div>
                 <h3 className="text-lg font-bold text-white">{activeView === "Dashboard" ? "Good morning, Dr. Sharma" : activeView}</h3>
                 <p className="text-xs text-slate-400">{activeView === "Dashboard" ? "Thursday · 10 Sep 2026 · 24 consultations scheduled" : `Your ${activeView.toLowerCase()} are ready to review.`}</p>

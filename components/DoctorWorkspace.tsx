@@ -1,216 +1,244 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { ChangeEvent, useRef, useState } from "react";
 import {
-  Activity,
-  Bell,
-  BookOpen,
+  ArrowUpRight,
   BrainCircuit,
   CalendarDays,
   Check,
   ChevronRight,
-  ClipboardList,
+  Clock3,
   FileText,
   HeartPulse,
   LayoutDashboard,
-  Menu,
-  MessageSquareText,
-  MoreHorizontal,
-  Pill,
+  Languages,
+  Mic,
+  NotebookTabs,
   Plus,
   Search,
   Send,
-  Settings,
   ShieldCheck,
+  Sparkles,
   Stethoscope,
+  UploadCloud,
   Users,
   X,
 } from "lucide-react";
 
-type Patient = {
-  id: string;
-  initials: string;
-  name: string;
-  age: number;
-  reason: string;
-  time: string;
-  status: "Ready" | "Waiting" | "In review";
-  tone: string;
-};
-
-const patients: Patient[] = [
-  { id: "RS-042", initials: "RS", name: "Rahul Sharma", age: 42, reason: "Hypertension follow-up", time: "09:30 AM", status: "Ready", tone: "bg-emerald-100 text-emerald-700" },
-  { id: "AK-118", initials: "AK", name: "Ananya Kapoor", age: 35, reason: "Annual wellness review", time: "10:00 AM", status: "Waiting", tone: "bg-amber-100 text-amber-700" },
-  { id: "VN-306", initials: "VN", name: "Vikram Nair", age: 58, reason: "Lab results review", time: "10:30 AM", status: "In review", tone: "bg-sky-100 text-sky-700" },
-  { id: "SP-077", initials: "SP", name: "Sneha Patel", age: 29, reason: "Medication check-in", time: "11:00 AM", status: "Waiting", tone: "bg-amber-100 text-amber-700" },
+const stats = [
+  { label: "Patients today", value: "12", detail: "↗ 18% vs last Tuesday", icon: Users, tone: "bg-[#eef7f2] text-[#4f9d78]" },
+  { label: "Notes completed", value: "08", detail: "↗ 24% this week", icon: FileText, tone: "bg-[#f6f0e9] text-[#bd865b]" },
+  { label: "Time saved", value: "2h 14m", detail: "AI-assisted documentation", icon: Clock3, tone: "bg-[#edf2f8] text-[#6682a5]" },
+  { label: "Next appointment", value: "10:30 AM", detail: "Rohan Mehta · Follow-up", icon: CalendarDays, tone: "bg-[#f4eef7] text-[#9773a4]" },
 ];
 
-const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard },
-  { label: "Appointments", icon: CalendarDays },
-  { label: "Patients", icon: Users },
-  { label: "Reports", icon: FileText },
-  { label: "Prescriptions", icon: Pill },
-  { label: "AI Inbox", icon: MessageSquareText, count: 4 },
-  { label: "Follow-ups", icon: ClipboardList, count: 7 },
-];
-
-const patientTabs = ["Overview", "Timeline", "Reports", "Prescriptions", "Follow-ups"];
+const waveform = [18, 34, 27, 45, 22, 38, 31, 52, 24, 40, 29, 47, 20, 35, 26, 44, 30, 55, 23, 39, 28, 48, 21, 34, 27, 43, 19, 37];
 
 export default function DoctorWorkspace() {
-  const [activeNav, setActiveNav] = useState("Dashboard");
-  const [selectedPatientId, setSelectedPatientId] = useState("RS-042");
-  const [activeTab, setActiveTab] = useState("Overview");
-  const [briefReviewed, setBriefReviewed] = useState(false);
-  const [showNewAppointment, setShowNewAppointment] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [notificationOpen, setNotificationOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [activeNav, setActiveNav] = useState("Overview");
+  const [language, setLanguage] = useState("हिन्दी");
   const [search, setSearch] = useState("");
+  const [sessionStarted, setSessionStarted] = useState(false);
+  const [scribeOpen, setScribeOpen] = useState(false);
+  const [symptoms, setSymptoms] = useState("");
+  const [symptomResult, setSymptomResult] = useState("");
+  const [question, setQuestion] = useState("");
+  const [copilotResult, setCopilotResult] = useState("");
+  const [uploadedFile, setUploadedFile] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  const selectedPatient = patients.find((patient) => patient.id === selectedPatientId) ?? patients[0];
-  const filteredPatients = patients.filter((patient) => patient.name.toLowerCase().includes(search.toLowerCase()));
+  function checkSymptoms() {
+    if (!symptoms.trim()) return;
+    setSymptomResult("Demo guidance ready: review duration, severity, and red-flag symptoms with the patient.");
+  }
 
-  function selectPatient(patient: Patient) {
-    setSelectedPatientId(patient.id);
-    setActiveTab("Overview");
-    setBriefReviewed(false);
+  function WorkspaceScreen({ activeNav, onNavigate }: { activeNav: string; onNavigate: (nav: string) => void }) {
+    const [query, setQuery] = useState("");
+    const [added, setAdded] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [revisitReport, setRevisitReport] = useState("");
+    const [reportUpdated, setReportUpdated] = useState(false);
+    const [reportAnalyzed, setReportAnalyzed] = useState(false);
+    const [reportSummary, setReportSummary] = useState(false);
+    const revisitFileInput = useRef<HTMLInputElement>(null);
+
+    const screenData: Record<string, { eyebrow: string; title: string; description: string }> = {
+      Patients: { eyebrow: "PATIENT DIRECTORY", title: "Patients", description: "Review patient records, appointments, and care status." },
+      "AI Scribe": { eyebrow: "CLINICAL DOCUMENTATION", title: "AI Scribe", description: "Capture a consultation and turn it into a structured SOAP note." },
+      "Clinical insights": { eyebrow: "CLINICAL INTELLIGENCE", title: "Clinical insights", description: "Explore evidence-linked summaries and decision support." },
+      "Symptom checker": { eyebrow: "PATIENT-FACING AI", title: "Symptom checker", description: "Organise symptoms before a visit for a focused consultation." },
+      "Medical records": { eyebrow: "DOCUMENT INTELLIGENCE", title: "Medical records", description: "Find reports, prescriptions, and source-linked clinical documents." },
+    };
+    const data = screenData[activeNav] ?? screenData.Patients;
+
+    return (
+      <div className="mx-auto max-w-[1280px] px-5 pb-12 pt-8 md:px-10">
+        <div className="flex flex-col justify-between gap-6 border-b border-[#e2ebe6] pb-8 lg:flex-row lg:items-end">
+          <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#5a9b88]">{data.eyebrow}</p><h1 className="mt-3 text-3xl font-bold tracking-[-0.05em] text-[#173f3c]">{data.title}</h1><p className="mt-2 text-sm text-[#78908a]">{data.description}</p></div>
+          <button onClick={() => setAdded(!added)} className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-3 text-sm font-bold text-white hover:bg-[#057e6d]"><Plus className="h-4 w-4" /> {added ? "Added to workspace" : activeNav === "Patients" ? "Add patient" : "Create new"}</button>
+        </div>
+
+        {activeNav === "Patients" && <section className="mt-8 space-y-4">
+          <div className="flex items-center gap-3 rounded-xl border border-[#e1e9e5] bg-white px-4 py-3"><Search className="h-4 w-4 text-[#91a49e]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search patient name or ID" className="flex-1 text-sm outline-none placeholder:text-[#a0b0ab]" /></div>
+          {[
+            ["Rohan Mehta", "RM-102", "Follow-up today · 10:30 AM", "Stable"],
+            ["Ananya Kapoor", "AK-118", "Annual wellness review · 11:00 AM", "Waiting"],
+            ["Vikram Nair", "VN-306", "Lab results review · 11:30 AM", "In review"],
+          ].filter(([name, id]) => `${name} ${id}`.toLowerCase().includes(query.toLowerCase())).map(([name, id, detail, status]) => <button key={id} onClick={() => onNavigate("Medical records")} className="flex w-full items-center gap-4 rounded-xl border border-[#e1e9e5] bg-white p-4 text-left hover:border-[#9ac8b8]"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e4f3ed] text-sm font-bold text-[#4e927d]">{name.split(" ").map((part) => part[0]).join("")}</span><span className="flex-1"><strong className="block text-sm text-[#244642]">{name}</strong><span className="mt-1 block text-xs text-[#82958f]">{id} · {detail}</span></span><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[11px] font-bold text-[#5a967e]">{status}</span><ChevronRight className="h-4 w-4 text-[#9ab0a9]" /></button>)}
+        </section>}
+
+        {activeNav === "AI Scribe" && <section className="mt-8 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]"><div className="rounded-2xl bg-[#124b47] p-7 text-white"><Mic className="h-7 w-7 text-[#9be2cb]" /><h2 className="mt-6 text-2xl font-bold">Ready to capture your consultation</h2><p className="mt-2 text-sm text-[#b8d2ce]">Start recording when the patient is ready. You can review every generated section before saving.</p><div className="mt-10 flex items-center gap-3"><button onClick={() => setSaved(!saved)} className="rounded-lg bg-white px-5 py-3 text-sm font-bold text-[#124b47]">{saved ? "Recording saved" : "Start recording"}</button><span className="text-xs text-[#a7d9cd]">Demo mode - no audio is stored</span></div></div><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><h3 className="font-bold text-[#244642]">SOAP note preview</h3><div className="mt-5 space-y-4 text-sm"><p><strong className="text-[#5a967e]">Subjective</strong><br /><span className="text-[#82958f]">Patient reports improved symptoms since last visit.</span></p><p><strong className="text-[#5a967e]">Objective</strong><br /><span className="text-[#82958f]">Vitals and examination findings will appear here.</span></p><p><strong className="text-[#5a967e]">Assessment and plan</strong><br /><span className="text-[#82958f]">Review and approve AI suggestions before signing.</span></p></div></div></section>}
+
+        {(activeNav === "Clinical insights" || activeNav === "Symptom checker" || activeNav === "Medical records") && <section className="mt-8 grid gap-4 md:grid-cols-2"><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><h2 className="text-lg font-bold text-[#244642]">{activeNav === "Medical records" ? "Recent documents" : activeNav === "Symptom checker" ? "Patient symptom intake" : "Today's clinical brief"}</h2><p className="mt-2 text-sm leading-6 text-[#82958f]">{activeNav === "Medical records" ? "CBC, lipid profile, prescriptions, and referral notes are ready to review." : activeNav === "Symptom checker" ? "Enter symptoms to create a structured pre-visit summary." : "Three follow-ups need review. One report has a new source-linked insight."}</p>{activeNav === "Symptom checker" ? <textarea placeholder="Describe symptoms, duration, and severity..." className="mt-5 h-28 w-full rounded-lg border border-[#e1e9e5] p-3 text-sm outline-none focus:border-[#8fc5b3]" /> : <button onClick={() => setSaved(!saved)} className="mt-6 rounded-lg bg-[#eaf6f0] px-4 py-2 text-xs font-bold text-[#4f927a]">{saved ? "Marked reviewed" : "Mark as reviewed"}</button>}</div><div className="rounded-2xl bg-[#e6f4ee] p-6"><ShieldCheck className="h-6 w-6 text-[#4f927a]" /><h3 className="mt-5 font-bold text-[#244642]">Human review remains in control</h3><p className="mt-2 text-sm leading-6 text-[#6f8d83]">AI suggestions are illustrative. Verify source records before taking clinical action.</p></div></section>}
+
+        {activeNav === "Medical records" && <section className="mt-4 rounded-2xl border border-[#e1e9e5] bg-white p-6">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#b0805e]">REVISIT WORKFLOW</p><h2 className="mt-2 text-xl font-bold text-[#244642]">Update and analyse Rohan&apos;s latest test report</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[#82958f]">Upload the report from today&apos;s revisit. The system keeps it linked to the patient timeline, compares it with the previous result, and prepares a reviewable doctor summary.</p></div>
+            <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${reportUpdated ? "bg-[#e3f5ec] text-[#4f927a]" : "bg-[#f5f0e9] text-[#a27d5b]"}`}>{reportUpdated ? "Record updated" : "Awaiting report"}</span>
+          </div>
+          <input ref={revisitFileInput} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => setRevisitReport(event.target.files?.[0]?.name ?? "")} className="hidden" />
+          <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto]">
+            <button onClick={() => revisitFileInput.current?.click()} className="flex min-h-[112px] items-center gap-4 rounded-xl border border-dashed border-[#cbded5] bg-[#f8fcfa] p-5 text-left hover:border-[#75b79d]"><span className="rounded-xl bg-[#e7f4ed] p-3 text-[#5a967e]"><UploadCloud className="h-5 w-5" /></span><span><strong className="block text-sm text-[#315a52]">{revisitReport || "Upload a new test report"}</strong><span className="mt-1 block text-xs text-[#82958f]">PDF or image · CBC, lipid profile, HbA1c, or other revisit report</span></span></button>
+            <button disabled={!revisitReport} onClick={() => setReportUpdated(true)} className="rounded-xl bg-[#eaf6f0] px-5 py-3 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#dcefe5] disabled:cursor-not-allowed disabled:opacity-50">{reportUpdated ? "Updated in timeline" : "Update patient record"}</button>
+          </div>
+          {reportUpdated && <div className="mt-5 rounded-xl border border-[#d9e9e1] bg-[#fbfdfc] p-5"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><p className="text-xs font-bold text-[#315a52]">{revisitReport}</p><p className="mt-1 text-[11px] text-[#82958f]">Added to Rohan Mehta&apos;s revisit · Previous report: 28 Aug 2026</p></div><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[10px] font-bold text-[#5a967e]">New result</span></div><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => setReportAnalyzed(true)} className="rounded-lg bg-[#124b47] px-4 py-2 text-xs font-bold text-white hover:bg-[#0d3e3b]">{reportAnalyzed ? "Analysis complete" : "Analyse changes"}</button><button disabled={!reportAnalyzed} onClick={() => setReportSummary(true)} className="rounded-lg border border-[#cbded5] px-4 py-2 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#edf7f2] disabled:cursor-not-allowed disabled:opacity-50">{reportSummary ? "Summary ready" : "Summarise for doctor"}</button></div>{reportAnalyzed && <div className="mt-4 grid gap-3 rounded-lg bg-[#f1f7f3] p-4 text-xs text-[#5f7c70] md:grid-cols-3"><span><strong className="block text-[#315a52]">Trend</strong>HbA1c improved by 0.6%</span><span><strong className="block text-[#315a52]">Flag</strong>LDL remains above target</span><span><strong className="block text-[#315a52]">Confidence</strong>High · 2 linked reports</span></div>}{reportSummary && <div className="mt-4 rounded-lg border-l-4 border-[#65a889] bg-white p-4 text-sm leading-6 text-[#527167]"><strong className="text-[#315a52]">Doctor summary:</strong> Compared with the previous report, glycaemic control is improving. LDL remains elevated and should be reviewed alongside adherence, diet, and the current statin plan at today&apos;s revisit.</div>}</div>}
+        </section>}
+      </div>
+    );
+  }
+
+  function askCopilot() {
+    if (!question.trim()) return;
+    setCopilotResult("Start with the patient timeline, current medications, and any red flags before deciding next steps.");
+  }
+
+  function handleFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) setUploadedFile(file.name);
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7f7] text-slate-900">
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur md:px-8">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setMobileNavOpen(!mobileNavOpen)} aria-label="Open navigation" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"><Menu className="h-5 w-5" /></button>
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0f766e] text-white shadow-sm"><Stethoscope className="h-5 w-5" /></div>
-          <div><p className="text-sm font-bold tracking-tight text-slate-900">AI Doctor OS</p><p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">Clinical workspace</p></div>
+    <main className="min-h-screen bg-[#f7faf8] text-[#183b39]">
+      <aside className="fixed inset-y-0 left-0 z-50 flex w-[78px] flex-col border-r border-[#dce9e3] bg-[#edf8f3] px-3 py-5 md:w-[292px] md:px-6 md:py-9">
+        <Link href="/" className="flex items-center gap-3 px-2">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#078d79] text-white shadow-[0_8px_16px_rgba(7,141,121,0.18)]"><Stethoscope className="h-6 w-6" /></span>
+          <span className="hidden text-[23px] font-bold tracking-[-0.06em] text-[#193d3a] md:inline">AI Doctor <span className="text-[#07947f]">OS</span></span>
+        </Link>
+        <p className="mt-10 hidden px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#86a09a] md:mt-16 md:block">Workspace</p>
+        <nav className="mt-5 space-y-2">
+          {[
+            { label: "Overview", icon: LayoutDashboard },
+            { label: "Patients", icon: Users },
+            { label: "AI Scribe", icon: Mic },
+            { label: "Clinical insights", icon: BrainCircuit, badge: "NEW" },
+            { label: "Symptom checker", icon: HeartPulse },
+            { label: "Medical records", icon: NotebookTabs },
+          ].map(({ label, icon: Icon, badge }) => (
+            <button key={label} onClick={() => setActiveNav(label)} aria-label={label} className={`flex w-full items-center justify-center gap-4 rounded-xl px-3 py-3.5 text-left text-[16px] font-semibold transition md:justify-start md:px-4 ${activeNav === label ? "bg-[#153f3c] text-white shadow-[0_10px_20px_rgba(21,63,60,0.14)]" : "text-[#6c8782] hover:bg-white/60 hover:text-[#315d57]"}`}>
+              <Icon className="h-5 w-5 shrink-0" />
+              <span className="hidden flex-1 md:inline">{label}</span>
+              {badge && <span className="hidden rounded bg-[#a9e6d2] px-1.5 py-0.5 text-[9px] font-bold text-[#27806b] md:inline">{badge}</span>}
+            </button>
+          ))}
+        </nav>
+        <div className="mt-auto">
+          <button aria-label="Demo workspace" className="w-full rounded-xl border border-[#c5e9dd] bg-[#d8f3e8] p-3 text-left transition hover:bg-[#cceee0] md:p-4">
+            <span className="flex items-center justify-center gap-3 text-sm font-bold text-[#078b78] md:justify-start"><Sparkles className="h-5 w-5" /><span className="hidden md:inline">Demo workspace</span></span>
+            <span className="mt-1 hidden pl-8 text-xs text-[#6d958b] md:block">Explore AI Doctor OS</span>
+          </button>
+          <button aria-label="Dr. Ananya Arya profile" className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl p-1 text-left hover:bg-white/60 md:justify-start">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#d5eee4] text-xs font-bold text-[#277a6b]">DA</span>
+            <span className="hidden flex-1 md:block"><strong className="block text-sm text-[#214440]">Dr. Ananya Arya</strong><span className="mt-1 block text-xs text-[#78918c]">General Medicine</span></span>
+            <ChevronRight className="h-5 w-5 text-[#87aaa0]" />
+          </button>
         </div>
-        <div className="hidden items-center gap-4 md:flex"><Link href="/demo" className="text-xs font-bold text-[#0f766e] hover:underline">Open demo workspace</Link><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500" /><span className="text-xs font-medium text-slate-500">All systems operational</span></span></div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { setNotificationOpen(!notificationOpen); setMenuOpen(false); }} aria-label="Notifications" className="relative rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"><Bell className="h-[18px] w-[18px]" /><span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-rose-500" /></button>
-          <button onClick={() => { setMenuOpen(!menuOpen); setNotificationOpen(false); }} className="flex items-center gap-2 rounded-lg p-1.5 pr-2 transition hover:bg-slate-100"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#d7efeb] text-xs font-bold text-[#0f766e]">DS</span><span className="hidden text-xs font-semibold text-slate-700 sm:block">Dr. Sharma</span></button>
-          {notificationOpen && <div className="absolute right-5 top-14 w-72 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-xl"><p className="px-2 pb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Notifications</p><button onClick={() => setNotificationOpen(false)} className="w-full rounded-lg bg-rose-50 p-3 text-left hover:bg-rose-100"><span className="block text-xs font-bold text-rose-700">Priority alert</span><span className="mt-1 block text-xs text-slate-600">1 report needs review for today&apos;s queue.</span></button><button onClick={() => setNotificationOpen(false)} className="mt-2 w-full rounded-lg bg-slate-50 p-3 text-left hover:bg-slate-100"><span className="block text-xs font-bold text-slate-700">Follow-up reminder</span><span className="mt-1 block text-xs text-slate-500">2 follow-ups are due this week.</span></button></div>}{menuOpen && <div className="absolute right-5 top-14 w-44 rounded-xl border border-slate-200 bg-white p-2 text-sm shadow-xl"><button onClick={() => setMenuOpen(false)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-600 hover:bg-slate-50"><Settings className="h-4 w-4" /> Account settings</button><button onClick={() => setMenuOpen(false)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-600 hover:bg-slate-50"><ShieldCheck className="h-4 w-4" /> Security</button></div>}
+      </aside>
+
+      <div className="ml-[78px] md:ml-[292px]">
+      <header className="border-b border-[#e4ebe7] bg-[#fbfdfc]">
+        <div className="mx-auto flex h-[64px] max-w-[1440px] items-center gap-3 px-3 sm:gap-5 sm:px-5 md:px-10">
+          <Link href="/" className="hidden shrink-0 items-center text-[17px] font-bold tracking-[-0.04em] sm:flex">
+            AI Doctor <span className="text-[#07947f]">&nbsp;OS</span>
+          </Link>
+          <div className="relative flex max-w-[430px] flex-1">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8da09b]" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search patients or records" placeholder="Search patients or records" className="h-10 w-full rounded-xl border-0 bg-transparent pl-10 pr-4 text-sm outline-none placeholder:text-[#94a39f]" />
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            <button onClick={() => setLanguage(language === "हिन्दी" ? "English" : "हिन्दी")} aria-label="Change language" className="flex items-center gap-2 rounded-lg border border-[#e4ebe7] px-2.5 py-2 text-xs font-semibold text-[#54716d] hover:bg-[#f0f6f3] sm:px-3"><Languages className="h-4 w-4" /><span className="hidden sm:inline">{language}</span></button>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#164642] text-xs font-bold text-white">DA</span>
+          </div>
         </div>
       </header>
-      {mobileNavOpen && <div className="fixed inset-x-0 top-16 z-30 border-b border-slate-200 bg-white p-3 shadow-lg lg:hidden"><div className="grid grid-cols-2 gap-1">{[...navItems, { label: "Analytics", icon: Activity }, { label: "Settings", icon: Settings }].map(({ label, icon: Icon }) => <button key={label} onClick={() => { setActiveNav(label); setMobileNavOpen(false); }} className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium ${activeNav === label ? "bg-[#e3f3f0] text-[#0f766e]" : "text-slate-600 hover:bg-slate-50"}`}><Icon className="h-4 w-4" />{label}</button>)}</div></div>}
 
-      <div className="mx-auto flex max-w-[1540px]">
-        <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white px-3 py-5 lg:block">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
-          <nav className="space-y-1">
-            {navItems.map(({ label, icon: Icon, count }) => <button key={label} onClick={() => setActiveNav(label)} className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition ${activeNav === label ? "bg-[#e3f3f0] text-[#0f766e]" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"}`}><span className="flex items-center gap-3"><Icon className="h-[17px] w-[17px]" />{label}</span>{count && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{count}</span>}</button>)}
-          </nav>
-          <div className="mt-8 border-t border-slate-100 pt-5"><p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Practice</p><button onClick={() => setActiveNav("Analytics")} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${activeNav === "Analytics" ? "bg-[#e3f3f0] text-[#0f766e]" : "text-slate-500 hover:bg-slate-50"}`}><Activity className="h-[17px] w-[17px]" />Analytics</button><button onClick={() => setActiveNav("Settings")} className={`mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${activeNav === "Settings" ? "bg-[#e3f3f0] text-[#0f766e]" : "text-slate-500 hover:bg-slate-50"}`}><Settings className="h-[17px] w-[17px]" />Settings</button></div>
-          <div className="mt-12 rounded-xl bg-[#f0f9f7] p-3"><div className="flex items-center gap-2 text-xs font-bold text-[#0f766e]"><ShieldCheck className="h-4 w-4" /> Doctor controlled</div><p className="mt-2 text-[11px] leading-relaxed text-slate-500">AI suggestions are always reviewed before they become clinical actions.</p></div>
-        </aside>
-
-        <section className="min-w-0 flex-1 px-4 py-5 md:px-8 md:py-7">
-          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#0f766e]">Thursday, 10 September 2026</p><h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Good morning, Dr. Sharma</h1><p className="mt-1 text-sm text-slate-500">Your clinic has 24 consultations scheduled today.</p></div><button onClick={() => setShowNewAppointment(true)} className="flex items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#0b625b]"><Plus className="h-4 w-4" /> New appointment</button></div>
-
-          {activeNav === "Dashboard" && <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Today&apos;s patients" value="24" detail="+3 from last Thursday" tone="teal" icon={Users} /><MetricCard label="Follow-ups due" value="7" detail="2 need attention" tone="amber" icon={ClipboardList} /><MetricCard label="Reports to review" value="3" detail="1 high priority" tone="sky" icon={FileText} /><MetricCard label="Avg. consult time" value="18m" detail="4m faster this week" tone="violet" icon={HeartPulse} /></div>
-
-          <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.65fr)]">
-            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="font-bold text-slate-900">Today&apos;s queue</h2><p className="mt-0.5 text-xs text-slate-500">{patients.length} appointments · 2 completed</p></div><button onClick={() => setActiveNav("Appointments")} className="text-xs font-bold text-[#0f766e] hover:underline">View calendar</button></div><div className="relative mt-4"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search today&apos;s patients" className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs outline-none focus:border-[#0f766e]" /></div><div className="mt-3 space-y-1">{filteredPatients.map((patient) => <button key={patient.id} onClick={() => selectPatient(patient)} className={`flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition ${patient.id === selectedPatientId ? "bg-[#eaf7f4]" : "hover:bg-slate-50"}`}><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${patient.tone}`}>{patient.initials}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{patient.name}</span><span className="block truncate text-[11px] text-slate-500">{patient.reason}</span></span><span className="text-right"><span className="block text-[11px] font-semibold text-slate-700">{patient.time}</span><span className={`text-[10px] font-medium ${patient.status === "Ready" ? "text-emerald-600" : patient.status === "In review" ? "text-sky-600" : "text-amber-600"}`}>{patient.status}</span></span></button>)}</div></section>
-
-            <section className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-start sm:justify-between"><div className="flex items-center gap-3"><span className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold ${selectedPatient.tone}`}>{selectedPatient.initials}</span><div><div className="flex items-center gap-2"><h2 className="font-bold text-slate-900">{selectedPatient.name}</h2><span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{selectedPatient.id}</span></div><p className="mt-0.5 text-xs text-slate-500">{selectedPatient.age} years · {selectedPatient.reason} · Last visit 28 Aug 2026</p></div></div><button onClick={() => setBriefReviewed(!briefReviewed)} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition ${briefReviewed ? "bg-emerald-50 text-emerald-700" : "bg-[#0f766e] text-white hover:bg-[#0b625b]"}`}>{briefReviewed ? <Check className="h-3.5 w-3.5" /> : <Stethoscope className="h-3.5 w-3.5" />}{briefReviewed ? "Brief reviewed" : "Review patient brief"}</button></div><div className="flex gap-1 overflow-x-auto border-b border-slate-100 px-4">{patientTabs.map((tab) => <button key={tab} onClick={() => setActiveTab(tab)} className={`whitespace-nowrap border-b-2 px-3 py-3 text-xs font-bold transition ${activeTab === tab ? "border-[#0f766e] text-[#0f766e]" : "border-transparent text-slate-400 hover:text-slate-700"}`}>{tab}</button>)}</div><PatientPanel tab={activeTab} reviewed={briefReviewed} /><PatientCopilot key={selectedPatient.id} patient={selectedPatient} activeTab={activeTab} /></section>
+      {activeNav === "Overview" ? <div className="mx-auto max-w-[1280px] overflow-hidden px-4 pb-12 pt-6 sm:px-5 md:px-10 md:pt-8">
+        <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#78908a]">Tuesday, 24 June 2025 <span className="mx-2 text-[#0b9c87]">•</span> Live clinic</p>
+            <h1 className="mt-3 text-[28px] font-bold tracking-[-0.05em] text-[#173f3c] sm:text-3xl md:text-[40px]">Good morning, Dr. Arya</h1>
+            <p className="mt-2 text-sm text-[#78908a]">Here&apos;s what&apos;s happening in your clinic today.</p>
           </div>
-          </>}
-
-          {activeNav !== "Dashboard" && <WorkspaceView activeNav={activeNav} onNewAppointment={() => setShowNewAppointment(true)} />}
+          <button onClick={() => setSessionStarted(!sessionStarted)} className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#07947f] px-5 py-3 text-sm font-bold text-white shadow-[0_8px_22px_rgba(7,148,127,0.18)] transition hover:bg-[#057e6d] lg:w-fit">
+            {sessionStarted ? <Check className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            {sessionStarted ? "Session active" : "Start new session"}
+            {sessionStarted ? <X className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+          </button>
         </section>
-      </div>
 
-      {showNewAppointment && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 px-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><h2 className="text-xl font-bold text-slate-900">New appointment</h2><p className="mt-1 text-sm text-slate-500">Add a patient to today&apos;s clinic queue.</p></div><button onClick={() => setShowNewAppointment(false)} aria-label="Close appointment dialog" className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-5 w-5" /></button></div><div className="mt-5 space-y-3"><input placeholder="Patient name" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#0f766e]" /><div className="grid grid-cols-2 gap-3"><input type="date" className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-500 outline-none focus:border-[#0f766e]" /><input type="time" className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-500 outline-none focus:border-[#0f766e]" /></div><button onClick={() => setShowNewAppointment(false)} className="mt-2 w-full rounded-lg bg-[#0f766e] py-2.5 text-sm font-bold text-white hover:bg-[#0b625b]">Add to queue</button></div></div></div>}
+        <section className="mt-10 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">
+          {stats.map(({ label, value, detail, icon: Icon, tone }) => (
+            <div key={label} className={`relative h-[121px] rounded-xl border border-[#e1e9e5] p-4 ${label === "Next appointment" ? "bg-[#dff4ec]" : "bg-white"}`}>
+              <div className="flex items-start justify-between"><p className="text-xs font-semibold text-[#6d827c]">{label}</p><span className={`rounded-lg p-2 ${tone}`}><Icon className="h-5 w-5" /></span></div>
+              <p className="absolute left-4 top-[52px] text-2xl font-bold tracking-[-0.03em] text-[#173f3c]">{value}</p>
+              <p className="absolute bottom-4 left-4 text-[11px] text-[#77908a]">{detail}</p>
+            </div>
+          ))}
+        </section>
+
+        <section className="mt-12">
+          <div className="flex items-end justify-between"><div><h2 className="text-xl font-semibold tracking-[-0.03em]">Your clinical command centre</h2><p className="mt-1 text-sm text-[#818b85]">Everything you need, in one calm place.</p></div><button onClick={() => setActiveNav("Patients")} className="hidden items-center gap-1 text-xs font-semibold text-[#56896d] hover:underline sm:flex">View all <ChevronRight className="h-3.5 w-3.5" /></button></div>
+
+          <div className="mt-6 grid grid-cols-1 gap-3 xl:grid-cols-2">
+            <article className="min-h-[235px] rounded-2xl bg-[#124b47] p-6 text-white">
+              <div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#8bd4be]">Live scribe</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Stay present. Let AI take notes.</h3><p className="mt-2 max-w-sm text-sm leading-6 text-[#b8d2ce]">Turn your consultation into a structured SOAP note in seconds.</p></div><span className="rounded-full bg-[#2c7069] p-4 text-[#a5e4d0]"><Mic className="h-5 w-5" /></span></div>
+              <div className="mt-8 flex h-14 items-center gap-1" role="img" aria-label={scribeOpen ? "Voice recording in progress" : "Voice frequency preview"}>
+                {waveform.map((height, index) => <span key={`${height}-${index}`} className={`w-1 rounded-full transition-all duration-300 ${index % 3 === 0 ? "bg-[#4fc4a7]" : "bg-[#8ed8c2]"} ${scribeOpen ? "animate-pulse" : ""}`} style={{ height: `${height}px`, animationDelay: `${index * 45}ms` }} />)}
+              </div>
+              <div className="mt-4 border-t border-[#39706a] pt-4 flex items-center justify-between"><span className={`flex items-center gap-2 text-xs font-semibold ${scribeOpen ? "text-[#a7e4cb]" : "text-[#b8d2ce]"}`}><span className={`h-2 w-2 rounded-full ${scribeOpen ? "bg-[#72e5b5]" : "bg-[#79b6a7]"}`} />{scribeOpen ? "Listening to consultation" : "Ready to listen"}</span><button onClick={() => setScribeOpen(!scribeOpen)} className="rounded-lg bg-white px-4 py-2 text-xs font-bold text-[#124b47] hover:bg-[#e6f5f0]">{scribeOpen ? "Pause scribe" : "Open scribe"} <ArrowUpRight className="ml-1 inline h-3.5 w-3.5" /></button></div>
+            </article>
+
+            <article className="min-h-[235px] rounded-2xl bg-[#f1e8df] p-6">
+              <div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#b0805e]">Patient snapshot</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Rohan Mehta</h3><p className="mt-1 text-sm text-[#8d837a]">32 years · Male · Patient since 2023</p></div><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#dfc6b0] text-xs font-bold text-[#8b654d]">RM</span></div>
+              <div className="mt-6 grid grid-cols-2 gap-y-3 text-xs"><span className="text-[#a09083]">Last visit <strong className="mt-1 block font-semibold text-[#655e57]">18 Jun 2025</strong></span><span className="text-[#a09083]">Blood group <strong className="mt-1 block font-semibold text-[#655e57]">B+</strong></span><span className="text-[#a09083]">Follow-up scheduled <strong className="mt-1 block font-semibold text-[#655e57]">Today, 10:30 AM</strong></span><span className="text-[#a09083]">Prescription updated <strong className="mt-1 block font-semibold text-[#655e57]">18 Jun 2025</strong></span></div>
+              <button onClick={() => setActiveNav("Patients")} className="mt-5 flex items-center gap-1 text-xs font-bold text-[#9b704f] hover:underline">Open patient record <ChevronRight className="h-3.5 w-3.5" /></button>
+            </article>
+
+            <article className="rounded-2xl border border-[#e8e8e2] bg-white p-6">
+              <div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#7ca28d]">Patient-facing AI</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Symptom checker</h3><p className="mt-2 text-sm text-[#818b85]">Help patients organise what they&apos;re feeling before a visit.</p></div><HeartPulse className="h-5 w-5 text-[#82ae96]" /></div>
+              <div className="mt-6 flex gap-2"><input value={symptoms} onChange={(event) => setSymptoms(event.target.value)} placeholder="e.g. headache, mild fever for two days..." className="min-w-0 flex-1 rounded-lg border border-[#e5e8e3] bg-[#fbfcfa] px-3 py-2.5 text-xs outline-none focus:border-[#9fbea9]" /><button onClick={checkSymptoms} className="rounded-lg bg-[#ebf4ed] px-3 text-xs font-bold text-[#5c916e] hover:bg-[#dceee1]">Check symptoms</button></div>
+              {symptomResult && <p className="mt-3 rounded-lg bg-[#f1f7f2] p-3 text-xs leading-5 text-[#65806e]">{symptomResult}</p>}
+            </article>
+
+            <article className="rounded-2xl border border-[#e8e8e2] bg-white p-6">
+              <div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#8a91b2]">Clinical intelligence</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Ask your medical copilot</h3><p className="mt-2 text-sm text-[#818b85]">Structure a question and get a clear starting point.</p></div><BrainCircuit className="h-5 w-5 text-[#8995bf]" /></div>
+              <div className="mt-6 flex rounded-lg border border-[#e5e8e3] bg-[#fbfcfa] p-1"><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => event.key === "Enter" && askCopilot()} placeholder="Ask about a case or guideline..." className="min-w-0 flex-1 bg-transparent px-2 text-xs outline-none" /><button onClick={askCopilot} aria-label="Ask copilot" className="rounded-md bg-[#e9edf7] p-2 text-[#6b7eac] hover:bg-[#dfe6f5]"><Send className="h-3.5 w-3.5" /></button></div>
+              <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setQuestion("Respiratory follow-up")} className="rounded-full bg-[#f5f5fa] px-3 py-1.5 text-[10px] font-semibold text-[#7b82a1]">Respiratory follow-up</button><button onClick={() => setQuestion("Red flags to document")} className="rounded-full bg-[#f5f5fa] px-3 py-1.5 text-[10px] font-semibold text-[#7b82a1]">Red flags to document</button></div>
+              {copilotResult && <p className="mt-3 rounded-lg bg-[#f3f4fa] p-3 text-xs leading-5 text-[#687493]">{copilotResult}</p>}
+            </article>
+
+            <article className="rounded-2xl border border-[#e8e8e2] bg-white p-6 lg:col-span-2">
+              <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#af8b66]">Document intelligence</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Summarise a medical document</h3><p className="mt-2 text-sm text-[#818b85]">Upload a PDF and get the key points at a glance.</p></div><FileText className="h-5 w-5 text-[#bd956d]" /></div>
+              <input ref={fileInput} type="file" accept=".pdf,application/pdf" onChange={handleFile} className="hidden" />
+              <button onClick={() => fileInput.current?.click()} className="mt-6 flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#d9ddd7] bg-[#fbfcfa] px-4 py-7 text-center hover:border-[#a9c0ae]"><UploadCloud className="h-6 w-6 text-[#a8b8ad]" /><span className="mt-2 text-xs font-semibold text-[#7d8b82]">{uploadedFile || "Drop a PDF here or browse"}</span><span className="mt-1 text-[10px] text-[#a4ada7]">PDF up to 10 MB · DEMO MODE</span></button>
+              <div className="mt-4 flex items-center justify-between"><span className="flex items-center gap-2 text-[11px] text-[#8b958e]"><ShieldCheck className="h-4 w-4 text-[#76a287]" /> Your data stays private</span><button disabled={!uploadedFile} onClick={() => setSymptomResult(`Summary ready for ${uploadedFile}. Key findings are available for clinician review.`)} className="rounded-lg bg-[#f2eee8] px-4 py-2 text-xs font-bold text-[#a2876c] enabled:hover:bg-[#e9dfd2] disabled:cursor-not-allowed disabled:opacity-50">Summarise document</button></div>
+            </article>
+          </div>
+        </section>
+
+        <footer className="mt-12 flex flex-col gap-2 border-t border-[#e8e8e2] pt-6 text-xs text-[#9aa39d] sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2 font-semibold text-[#707b74]"><HeartPulse className="h-4 w-4 text-[#76a287]" /> AI Doctor OS</span><span>Designed for focused care <span className="text-[#d89182]">♥</span></span><span>DEMO MODE · AI responses are simulated</span></footer>
+      </div> : <WorkspaceScreen activeNav={activeNav} onNavigate={setActiveNav} />}
+      </div>
     </main>
   );
 }
-
-function MetricCard({ label, value, detail, tone, icon: Icon }: { label: string; value: string; detail: string; tone: string; icon: typeof Users }) {
-  const tones: Record<string, string> = { teal: "bg-teal-50 text-teal-700", amber: "bg-amber-50 text-amber-700", sky: "bg-sky-50 text-sky-700", violet: "bg-violet-50 text-violet-700" };
-  return <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between"><p className="text-xs font-semibold text-slate-500">{label}</p><span className={`rounded-lg p-2 ${tones[tone]}`}><Icon className="h-4 w-4" /></span></div><p className="mt-3 text-2xl font-bold tracking-tight text-slate-900">{value}</p><p className="mt-1 text-[11px] font-medium text-slate-400">{detail}</p></div>;
-}
-
-function PatientCopilot({ patient, activeTab }: { patient: Patient; activeTab: string }) {
-  const [messages, setMessages] = useState<{ role: "doctor" | "ai"; text: string }[]>([
-    { role: "ai", text: `I am reviewing ${patient.name}'s authorized record, including the ${patient.reason.toLowerCase()} context. Ask me about the diagnosis, reports, risks, or possible next steps.` },
-  ]);
-  const [draft, setDraft] = useState("");
-  const [researchMode, setResearchMode] = useState(false);
-  const [researching, setResearching] = useState(false);
-
-  function askCopilot(prompt: string) {
-    if (!prompt.trim()) return;
-    setMessages((current) => [...current, { role: "doctor", text: prompt }, { role: "ai", text: researchMode ? `Deep research brief for ${patient.name}: the available record supports reviewing the current trend, confirming missing history, and checking guideline-aligned options. Any external evidence should be verified by the treating clinician before action.` : `Based on the available ${patient.name} record and the current ${activeTab.toLowerCase()} view, consider confirming the latest home readings, checking adherence and contraindications, and documenting the clinical reasoning before changing the plan. I can help compare a specific report or draft questions for the next visit.` }]);
-    setDraft("");
-  }
-
-  function runResearch() {
-    setResearching(true);
-    window.setTimeout(() => {
-      setResearching(false);
-      setMessages((current) => [...current, { role: "ai", text: `Research scan completed for ${patient.name}: 3 relevant evidence areas found. Review current guidelines, compare the patient's trend against treatment targets, and verify contraindications before making a clinical decision. Sources are suggestions for review, not a diagnosis or prescription.` }]);
-    }, 700);
-  }
-
-  return <section className="mt-5 overflow-hidden rounded-xl border border-[#b9ded8] bg-[#f8fcfb] shadow-sm"><div className="flex flex-col gap-3 border-b border-[#d8eeea] p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="rounded-xl bg-[#dff3ef] p-2 text-[#0f766e]"><BrainCircuit className="h-5 w-5" /></span><div><div className="flex items-center gap-2"><h3 className="font-bold text-slate-900">AI Clinical Copilot</h3><span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">PATIENT-SCOPED</span></div><p className="mt-0.5 text-xs text-slate-500">Discuss diagnosis, reports, risks and next steps with the record in context.</p></div></div><button onClick={() => setResearchMode(!researchMode)} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition ${researchMode ? "bg-[#0f766e] text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:text-[#0f766e]"}`}><BookOpen className="h-3.5 w-3.5" />{researchMode ? "Deep research on" : "Deep research"}</button></div><div className="grid gap-0 lg:grid-cols-[1.35fr_0.65fr]"><div className="border-b border-[#d8eeea] lg:border-b-0 lg:border-r"><div className="max-h-64 space-y-3 overflow-y-auto p-4">{messages.map((message, index) => <div key={`${message.role}-${index}`} className={`flex ${message.role === "doctor" ? "justify-end" : "justify-start"}`}><div className={`max-w-[90%] rounded-xl px-3 py-2.5 text-xs leading-relaxed ${message.role === "doctor" ? "bg-[#0f766e] text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{message.text}</div></div>)}</div><div className="flex flex-wrap gap-2 border-t border-[#d8eeea] px-4 py-3"><button onClick={() => askCopilot("What should I verify before the next clinical decision?")} className="rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 hover:text-[#0f766e]">What should I verify?</button><button onClick={() => askCopilot("Compare the latest reports and explain what changed.")} className="rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 hover:text-[#0f766e]">Compare reports</button><button onClick={() => askCopilot("What safety risks or missing information should I check?")} className="rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 hover:text-[#0f766e]">Safety review</button></div><form onSubmit={(event) => { event.preventDefault(); askCopilot(draft); }} className="flex gap-2 border-t border-[#d8eeea] bg-white p-3"><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`Ask about ${patient.name}'s record...`} className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-[#0f766e]" /><button type="submit" aria-label="Send message to AI Copilot" className="rounded-lg bg-[#0f766e] p-2.5 text-white hover:bg-[#0b625b]"><Send className="h-4 w-4" /></button></form></div><div className="space-y-4 p-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#0f766e]">Decision support</p><p className="mt-1 text-xs leading-relaxed text-slate-500">AI suggestions are draft guidance only. Doctor review is required before diagnosis, prescription, record change, or patient communication.</p></div><div className="rounded-lg bg-white p-3 ring-1 ring-slate-200"><p className="text-xs font-bold text-slate-800">Suggested next checks</p><ul className="mt-2 space-y-2 text-[11px] text-slate-500"><li className="flex gap-2"><Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />Confirm current symptoms and home readings</li><li className="flex gap-2"><Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />Review recent medication adherence</li><li className="flex gap-2"><Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />Document rationale for the care plan</li></ul></div><button onClick={runResearch} disabled={researching} className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#b9ded8] bg-white px-3 py-2.5 text-xs font-bold text-[#0f766e] hover:bg-[#effaf8] disabled:opacity-60"><BookOpen className="h-3.5 w-3.5" />{researching ? "Researching evidence..." : "Run evidence research"}</button></div></div></section>;
-}
-
-function WorkspaceView({ activeNav, onNewAppointment }: { activeNav: string; onNewAppointment: () => void }) {
-  const [query, setQuery] = useState("");
-  const [period, setPeriod] = useState("This week");
-  const [completed, setCompleted] = useState<string[]>([]);
-  const [reviewed, setReviewed] = useState<string[]>([]);
-  const [enabled, setEnabled] = useState<Record<string, boolean>>({ reminders: true, aiReview: true, messages: false });
-
-  function toggleItem(id: string, setter: (value: string[]) => void, values: string[]) {
-    setter(values.includes(id) ? values.filter((value) => value !== id) : [...values, id]);
-  }
-
-  const title = activeNav === "AI Inbox" ? "AI Inbox" : activeNav;
-  const description = activeNav === "AI Inbox" ? "Review messages, reports and tasks that need a human decision." : "Keep the clinic moving with a clear, reviewable workflow.";
-
-  if (activeNav === "Appointments") return <WorkspaceFrame title="Appointments" description="Plan the day, manage check-ins and keep the live queue moving." action="New appointment" onAction={onNewAppointment}><div className="mb-5 flex flex-wrap gap-2"><FilterButton label="Today · 10 Sep" active /><FilterButton label="All providers" /><FilterButton label="All statuses" /></div><div className="overflow-hidden rounded-xl border border-slate-200"><ListHeader labels={["Patient", "Visit type", "Time", "Status", ""]} />{patients.map((patient) => <div key={patient.id} className="grid grid-cols-[1.5fr_1.3fr_0.8fr_0.9fr_32px] items-center gap-3 border-t border-slate-100 bg-white px-4 py-3 text-sm"><span className="font-semibold text-slate-800">{patient.name}<small className="mt-0.5 block text-[11px] font-normal text-slate-400">{patient.id}</small></span><span className="text-xs text-slate-500">{patient.reason}</span><span className="text-xs font-semibold text-slate-700">{patient.time}</span><button onClick={() => toggleItem(patient.id, setCompleted, completed)} className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${completed.includes(patient.id) ? "bg-emerald-100 text-emerald-700" : patient.status === "Ready" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"}`}>{completed.includes(patient.id) ? "Checked in" : patient.status}</button><button onClick={() => setQuery(`Actions for ${patient.name}`)} aria-label={`More actions for ${patient.name}`} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><MoreHorizontal className="h-4 w-4" /></button></div>)}</div></WorkspaceFrame>;
-
-  if (activeNav === "Patients") return <WorkspaceFrame title="Patients" description="Search and open the longitudinal record for any patient in your clinic." action="Register patient" onAction={() => setQuery("Registering a new patient...")}><div className="relative mb-4 max-w-md"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by patient name or ID" className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#0f766e]" /></div><div className="grid gap-3 md:grid-cols-2">{patients.filter((patient) => `${patient.name} ${patient.id}`.toLowerCase().includes(query.toLowerCase())).map((patient) => <button key={patient.id} onClick={() => setQuery(`Opened ${patient.name}`)} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:border-[#9bd3ca] hover:shadow-sm"><span className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold ${patient.tone}`}>{patient.initials}</span><span className="flex-1"><span className="block font-semibold text-slate-800">{patient.name}</span><span className="mt-1 block text-xs text-slate-500">{patient.age} years · {patient.reason}</span></span><ChevronRight className="h-4 w-4 text-slate-300" /></button>)}</div></WorkspaceFrame>;
-
-  if (activeNav === "Reports") return <WorkspaceFrame title="Reports" description="Review extracted results and keep every document linked to the patient story." action="Upload report" onAction={() => setReviewed([...reviewed, "upload"])}><div className="mb-5 flex flex-wrap gap-2"><FilterButton label="All reports" active /><FilterButton label="Needs review" /><FilterButton label="Reviewed" /></div><div className="grid gap-3 md:grid-cols-2">{["Lipid profile · Rahul Sharma", "CBC · Vikram Nair", "HbA1c · Ananya Kapoor", "Thyroid panel · Sneha Patel"].map((report, index) => { const id = `report-${index}`; return <div key={report} className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-start gap-3"><span className="rounded-lg bg-sky-50 p-2 text-sky-600"><FileText className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-slate-800">{report}</p><p className="mt-1 text-xs text-slate-400">Extracted today · Source document attached</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${reviewed.includes(id) ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{reviewed.includes(id) ? "Reviewed" : "Needs review"}</span></div><button onClick={() => toggleItem(id, setReviewed, reviewed)} className="mt-4 flex items-center gap-2 text-xs font-bold text-[#0f766e] hover:underline">{reviewed.includes(id) ? <Check className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}{reviewed.includes(id) ? "Mark for re-review" : "Review extracted values"}</button></div>; })}</div></WorkspaceFrame>;
-
-  if (activeNav === "Prescriptions") return <WorkspaceFrame title="Prescriptions" description="Review safety checks before an authorized doctor signs a prescription." action="New prescription" onAction={() => setReviewed([...reviewed, "new"])}><div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 text-amber-600" /><div><p className="text-sm font-bold text-amber-900">2 prescriptions need review</p><p className="mt-1 text-xs text-amber-800/80">AI can prepare and check prescriptions, but a doctor must review and sign.</p></div></div></div><div className="mt-4 space-y-3">{["Rahul Sharma · Amlodipine 5 mg", "Vikram Nair · Metformin 500 mg", "Sneha Patel · Cetirizine 10 mg"].map((prescription, index) => { const id = `rx-${index}`; return <div key={prescription} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4"><span className="rounded-lg bg-violet-50 p-2 text-violet-600"><Pill className="h-4 w-4" /></span><span className="min-w-[180px] flex-1"><span className="block text-sm font-bold text-slate-800">{prescription}</span><span className="mt-1 block text-xs text-slate-400">Allergy and interaction check complete</span></span><span className="text-[10px] font-bold text-emerald-600">No alerts</span><button onClick={() => toggleItem(id, setReviewed, reviewed)} className={`rounded-lg px-3 py-2 text-xs font-bold ${reviewed.includes(id) ? "bg-emerald-100 text-emerald-700" : "bg-[#0f766e] text-white hover:bg-[#0b625b]"}`}>{reviewed.includes(id) ? "Reviewed" : "Review & sign"}</button></div>; })}</div></WorkspaceFrame>;
-
-  if (activeNav === "Follow-ups") return <WorkspaceFrame title="Follow-ups" description="Make sure every next step stays connected to the patient story." action="Create follow-up" onAction={() => setCompleted([...completed, "new-follow-up"])}><div className="grid gap-4 md:grid-cols-3"><MetricCard label="Due this week" value="7" detail="2 overdue" tone="amber" icon={ClipboardList} /><MetricCard label="Completed" value="18" detail="92% completion rate" tone="teal" icon={Check} /><MetricCard label="Referrals open" value="3" detail="1 awaiting consent" tone="sky" icon={FileText} /></div><div className="mt-5 space-y-3">{["Blood pressure review · Rahul Sharma", "Repeat lipid profile · Vikram Nair", "Specialist referral consent · Sneha Patel"].map((followUp, index) => { const id = `follow-${index}`; return <button key={followUp} onClick={() => toggleItem(id, setCompleted, completed)} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-[#9bd3ca]"><span className={`h-2.5 w-2.5 rounded-full ${completed.includes(id) ? "bg-emerald-500" : index === 0 ? "bg-rose-500" : "bg-amber-400"}`} /><span className="flex-1"><span className={`block text-sm font-bold ${completed.includes(id) ? "text-slate-400 line-through" : "text-slate-800"}`}>{followUp}</span><span className="mt-1 block text-xs text-slate-400">{completed.includes(id) ? "Completed just now" : index === 0 ? "Due today" : "Due in 4 days"}</span></span><ChevronRight className="h-4 w-4 text-slate-300" /></button>; })}</div></WorkspaceFrame>;
-
-  if (activeNav === "Analytics") return <WorkspaceFrame title="Practice analytics" description="Understand patient flow, clinical workload and task completion." action="Export report" onAction={() => setPeriod("Export ready")}><div className="mb-5 flex gap-2">{["This week", "This month", "This quarter"].map((item) => <button key={item} onClick={() => setPeriod(item)} className={`rounded-lg px-3 py-2 text-xs font-bold ${period === item ? "bg-[#0f766e] text-white" : "bg-white text-slate-500 ring-1 ring-slate-200"}`}>{item}</button>)}</div><div className="grid gap-4 md:grid-cols-3"><MetricCard label="Consultations" value="118" detail="+12% vs previous period" tone="teal" icon={Users} /><MetricCard label="Avg. wait time" value="14m" detail="-6m vs previous period" tone="sky" icon={CalendarDays} /><MetricCard label="Task completion" value="92%" detail="+4% vs previous period" tone="violet" icon={Activity} /></div><div className="mt-5 rounded-xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><h3 className="font-bold text-slate-900">Consultation volume</h3><span className="text-xs text-slate-400">{period}</span></div><div className="mt-6 flex h-40 items-end gap-3">{[46, 62, 54, 82, 68, 94, 76].map((height, index) => <div key={index} className="flex flex-1 flex-col items-center gap-2"><div className="w-full rounded-t-md bg-[#9bd3ca] transition hover:bg-[#0f766e]" style={{ height: `${height}%` }} /><span className="text-[10px] text-slate-400">{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][index]}</span></div>)}</div></div></WorkspaceFrame>;
-
-  if (activeNav === "Settings") return <WorkspaceFrame title="Settings & governance" description="Control clinic access, AI review rules and communication preferences." action="Save changes" onAction={() => setCompleted([...completed, "settings"])}><div className="max-w-2xl divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">{[{ id: "aiReview", title: "Require human review for AI output", detail: "AI-generated notes and messages stay drafts until authorized review." }, { id: "reminders", title: "Follow-up reminders", detail: "Notify assigned staff when a follow-up is due or overdue." }, { id: "messages", title: "Patient message suggestions", detail: "Allow AI to prepare replies for review in the inbox." }].map((setting) => <div key={setting.id} className="flex items-center gap-4 p-4"><span className="flex-1"><span className="block text-sm font-bold text-slate-800">{setting.title}</span><span className="mt-1 block text-xs leading-relaxed text-slate-500">{setting.detail}</span></span><button onClick={() => setEnabled({ ...enabled, [setting.id]: !enabled[setting.id] })} aria-label={`Toggle ${setting.title}`} className={`relative h-6 w-11 rounded-full transition ${enabled[setting.id] ? "bg-[#0f766e]" : "bg-slate-200"}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${enabled[setting.id] ? "left-6" : "left-1"}`} /></button></div>)}</div></WorkspaceFrame>;
-
-  return <WorkspaceFrame title={title} description={description} action="Open priority item" onAction={() => setCompleted([...completed, "inbox"])}><div className="space-y-3">{["Lab report needs review · Rahul Sharma", "Patient message awaiting response · Ananya Kapoor", "Referral document ready for approval · Sneha Patel", "Follow-up task overdue · Vikram Nair"].map((item, index) => { const id = `inbox-${index}`; return <div key={item} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4"><span className={`rounded-lg p-2 ${index === 0 ? "bg-rose-50 text-rose-600" : "bg-sky-50 text-sky-600"}`}><MessageSquareText className="h-4 w-4" /></span><span className="flex-1"><span className="block text-sm font-bold text-slate-800">{item}</span><span className="mt-1 block text-xs text-slate-400">{index === 0 ? "Urgent · 8 minutes ago" : "Clinical · Today"}</span></span><button onClick={() => toggleItem(id, setCompleted, completed)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-[#9bd3ca] hover:text-[#0f766e]">{completed.includes(id) ? "Resolved" : "Open"}</button></div>; })}</div></WorkspaceFrame>;
-}
-
-function WorkspaceFrame({ title, description, action, onAction, children }: { title: string; description: string; action: string; onAction: () => void; children: React.ReactNode }) {
-  return <div><div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#0f766e]">Workspace</p><h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{title}</h2><p className="mt-1 text-sm text-slate-500">{description}</p></div><button onClick={onAction} className="flex items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#0b625b]"><Plus className="h-4 w-4" />{action}</button></div>{children}</div>;
-}
-
-function FilterButton({ label, active = false }: { label: string; active?: boolean }) { const [selected, setSelected] = useState(active); return <button onClick={() => setSelected(!selected)} className={`rounded-lg px-3 py-2 text-xs font-bold ${selected ? "bg-[#e3f3f0] text-[#0f766e]" : "bg-white text-slate-500 ring-1 ring-slate-200 hover:text-slate-800"}`}>{label}</button>; }
-function ListHeader({ labels }: { labels: string[] }) { return <div className="grid grid-cols-[1.5fr_1.3fr_0.8fr_0.9fr_32px] gap-3 bg-slate-50 px-4 py-2.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">{labels.map((label) => <span key={label}>{label}</span>)}</div>; }
-
-function PatientPanel({ tab, reviewed }: { tab: string; reviewed: boolean }) {
-  if (tab === "Timeline") return <div className="space-y-4 p-5"><PanelTitle title="Longitudinal timeline" action="Add event" /><TimelineItem date="28 Aug 2026" title="Follow-up consultation" detail="Blood pressure trending down. Medication adherence discussed." /><TimelineItem date="14 Jul 2026" title="Lab report reviewed" detail="Lipid profile added to patient record and compared with May results." /><TimelineItem date="02 Jun 2026" title="Prescription updated" detail="Amlodipine 5mg continued. Next review scheduled." /></div>;
-  if (tab === "Reports") return <div className="space-y-3 p-5"><PanelTitle title="Reports & lab results" action="Upload report" /><ReportRow title="Complete blood count" date="28 Aug 2026" status="Reviewed" /><ReportRow title="Lipid profile" date="28 Aug 2026" status="Needs review" /><ReportRow title="HbA1c" date="14 Jul 2026" status="Reviewed" /></div>;
-  if (tab === "Prescriptions") return <div className="space-y-3 p-5"><PanelTitle title="Current medications" action="Add medication" /><MedicationRow name="Amlodipine" detail="5 mg · Once daily · Active" safe /><MedicationRow name="Atorvastatin" detail="10 mg · At night · Active" safe /><div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-xs font-medium text-emerald-700"><ShieldCheck className="h-4 w-4" /> No interaction alerts for current medications</div></div>;
-  if (tab === "Follow-ups") return <div className="space-y-3 p-5"><PanelTitle title="Follow-up plan" action="Schedule follow-up" /><div className="rounded-lg border border-amber-200 bg-amber-50 p-4"><p className="text-xs font-bold text-amber-800">Due 24 Sep 2026</p><p className="mt-1 text-sm font-semibold text-slate-800">Blood pressure review</p><p className="mt-1 text-xs text-slate-500">Check home readings and medication adherence.</p></div></div>;
-  return <div className="grid gap-5 p-5 md:grid-cols-[1.3fr_0.7fr]"><div><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#0f766e]">AI patient brief</p><h3 className="mt-1 text-base font-bold text-slate-900">A stable follow-up with one item to verify</h3></div>{reviewed ? <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600"><Check className="h-3.5 w-3.5" /> Reviewed</span> : <span className="rounded bg-sky-50 px-2 py-1 text-[10px] font-bold text-sky-700">AI-GENERATED</span>}</div><p className="mt-3 text-sm leading-relaxed text-slate-600">Rahul&apos;s blood pressure has improved across the last three visits. Current medication appears well tolerated. Confirm home readings before deciding whether the current plan should continue.</p><div className="mt-4 flex flex-wrap gap-2"><span className="rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">Source-linked · 3 visits</span><span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">Confidence · High</span></div></div><div className="rounded-lg bg-slate-50 p-4"><p className="text-xs font-bold text-slate-500">Vitals snapshot</p><div className="mt-3 space-y-3"><Vital label="Blood pressure" value="128/82" change="-8 / -4" /><Vital label="Heart rate" value="74 bpm" change="Stable" /><Vital label="Weight" value="78.4 kg" change="-1.2 kg" /></div></div></div>;
-}
-
-function PanelTitle({ title, action }: { title: string; action: string }) { const [clicked, setClicked] = useState(false); return <div className="flex items-center justify-between"><h3 className="font-bold text-slate-900">{title}</h3><button onClick={() => setClicked(!clicked)} className="flex items-center gap-1 text-xs font-bold text-[#0f766e] hover:underline"><Plus className="h-3.5 w-3.5" />{clicked ? "Ready" : action}</button></div>; }
-function TimelineItem({ date, title, detail }: { date: string; title: string; detail: string }) { return <div className="relative border-l-2 border-[#cde8e3] pl-4"><span className="absolute -left-[5px] top-1 h-2 w-2 rounded-full bg-[#0f766e]" /><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{date}</p><p className="mt-1 text-sm font-semibold text-slate-800">{title}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>; }
-function ReportRow({ title, date, status }: { title: string; date: string; status: string }) { const [opened, setOpened] = useState(false); return <button onClick={() => setOpened(!opened)} className="flex w-full items-center gap-3 rounded-lg border border-slate-100 p-3 text-left transition hover:border-slate-200 hover:bg-slate-50"><span className="rounded-lg bg-sky-50 p-2 text-sky-600"><FileText className="h-4 w-4" /></span><span className="flex-1"><span className="block text-sm font-semibold text-slate-800">{title}</span><span className="block text-[11px] text-slate-400">Uploaded {date}</span></span><span className={`text-[10px] font-bold ${opened || status === "Reviewed" ? "text-emerald-600" : "text-amber-600"}`}>{opened ? "Opened" : status}</span><ChevronRight className="h-4 w-4 text-slate-300" /></button>; }
-function MedicationRow({ name, detail, safe }: { name: string; detail: string; safe: boolean }) { return <div className="flex items-center gap-3 rounded-lg border border-slate-100 p-3"><span className="rounded-lg bg-violet-50 p-2 text-violet-600"><Pill className="h-4 w-4" /></span><span className="flex-1"><span className="block text-sm font-semibold text-slate-800">{name}</span><span className="block text-[11px] text-slate-400">{detail}</span></span>{safe && <ShieldCheck className="h-4 w-4 text-emerald-500" />}</div>; }
-function Vital({ label, value, change }: { label: string; value: string; change: string }) { return <div className="flex items-end justify-between"><span className="text-xs text-slate-500">{label}</span><span className="text-right"><span className="block text-sm font-bold text-slate-800">{value}</span><span className="text-[10px] font-semibold text-emerald-600">{change}</span></span></div>; }
-
-
-
-
-
-
