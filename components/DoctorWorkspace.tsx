@@ -47,6 +47,7 @@ async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
 
 export default function DoctorWorkspace() {
   const [activeNav, setActiveNav] = useState("Overview");
+  const [selectedPatientId, setSelectedPatientId] = useState("RM-102");
   const [language, setLanguage] = useState("हिन्दी");
   const [search, setSearch] = useState("");
   const [sessionStarted, setSessionStarted] = useState(false);
@@ -105,7 +106,7 @@ export default function DoctorWorkspace() {
       }
       if (activeNav === "Medical records") {
         setScreenLoading(true);
-        apiRequest<{ reports: typeof reports }>("/api/medical-records/reports?patientId=RM-102").then(({ reports: data }) => setReports(data)).catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Medical records could not be loaded.")).finally(() => setScreenLoading(false));
+        apiRequest<{ reports: typeof reports }>(`/api/medical-records/reports?patientId=${selectedPatientId}`).then(({ reports: data }) => setReports(data)).catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Medical records could not be loaded.")).finally(() => setScreenLoading(false));
       }
       if (activeNav === "Clinical insights") {
         setScreenLoading(true);
@@ -116,7 +117,7 @@ export default function DoctorWorkspace() {
           .then(({ settings }) => { setProfileForm({ fullName: settings.fullName, specialty: settings.specialty, clinicBio: settings.clinicBio }); setAccountForm(settings.notifications); })
           .catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Profile settings could not be loaded."));
       }
-    }, [activeNav]);
+    }, [activeNav, selectedPatientId]);
 
     async function queueWorkspaceAction(action: string) {
       try {
@@ -161,11 +162,32 @@ export default function DoctorWorkspace() {
     async function analyzeReport(reportId: string) {
       setReportAnalyzed(false);
       try {
-        const { analysis } = await apiRequest<{ analysis: { trend: string; flag: string; confidence: string; summary: string } }>("/api/medical-records/analyze", { method: "POST", body: JSON.stringify({ patientId: "RM-102", reportId }) });
+        const { analysis } = await apiRequest<{ analysis: { trend: string; flag: string; confidence: string; summary: string } }>("/api/medical-records/analyze", { method: "POST", body: JSON.stringify({ patientId: selectedPatientId, reportId }) });
         setRevisitReport(`${analysis.trend} ${analysis.flag} ${analysis.confidence}`);
         setReportAnalyzed(true);
       } catch (error: unknown) {
         setScreenError(error instanceof Error ? error.message : "Report analysis failed.");
+      }
+    }
+
+    async function summarizeReport(reportId: string, title: string) {
+      try {
+        await apiRequest("/api/medical-records/summarize", { method: "POST", body: JSON.stringify({ reportId, title }) });
+        setReportSummary(true);
+      } catch (error: unknown) {
+        setScreenError(error instanceof Error ? error.message : "Report summary failed.");
+      }
+    }
+
+    async function updateRevisitRecord() {
+      const title = revisitFileInput.current?.files?.[0]?.name;
+      if (!title) return;
+      try {
+        await apiRequest("/api/medical-records/reports", { method: "POST", body: JSON.stringify({ patientId: selectedPatientId, title, type: "Lab report" }) });
+        setRevisitReport(title);
+        setReportUpdated(true);
+      } catch (error: unknown) {
+        setScreenError(error instanceof Error ? error.message : "Report upload failed.");
       }
     }
 
@@ -189,7 +211,7 @@ export default function DoctorWorkspace() {
         {activeNav === "Patients" && <section className="mt-8 space-y-4">
           <div className="flex items-center gap-3 rounded-xl border border-[#e1e9e5] bg-white px-4 py-3"><Search className="h-4 w-4 text-[#91a49e]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search patient name or ID" className="flex-1 text-sm outline-none placeholder:text-[#a0b0ab]" /></div>
           {screenLoading && <p className="rounded-xl bg-[#edf7f2] p-4 text-sm text-[#5a967e]">Loading patient directory from the clinic service...</p>}
-          {patients.filter(({ name, id }) => `${name} ${id}`.toLowerCase().includes(query.toLowerCase())).map(({ name, id, appointment: detail, status, initials }) => <button key={id} onClick={() => onNavigate("Medical records")} className="flex w-full items-center gap-4 rounded-xl border border-[#e1e9e5] bg-white p-4 text-left hover:border-[#9ac8b8]"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e4f3ed] text-sm font-bold text-[#4e927d]">{initials}</span><span className="flex-1"><strong className="block text-sm text-[#244642]">{name}</strong><span className="mt-1 block text-xs text-[#82958f]">{id} · {detail}</span></span><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[11px] font-bold text-[#5a967e]">{status}</span><ChevronRight className="h-4 w-4 text-[#9ab0a9]" /></button>)}
+          {patients.filter(({ name, id }) => `${name} ${id}`.toLowerCase().includes(query.toLowerCase())).map(({ name, id, appointment: detail, status, initials }) => <button key={id} onClick={() => { setSelectedPatientId(id); onNavigate("Medical records"); }} className="flex w-full items-center gap-4 rounded-xl border border-[#e1e9e5] bg-white p-4 text-left hover:border-[#9ac8b8]"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e4f3ed] text-sm font-bold text-[#4e927d]">{initials}</span><span className="flex-1"><strong className="block text-sm text-[#244642]">{name}</strong><span className="mt-1 block text-xs text-[#82958f]">{id} · {detail}</span></span><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[11px] font-bold text-[#5a967e]">{status}</span><ChevronRight className="h-4 w-4 text-[#9ab0a9]" /></button>)}
         </section>}
 
         {activeNav === "Profile" && <section className="mt-8 grid gap-5 lg:grid-cols-[280px_1fr]">
@@ -219,9 +241,9 @@ export default function DoctorWorkspace() {
           <input ref={revisitFileInput} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => setRevisitReport(event.target.files?.[0]?.name ?? "")} className="hidden" />
           <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto]">
             <button onClick={() => revisitFileInput.current?.click()} className="flex min-h-[112px] items-center gap-4 rounded-xl border border-dashed border-[#cbded5] bg-[#f8fcfa] p-5 text-left hover:border-[#75b79d]"><span className="rounded-xl bg-[#e7f4ed] p-3 text-[#5a967e]"><UploadCloud className="h-5 w-5" /></span><span><strong className="block text-sm text-[#315a52]">{revisitReport || "Upload a new test report"}</strong><span className="mt-1 block text-xs text-[#82958f]">PDF or image · CBC, lipid profile, HbA1c, or other revisit report</span></span></button>
-            <button disabled={!revisitReport} onClick={() => setReportUpdated(true)} className="rounded-xl bg-[#eaf6f0] px-5 py-3 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#dcefe5] disabled:cursor-not-allowed disabled:opacity-50">{reportUpdated ? "Updated in timeline" : "Update patient record"}</button>
+            <button disabled={!revisitReport || screenLoading} onClick={updateRevisitRecord} className="rounded-xl bg-[#eaf6f0] px-5 py-3 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#dcefe5] disabled:cursor-not-allowed disabled:opacity-50">{reportUpdated ? "Updated in timeline" : "Update patient record"}</button>
           </div>
-          {reportUpdated && <div className="mt-5 rounded-xl border border-[#d9e9e1] bg-[#fbfdfc] p-5"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><p className="text-xs font-bold text-[#315a52]">{revisitReport}</p><p className="mt-1 text-[11px] text-[#82958f]">Added to Rohan Mehta&apos;s revisit · Previous report: 28 Aug 2026</p></div><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[10px] font-bold text-[#5a967e]">New result</span></div><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => setReportAnalyzed(true)} className="rounded-lg bg-[#124b47] px-4 py-2 text-xs font-bold text-white hover:bg-[#0d3e3b]">{reportAnalyzed ? "Analysis complete" : "Analyse changes"}</button><button disabled={!reportAnalyzed} onClick={() => setReportSummary(true)} className="rounded-lg border border-[#cbded5] px-4 py-2 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#edf7f2] disabled:cursor-not-allowed disabled:opacity-50">{reportSummary ? "Summary ready" : "Summarise for doctor"}</button></div>{reportAnalyzed && <div className="mt-4 grid gap-3 rounded-lg bg-[#f1f7f3] p-4 text-xs text-[#5f7c70] md:grid-cols-3"><span><strong className="block text-[#315a52]">Trend</strong>HbA1c improved by 0.6%</span><span><strong className="block text-[#315a52]">Flag</strong>LDL remains above target</span><span><strong className="block text-[#315a52]">Confidence</strong>High · 2 linked reports</span></div>}{reportSummary && <div className="mt-4 rounded-lg border-l-4 border-[#65a889] bg-white p-4 text-sm leading-6 text-[#527167]"><strong className="text-[#315a52]">Doctor summary:</strong> Compared with the previous report, glycaemic control is improving. LDL remains elevated and should be reviewed alongside adherence, diet, and the current statin plan at today&apos;s revisit.</div>}</div>}
+          {reportUpdated && <div className="mt-5 rounded-xl border border-[#d9e9e1] bg-[#fbfdfc] p-5"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><p className="text-xs font-bold text-[#315a52]">{revisitReport}</p><p className="mt-1 text-[11px] text-[#82958f]">Added to the selected patient&apos;s revisit</p></div><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[10px] font-bold text-[#5a967e]">New result</span></div><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => analyzeReport(reports[0]?.id ?? "report-cbc-102")} className="rounded-lg bg-[#124b47] px-4 py-2 text-xs font-bold text-white hover:bg-[#0d3e3b]">{reportAnalyzed ? "Analysis complete" : "Analyse changes"}</button><button disabled={!reportAnalyzed} onClick={() => summarizeReport(reports[0]?.id ?? "report-cbc-102", revisitReport)} className="rounded-lg border border-[#cbded5] px-4 py-2 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#edf7f2] disabled:cursor-not-allowed disabled:opacity-50">{reportSummary ? "Summary ready" : "Summarise for doctor"}</button></div>{reportAnalyzed && <div className="mt-4 grid gap-3 rounded-lg bg-[#f1f7f3] p-4 text-xs text-[#5f7c70] md:grid-cols-3"><span><strong className="block text-[#315a52]">Trend</strong>HbA1c improved by 0.6%</span><span><strong className="block text-[#315a52]">Flag</strong>LDL remains above target</span><span><strong className="block text-[#315a52]">Confidence</strong>High · 2 linked reports</span></div>}{reportSummary && <div className="mt-4 rounded-lg border-l-4 border-[#65a889] bg-white p-4 text-sm leading-6 text-[#527167]"><strong className="text-[#315a52]">Doctor summary:</strong> Compared with the previous report, glycaemic control is improving. LDL remains elevated and should be reviewed alongside adherence, diet, and the current statin plan at today&apos;s revisit.</div>}</div>}
         </section>}
       </div>
     );
