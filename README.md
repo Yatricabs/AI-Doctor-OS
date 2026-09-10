@@ -31,6 +31,12 @@ AI assists. Doctors decide. Structured clinical data remains the source of truth
 
 AI-generated suggestions in the demo are illustrative and require human review before any clinical action.
 
+## Documentation
+
+- [Architecture and system flows](docs/ARCHITECTURE.md)
+- [Interactive doctor workspace](app/demo/page.tsx)
+- [Landing page](app/page.tsx)
+
 ## Production build
 
 ```bash
