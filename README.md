@@ -2,11 +2,17 @@
 
 AI Doctor OS is a clinician-controlled workspace for patient context, clinical documentation, reports, prescription safety, AI assistance, and follow-up workflows.
 
-## Routes
+## Public routes
 
-- `/` - informative product landing page
-- `/demo` - interactive doctor workspace demo
-- `/gemini-preview` - isolated preview of the Gemini-generated landing concept
+- `/` - Home and product overview
+- `/product` - Product and AI capabilities
+- `/workflow` - Connected clinical workflow
+- `/for-doctors` - Doctor experience
+- `/security` - Safety, privacy, and governance
+- `/about` - About AI Doctor OS
+- `/contact` - Clinic demo and contact form
+- `/demo` - Interactive doctor workspace demo
+- `/gemini-preview` - Isolated Gemini concept preview
 
 ## Stack
 

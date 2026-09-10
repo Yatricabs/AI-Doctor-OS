@@ -1,52 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Stethoscope, ClipboardList, BrainCircuit, ShieldCheck, Building2 } from "lucide-react";
+import Link from "next/link";
+import { Stethoscope, ClipboardList, BrainCircuit, ShieldCheck, UserRound } from "lucide-react";
 import DemoDialog from "./DemoDialog";
 
 const navItems = [
-  { label: "Product", icon: ClipboardList, href: "#product" },
-  { label: "Why AI", icon: BrainCircuit, href: "#workflow" },
-  { label: "Safety", icon: ShieldCheck, href: "#safety" },
-  { label: "Clinics", icon: Building2, href: "#clinics" },
+  { label: "Product", icon: ClipboardList, href: "/product" },
+  { label: "Workflow", icon: BrainCircuit, href: "/workflow" },
+  { label: "For doctors", icon: UserRound, href: "/for-doctors" },
+  { label: "Security", icon: ShieldCheck, href: "/security" },
 ];
 
 export default function Header() {
   const [demoOpen, setDemoOpen] = useState(false);
-
-  return (
-    <>
-      <header className="sticky top-0 z-50 backdrop-blur-md bg-[#080D14]/80 border-b border-white/5">
-      <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-500 flex items-center justify-center text-slate-950 shadow-lg shadow-emerald-500/20">
-            <Stethoscope className="w-6 h-6" strokeWidth={2.5} />
-          </div>
-          <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-            AI Doctor OS
-          </span>
-        </div>
-
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
-          {navItems.map(({ label, icon: Icon, href }) => (
-            <a
-              key={label}
-              href={href}
-              className="flex items-center gap-1.5 hover:text-emerald-400 transition-colors"
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </a>
-          ))}
-        </nav>
-
-        <a href="/demo" className="hidden sm:inline-flex px-4 py-2.5 rounded-xl text-sm font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 transition">Open live demo</a><button onClick={() => setDemoOpen(true)} className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 transition-all shadow-lg shadow-emerald-500/25 active:scale-95">
-          Request a free demo
-        </button>
-      </div>
-      </header>
-      <DemoDialog open={demoOpen} onClose={() => setDemoOpen(false)} />
-    </>
-  );
+  return <><header className="sticky top-0 z-50 border-b border-white/5 bg-[#080D14]/80 backdrop-blur-md"><div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6"><Link href="/" className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-500 text-slate-950 shadow-lg shadow-emerald-500/20"><Stethoscope className="h-6 w-6" strokeWidth={2.5} /></span><span className="text-xl font-extrabold tracking-tight text-white">AI Doctor OS</span></Link><nav className="hidden items-center gap-7 text-sm font-medium text-slate-400 md:flex">{navItems.map(({ label, icon: Icon, href }) => <Link key={label} href={href} className="flex items-center gap-1.5 transition-colors hover:text-emerald-400"><Icon className="h-4 w-4" />{label}</Link>)}</nav><div className="flex items-center gap-2"><Link href="/demo" className="hidden rounded-xl bg-emerald-100 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-200 sm:inline-flex">Open live demo</Link><button onClick={() => setDemoOpen(true)} className="rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 transition-all hover:from-emerald-300 hover:to-teal-300">Request a free demo</button></div></div></header><DemoDialog open={demoOpen} onClose={() => setDemoOpen(false)} /></>;
 }
-

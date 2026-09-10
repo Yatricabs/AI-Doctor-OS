@@ -135,7 +135,7 @@ export default function AIDoctorOSLandingEnhanced() {
                 </div>
                 <div className="p-3 bg-slate-900/80 rounded-lg border border-cyan-500/20">
                   <p className="text-xs text-slate-400">Renal Adjustment</p>
-                  <p className="text-sm font-bold text-cyan-400 mt-1">eGFR Safe (>60 mL/min)</p>
+                  <p className="text-sm font-bold text-cyan-400 mt-1">eGFR Safe (&gt;60 mL/min)</p>
                 </div>
               </div>
             </div>
