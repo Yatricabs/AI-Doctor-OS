@@ -19,6 +19,7 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Settings,
   Sparkles,
   Stethoscope,
   UploadCloud,
@@ -50,7 +51,7 @@ export default function DoctorWorkspace() {
 
   function checkSymptoms() {
     if (!symptoms.trim()) return;
-    setSymptomResult("Demo guidance ready: review duration, severity, and red-flag symptoms with the patient.");
+    setSymptomResult(`For "${symptoms.trim()}", organise onset, severity, triggers, current medicines, and red flags. Demo triage: schedule clinician review and escalate immediately if symptoms are severe or worsening.`);
   }
 
   function WorkspaceScreen({ activeNav, onNavigate }: { activeNav: string; onNavigate: (nav: string) => void }) {
@@ -62,6 +63,7 @@ export default function DoctorWorkspace() {
     const [reportAnalyzed, setReportAnalyzed] = useState(false);
     const [reportSummary, setReportSummary] = useState(false);
     const revisitFileInput = useRef<HTMLInputElement>(null);
+    const [profileSection, setProfileSection] = useState("Overview");
 
     const screenData: Record<string, { eyebrow: string; title: string; description: string }> = {
       Patients: { eyebrow: "PATIENT DIRECTORY", title: "Patients", description: "Review patient records, appointments, and care status." },
@@ -69,6 +71,7 @@ export default function DoctorWorkspace() {
       "Clinical insights": { eyebrow: "CLINICAL INTELLIGENCE", title: "Clinical insights", description: "Explore evidence-linked summaries and decision support." },
       "Symptom checker": { eyebrow: "PATIENT-FACING AI", title: "Symptom checker", description: "Organise symptoms before a visit for a focused consultation." },
       "Medical records": { eyebrow: "DOCUMENT INTELLIGENCE", title: "Medical records", description: "Find reports, prescriptions, and source-linked clinical documents." },
+      Profile: { eyebrow: "CLINICIAN PROFILE", title: "Dr. Ananya Arya", description: "Manage your professional profile, clinic preferences, and account settings." },
     };
     const data = screenData[activeNav] ?? screenData.Patients;
 
@@ -86,6 +89,18 @@ export default function DoctorWorkspace() {
             ["Ananya Kapoor", "AK-118", "Annual wellness review · 11:00 AM", "Waiting"],
             ["Vikram Nair", "VN-306", "Lab results review · 11:30 AM", "In review"],
           ].filter(([name, id]) => `${name} ${id}`.toLowerCase().includes(query.toLowerCase())).map(([name, id, detail, status]) => <button key={id} onClick={() => onNavigate("Medical records")} className="flex w-full items-center gap-4 rounded-xl border border-[#e1e9e5] bg-white p-4 text-left hover:border-[#9ac8b8]"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e4f3ed] text-sm font-bold text-[#4e927d]">{name.split(" ").map((part) => part[0]).join("")}</span><span className="flex-1"><strong className="block text-sm text-[#244642]">{name}</strong><span className="mt-1 block text-xs text-[#82958f]">{id} · {detail}</span></span><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[11px] font-bold text-[#5a967e]">{status}</span><ChevronRight className="h-4 w-4 text-[#9ab0a9]" /></button>)}
+        </section>}
+
+        {activeNav === "Profile" && <section className="mt-8 grid gap-5 lg:grid-cols-[280px_1fr]">
+          <aside className="rounded-2xl border border-[#e1e9e5] bg-white p-4">
+            <div className="flex items-center gap-3 border-b border-[#edf1ee] pb-5"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#d5eee4] text-lg font-bold text-[#277a6b]">DA</span><div><strong className="block text-sm text-[#244642]">Dr. Ananya Arya</strong><span className="text-xs text-[#82958f]">General Medicine</span></div></div>
+            <nav className="mt-4 space-y-1">{["Overview", "Profile settings", "Account settings"].map((section) => <button key={section} onClick={() => setProfileSection(section)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${profileSection === section ? "bg-[#e8f5ef] text-[#27806b]" : "text-[#78908a] hover:bg-[#f4f8f5]"}`}><Settings className="h-4 w-4" />{section}</button>)}</nav>
+          </aside>
+          <div className="rounded-2xl border border-[#e1e9e5] bg-white p-6 md:p-8">
+            {profileSection === "Overview" && <><div className="flex flex-col justify-between gap-4 border-b border-[#edf1ee] pb-6 sm:flex-row sm:items-start"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#5a9b88]">Professional profile</p><h2 className="mt-2 text-2xl font-bold text-[#244642]">Dr. Ananya Arya, MBBS, MD</h2><p className="mt-1 text-sm text-[#82958f]">General Medicine · 12 years of clinical experience</p></div><button onClick={() => setProfileSection("Profile settings")} className="rounded-lg bg-[#07947f] px-4 py-2 text-xs font-bold text-white hover:bg-[#057e6d]">Edit profile</button></div><div className="mt-6 grid gap-5 md:grid-cols-2"><div><h3 className="font-bold text-[#315a52]">Education & qualifications</h3><p className="mt-2 text-sm leading-6 text-[#82958f]">MBBS, AIIMS New Delhi · 2010<br />MD, Internal Medicine, PGIMER Chandigarh · 2014<br />Certificate in Diabetes Care · 2018</p></div><div><h3 className="font-bold text-[#315a52]">Specialities</h3><p className="mt-2 text-sm leading-6 text-[#82958f]">Preventive care, diabetes management, hypertension, thyroid disorders, and adult wellness.</p></div><div><h3 className="font-bold text-[#315a52]">Experience & clinic history</h3><p className="mt-2 text-sm leading-6 text-[#82958f]">Lead physician at AI UPCHAR Care Clinic since 2019. Previously consultant at CityCare Hospital, Bengaluru.</p></div><div><h3 className="font-bold text-[#315a52]">Achievements</h3><p className="mt-2 text-sm leading-6 text-[#82958f]">15,000+ consultations · 3 published clinical audits · 2024 Patient Care Excellence award.</p></div></div></>}
+            {profileSection === "Profile settings" && <div><h2 className="text-xl font-bold text-[#244642]">Profile settings</h2><p className="mt-1 text-sm text-[#82958f]">Update the details shown to your care team and patients.</p><div className="mt-6 grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold text-[#5f7c70]">Full name<input defaultValue="Dr. Ananya Arya" className="mt-2 w-full rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm font-normal text-[#244642] outline-none focus:border-[#8fc5b3]" /></label><label className="text-xs font-semibold text-[#5f7c70]">Speciality<input defaultValue="General Medicine" className="mt-2 w-full rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm font-normal text-[#244642] outline-none focus:border-[#8fc5b3]" /></label><label className="text-xs font-semibold text-[#5f7c70] sm:col-span-2">Clinic bio<textarea defaultValue="Clinician focused on practical, preventive adult care." className="mt-2 h-24 w-full rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm font-normal text-[#244642] outline-none focus:border-[#8fc5b3]" /></label></div><button onClick={() => setProfileSection("Overview")} className="mt-6 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#057e6d]">Save profile changes</button></div>}
+            {profileSection === "Account settings" && <div><h2 className="text-xl font-bold text-[#244642]">Account settings</h2><p className="mt-1 text-sm text-[#82958f]">Control sign-in, notifications, and workspace preferences.</p><div className="mt-6 space-y-3">{["Email notifications for urgent follow-ups", "Weekly clinic performance summary", "Two-step sign-in protection"].map((setting) => <label key={setting} className="flex items-center justify-between rounded-xl border border-[#edf1ee] p-4 text-sm text-[#315a52]"><span>{setting}</span><input type="checkbox" defaultChecked className="h-4 w-4 accent-[#07947f]" /></label>)}</div><button onClick={() => setProfileSection("Overview")} className="mt-6 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#057e6d]">Save account settings</button></div>}
+          </div>
         </section>}
 
         {activeNav === "AI Scribe" && <section className="mt-8 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]"><div className="rounded-2xl bg-[#124b47] p-7 text-white"><Mic className="h-7 w-7 text-[#9be2cb]" /><h2 className="mt-6 text-2xl font-bold">Ready to capture your consultation</h2><p className="mt-2 text-sm text-[#b8d2ce]">Start recording when the patient is ready. You can review every generated section before saving.</p><div className="mt-10 flex items-center gap-3"><button onClick={() => setSaved(!saved)} className="rounded-lg bg-white px-5 py-3 text-sm font-bold text-[#124b47]">{saved ? "Recording saved" : "Start recording"}</button><span className="text-xs text-[#a7d9cd]">Demo mode - no audio is stored</span></div></div><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><h3 className="font-bold text-[#244642]">SOAP note preview</h3><div className="mt-5 space-y-4 text-sm"><p><strong className="text-[#5a967e]">Subjective</strong><br /><span className="text-[#82958f]">Patient reports improved symptoms since last visit.</span></p><p><strong className="text-[#5a967e]">Objective</strong><br /><span className="text-[#82958f]">Vitals and examination findings will appear here.</span></p><p><strong className="text-[#5a967e]">Assessment and plan</strong><br /><span className="text-[#82958f]">Review and approve AI suggestions before signing.</span></p></div></div></section>}
@@ -110,7 +125,7 @@ export default function DoctorWorkspace() {
 
   function askCopilot() {
     if (!question.trim()) return;
-    setCopilotResult("Start with the patient timeline, current medications, and any red flags before deciding next steps.");
+    setCopilotResult(`For "${question.trim()}", start with the patient timeline, current medications, recent reports, and red flags. Demo suggestion: verify the source data, document your reasoning, and keep the final decision with the clinician.`);
   }
 
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
@@ -143,11 +158,11 @@ export default function DoctorWorkspace() {
           ))}
         </nav>
         <div className="mt-auto">
-          <button aria-label="Demo workspace" className="w-full rounded-xl border border-[#c5e9dd] bg-[#d8f3e8] p-3 text-left transition hover:bg-[#cceee0] md:p-4">
+          <button onClick={() => setActiveNav("Overview")} aria-label="Demo workspace" className="w-full rounded-xl border border-[#c5e9dd] bg-[#d8f3e8] p-3 text-left transition hover:bg-[#cceee0] md:p-4">
             <span className="flex items-center justify-center gap-3 text-sm font-bold text-[#078b78] md:justify-start"><Sparkles className="h-5 w-5" /><span className="hidden md:inline">Demo workspace</span></span>
             <span className="mt-1 hidden pl-8 text-xs text-[#6d958b] md:block">Explore AI UPCHAR</span>
           </button>
-          <button aria-label="Dr. Ananya Arya profile" className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl p-1 text-left hover:bg-white/60 md:justify-start">
+          <button onClick={() => setActiveNav("Profile")} aria-label="Dr. Ananya Arya profile" className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl p-1 text-left hover:bg-white/60 md:justify-start">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#d5eee4] text-xs font-bold text-[#277a6b]">DA</span>
             <span className="hidden flex-1 md:block"><strong className="block text-sm text-[#214440]">Dr. Ananya Arya</strong><span className="mt-1 block text-xs text-[#78918c]">General Medicine</span></span>
             <ChevronRight className="h-5 w-5 text-[#87aaa0]" />
