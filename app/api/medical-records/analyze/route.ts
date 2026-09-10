@@ -1,4 +1,4 @@
-import { error, json, patientById, readObject, requiredString } from "../../_lib/demo";
+import { error, json, patientById, readObject, reports, requiredString } from "../../_lib/demo";
 
 export async function POST(request: Request) {
   const body = await readObject(request);
@@ -8,10 +8,13 @@ export async function POST(request: Request) {
   if (!patientId || !reportId) return error("patientId and reportId are required.");
   const patient = patientById(patientId);
   if (!patient) return error("Patient not found.", 404);
+  const report = reports.find((item) => item.id === reportId && item.patientId === patientId);
+  if (!report) return error("Report not found for this patient.", 404);
   return json({
     analysis: {
       patientId,
-      reportId,
+      reportId: report.id,
+      title: report.title,
       patient: patient.name,
       trend: "HbA1c improved by 0.6% compared with the previous report.",
       flag: "LDL remains above target and needs clinician review.",

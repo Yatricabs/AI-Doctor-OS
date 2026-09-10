@@ -37,6 +37,7 @@ const stats = [
 const waveform = [18, 34, 27, 45, 22, 38, 31, 52, 24, 40, 29, 47, 20, 35, 26, 44, 30, 55, 23, 39, 28, 48, 21, 34, 27, 43, 19, 37];
 
 type ApiEnvelope<T> = { ok: boolean; data?: T; error?: { message: string } };
+type ScribeNote = { id: string; patientId: string | null; status: string; subjective: string; objective: string; assessment: string; plan: string };
 
 async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
@@ -54,9 +55,14 @@ export default function DoctorWorkspace() {
   const [scribeOpen, setScribeOpen] = useState(false);
   const [symptoms, setSymptoms] = useState("");
   const [symptomResult, setSymptomResult] = useState("");
+  const [symptomDuration, setSymptomDuration] = useState("");
+  const [symptomSeverity, setSymptomSeverity] = useState("Mild");
+  const [associatedSymptoms, setAssociatedSymptoms] = useState("");
+  const [medicines, setMedicines] = useState("");
   const [question, setQuestion] = useState("");
   const [copilotResult, setCopilotResult] = useState("");
   const [uploadedFile, setUploadedFile] = useState("");
+  const [uploadedReportId, setUploadedReportId] = useState("");
   const [documentSummary, setDocumentSummary] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const [summaryStats, setSummaryStats] = useState<typeof stats>(stats);
@@ -71,21 +77,24 @@ export default function DoctorWorkspace() {
   async function checkSymptoms() {
     if (!symptoms.trim()) return;
     try {
-      const { analysis } = await apiRequest<{ analysis: { input: string; questions: string[]; triage: string; redFlags: string } }>("/api/symptom-analysis", { method: "POST", body: JSON.stringify({ symptoms }) });
-      setSymptomResult(`For "${analysis.input}", ${analysis.questions.join(" ")} Demo triage: ${analysis.triage}. ${analysis.redFlags}`);
+      const { analysis } = await apiRequest<{ analysis: { input: string; duration: string; severity: string; associatedSymptoms: string; medicines: string; questions: string[]; triage: string; redFlags: string } }>("/api/symptom-analysis", { method: "POST", body: JSON.stringify({ symptoms, patientId: selectedPatientId, duration: symptomDuration, severity: symptomSeverity, associatedSymptoms, medicines }) });
+      setSymptomResult(`Structured intake · Duration: ${analysis.duration} · Severity: ${analysis.severity} · Associated symptoms: ${analysis.associatedSymptoms} · Medicines: ${analysis.medicines}\n\nFollow-up questions: ${analysis.questions.join(" ")}\n\nTriage: ${analysis.triage}. ${analysis.redFlags}`);
     } catch (error: unknown) {
       setServiceError(error instanceof Error ? error.message : "Symptom analysis failed.");
     }
   }
 
-  function WorkspaceScreen({ activeNav, onNavigate }: { activeNav: string; onNavigate: (nav: string) => void }) {
+  function WorkspaceScreen({ activeNav, onNavigate, selectedPatientId, setSelectedPatientId }: { activeNav: string; onNavigate: (nav: string) => void; selectedPatientId: string; setSelectedPatientId: (patientId: string) => void }) {
     const [query, setQuery] = useState("");
     const [added, setAdded] = useState(false);
     const [saved, setSaved] = useState(false);
     const [revisitReport, setRevisitReport] = useState("");
+    const [revisitReportId, setRevisitReportId] = useState("");
     const [reportUpdated, setReportUpdated] = useState(false);
     const [reportAnalyzed, setReportAnalyzed] = useState(false);
     const [reportSummary, setReportSummary] = useState(false);
+    const [analysisText, setAnalysisText] = useState("");
+    const [summaryText, setSummaryText] = useState("");
     const revisitFileInput = useRef<HTMLInputElement>(null);
     const [profileSection, setProfileSection] = useState("Overview");
     const [patients, setPatients] = useState<{ id: string; name: string; initials: string; appointment: string; status: string }[]>([]);
@@ -93,20 +102,29 @@ export default function DoctorWorkspace() {
     const [screenLoading, setScreenLoading] = useState(false);
     const [screenError, setScreenError] = useState("");
     const [transcript, setTranscript] = useState("");
-    const [scribeNote, setScribeNote] = useState("");
+    const [scribeNote, setScribeNote] = useState<ScribeNote | null>(null);
+    const [scribePatientId, setScribePatientId] = useState(selectedPatientId);
+    const [scribeSaving, setScribeSaving] = useState(false);
     const [insights, setInsights] = useState<{ id: string; title: string; detail: string; priority: string }[]>([]);
     const [profileForm, setProfileForm] = useState({ fullName: "Dr. Ananya Arya", specialty: "General Medicine", clinicBio: "Clinician focused on practical, preventive adult care." });
     const [accountForm, setAccountForm] = useState({ urgentFollowUps: true, weeklySummary: true, twoStepSignIn: true });
+    const [showAddPatient, setShowAddPatient] = useState(false);
+    const [newPatient, setNewPatient] = useState({ name: "", id: "", appointment: "" });
 
     useEffect(() => {
       setScreenError("");
-      if (activeNav === "Patients") {
+      if (["Patients", "AI Scribe", "Symptom checker", "Medical records"].includes(activeNav)) {
         setScreenLoading(true);
         apiRequest<{ patients: typeof patients }>("/api/patients").then(({ patients: data }) => setPatients(data)).catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Patients could not be loaded.")).finally(() => setScreenLoading(false));
       }
       if (activeNav === "Medical records") {
         setScreenLoading(true);
         apiRequest<{ reports: typeof reports }>(`/api/medical-records/reports?patientId=${selectedPatientId}`).then(({ reports: data }) => setReports(data)).catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Medical records could not be loaded.")).finally(() => setScreenLoading(false));
+      }
+      if (activeNav === "AI Scribe") {
+        apiRequest<{ notes: ScribeNote[] }>(`/api/scribe?patientId=${selectedPatientId}`)
+          .then(({ notes }) => setScribeNote(notes.at(-1) ?? null))
+          .catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Saved SOAP notes could not be loaded."));
       }
       if (activeNav === "Clinical insights") {
         setScreenLoading(true);
@@ -118,6 +136,19 @@ export default function DoctorWorkspace() {
           .catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Profile settings could not be loaded."));
       }
     }, [activeNav, selectedPatientId]);
+
+    async function addPatient() {
+      if (!newPatient.name.trim()) return;
+      try {
+        const { patient } = await apiRequest<{ patient: { id: string; name: string; initials: string; appointment: string; status: string } }>("/api/patients", { method: "POST", body: JSON.stringify(newPatient) });
+        setPatients((current) => [...current, patient]);
+        setSelectedPatientId(patient.id);
+        setNewPatient({ name: "", id: "", appointment: "" });
+        setShowAddPatient(false);
+      } catch (error: unknown) {
+        setScreenError(error instanceof Error ? error.message : "Patient could not be added.");
+      }
+    }
 
     async function queueWorkspaceAction(action: string) {
       try {
@@ -150,12 +181,26 @@ export default function DoctorWorkspace() {
       if (!transcript.trim()) return;
       setScreenLoading(true);
       try {
-        const { note } = await apiRequest<{ note: { subjective: string; objective: string; assessment: string; plan: string } }>("/api/scribe", { method: "POST", body: JSON.stringify({ transcript, patientId: "RM-102" }) });
-        setScribeNote(`${note.subjective} ${note.objective} ${note.assessment} ${note.plan}`);
+        const { note } = await apiRequest<{ note: ScribeNote }>("/api/scribe", { method: "POST", body: JSON.stringify({ transcript, patientId: scribePatientId }) });
+        setScribeNote(note);
       } catch (error: unknown) {
         setScreenError(error instanceof Error ? error.message : "Scribe generation failed.");
       } finally {
         setScreenLoading(false);
+      }
+
+    }
+
+    async function updateScribe(action: "save" | "approve") {
+      if (!scribeNote) return;
+      setScribeSaving(true);
+      try {
+        const { note } = await apiRequest<{ note: ScribeNote }>("/api/scribe", { method: "PATCH", body: JSON.stringify({ noteId: scribeNote.id, action, subjective: scribeNote.subjective, objective: scribeNote.objective, assessment: scribeNote.assessment, plan: scribeNote.plan }) });
+        setScribeNote(note);
+      } catch (error: unknown) {
+        setScreenError(error instanceof Error ? error.message : "SOAP note could not be updated.");
+      } finally {
+        setScribeSaving(false);
       }
     }
 
@@ -163,7 +208,8 @@ export default function DoctorWorkspace() {
       setReportAnalyzed(false);
       try {
         const { analysis } = await apiRequest<{ analysis: { trend: string; flag: string; confidence: string; summary: string } }>("/api/medical-records/analyze", { method: "POST", body: JSON.stringify({ patientId: selectedPatientId, reportId }) });
-        setRevisitReport(`${analysis.trend} ${analysis.flag} ${analysis.confidence}`);
+        setAnalysisText(`${analysis.trend} ${analysis.flag} ${analysis.confidence} ${analysis.summary}`);
+        setRevisitReportId(reportId);
         setReportAnalyzed(true);
       } catch (error: unknown) {
         setScreenError(error instanceof Error ? error.message : "Report analysis failed.");
@@ -172,7 +218,8 @@ export default function DoctorWorkspace() {
 
     async function summarizeReport(reportId: string, title: string) {
       try {
-        await apiRequest("/api/medical-records/summarize", { method: "POST", body: JSON.stringify({ reportId, title }) });
+        const { summary } = await apiRequest<{ summary: { keyFindings: string[]; nextStep: string } }>("/api/medical-records/summarize", { method: "POST", body: JSON.stringify({ reportId, title }) });
+        setSummaryText(`${summary.keyFindings.join(" · ")} Next step: ${summary.nextStep}`);
         setReportSummary(true);
       } catch (error: unknown) {
         setScreenError(error instanceof Error ? error.message : "Report summary failed.");
@@ -183,7 +230,9 @@ export default function DoctorWorkspace() {
       const title = revisitFileInput.current?.files?.[0]?.name;
       if (!title) return;
       try {
-        await apiRequest("/api/medical-records/reports", { method: "POST", body: JSON.stringify({ patientId: selectedPatientId, title, type: "Lab report" }) });
+        const { report } = await apiRequest<{ report: { id: string; title: string; patientId: string; type: string; date: string; status: string } }>("/api/medical-records/reports", { method: "POST", body: JSON.stringify({ patientId: selectedPatientId, title, type: "Lab report" }) });
+        setReports((current) => [report, ...current]);
+        setRevisitReportId(report.id);
         setRevisitReport(title);
         setReportUpdated(true);
       } catch (error: unknown) {
@@ -205,10 +254,11 @@ export default function DoctorWorkspace() {
       <div className="mx-auto max-w-[1280px] px-5 pb-12 pt-8 md:px-10">
         <div className="flex flex-col justify-between gap-6 border-b border-[#e2ebe6] pb-8 lg:flex-row lg:items-end">
           <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#5a9b88]">{data.eyebrow}</p><h1 className="mt-3 text-3xl font-bold tracking-[-0.05em] text-[#173f3c]">{data.title}</h1><p className="mt-2 text-sm text-[#78908a]">{data.description}</p></div>
-          <button onClick={() => queueWorkspaceAction(activeNav === "Patients" ? "Add patient" : `Create ${activeNav}`)} className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-3 text-sm font-bold text-white hover:bg-[#057e6d]"><Plus className="h-4 w-4" /> {added ? "Action queued" : activeNav === "Patients" ? "Add patient" : "Create new"}</button>
+          <button onClick={() => activeNav === "Patients" ? setShowAddPatient(true) : queueWorkspaceAction(`Create ${activeNav}`)} className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-3 text-sm font-bold text-white hover:bg-[#057e6d]"><Plus className="h-4 w-4" /> {added ? "Action queued" : activeNav === "Patients" ? "Add patient" : "Create new"}</button>
         </div>
 
         {activeNav === "Patients" && <section className="mt-8 space-y-4">
+          {showAddPatient && <div className="rounded-2xl border border-[#b9decf] bg-[#f5fcf8] p-5"><div className="flex items-center justify-between"><h2 className="font-bold text-[#244642]">Add patient</h2><button onClick={() => setShowAddPatient(false)} aria-label="Close add patient form"><X className="h-4 w-4 text-[#78908a]" /></button></div><div className="mt-4 grid gap-3 md:grid-cols-3"><input value={newPatient.name} onChange={(event) => setNewPatient({ ...newPatient, name: event.target.value })} placeholder="Full name *" className="rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none" /><input value={newPatient.id} onChange={(event) => setNewPatient({ ...newPatient, id: event.target.value })} placeholder="Patient ID (optional)" className="rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none" /><input value={newPatient.appointment} onChange={(event) => setNewPatient({ ...newPatient, appointment: event.target.value })} placeholder="Appointment (optional)" className="rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none" /></div><button onClick={addPatient} disabled={!newPatient.name.trim()} className="mt-4 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">Save patient</button></div>}
           <div className="flex items-center gap-3 rounded-xl border border-[#e1e9e5] bg-white px-4 py-3"><Search className="h-4 w-4 text-[#91a49e]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search patient name or ID" className="flex-1 text-sm outline-none placeholder:text-[#a0b0ab]" /></div>
           {screenLoading && <p className="rounded-xl bg-[#edf7f2] p-4 text-sm text-[#5a967e]">Loading patient directory from the clinic service...</p>}
           {patients.filter(({ name, id }) => `${name} ${id}`.toLowerCase().includes(query.toLowerCase())).map(({ name, id, appointment: detail, status, initials }) => <button key={id} onClick={() => { setSelectedPatientId(id); onNavigate("Medical records"); }} className="flex w-full items-center gap-4 rounded-xl border border-[#e1e9e5] bg-white p-4 text-left hover:border-[#9ac8b8]"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e4f3ed] text-sm font-bold text-[#4e927d]">{initials}</span><span className="flex-1"><strong className="block text-sm text-[#244642]">{name}</strong><span className="mt-1 block text-xs text-[#82958f]">{id} · {detail}</span></span><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[11px] font-bold text-[#5a967e]">{status}</span><ChevronRight className="h-4 w-4 text-[#9ab0a9]" /></button>)}
@@ -226,16 +276,16 @@ export default function DoctorWorkspace() {
           </div>
         </section>}
 
-        {activeNav === "AI Scribe" && <section className="mt-8 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]"><div className="rounded-2xl bg-[#124b47] p-7 text-white"><Mic className="h-7 w-7 text-[#9be2cb]" /><h2 className="mt-6 text-2xl font-bold">Ready to capture your consultation</h2><p className="mt-2 text-sm text-[#b8d2ce]">Send a consultation transcript to the serverless scribe service and review the generated SOAP draft.</p><textarea value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Paste or dictate consultation notes..." className="mt-6 h-28 w-full rounded-lg border border-[#39706a] bg-[#0d3d3a] p-3 text-sm text-white outline-none placeholder:text-[#8bbeb1]" /><div className="mt-4 flex items-center gap-3"><button onClick={generateScribeNote} disabled={screenLoading || !transcript.trim()} className="rounded-lg bg-white px-5 py-3 text-sm font-bold text-[#124b47] disabled:cursor-not-allowed disabled:opacity-60">{screenLoading ? "Generating..." : "Generate SOAP draft"}</button><span className="text-xs text-[#a7d9cd]">Server response · clinician review required</span></div></div><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><h3 className="font-bold text-[#244642]">SOAP note preview</h3><p className="mt-5 whitespace-pre-line text-sm leading-6 text-[#82958f]">{scribeNote || "Your server-generated draft will appear here after you submit a transcript."}</p></div></section>}
+        {activeNav === "AI Scribe" && <section className="mt-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]"><div className="rounded-2xl bg-[#124b47] p-7 text-white"><Mic className="h-7 w-7 text-[#9be2cb]" /><h2 className="mt-6 text-2xl font-bold">Ready to capture your consultation</h2><p className="mt-2 text-sm text-[#b8d2ce]">Choose the patient, capture the consultation, then edit and save or approve the SOAP draft.</p><select value={scribePatientId} onChange={(event) => setScribePatientId(event.target.value)} className="mt-5 w-full rounded-lg border border-[#39706a] bg-[#0d3d3a] p-3 text-sm text-white outline-none"><option value="">No patient selected</option>{patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.name} ({patient.id})</option>)}</select><textarea value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Paste or dictate consultation notes..." className="mt-3 h-28 w-full rounded-lg border border-[#39706a] bg-[#0d3d3a] p-3 text-sm text-white outline-none placeholder:text-[#8bbeb1]" /><div className="mt-4 flex items-center gap-3"><button onClick={generateScribeNote} disabled={screenLoading || !transcript.trim() || !scribePatientId} className="rounded-lg bg-white px-5 py-3 text-sm font-bold text-[#124b47] disabled:cursor-not-allowed disabled:opacity-60">{screenLoading ? "Generating..." : "Generate SOAP draft"}</button><span className="text-xs text-[#a7d9cd]">Server response · clinician review required</span></div></div><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><div className="flex items-center justify-between"><h3 className="font-bold text-[#244642]">Editable SOAP draft</h3>{scribeNote && <span className="rounded-full bg-[#edf7f2] px-2.5 py-1 text-[10px] font-bold uppercase text-[#4f927a]">{scribeNote.status}</span>}</div>{scribeNote ? <div className="mt-5 space-y-3">{(["subjective", "objective", "assessment", "plan"] as const).map((field) => <label key={field} className="block text-xs font-bold capitalize text-[#5f7c70]">{field}<textarea value={scribeNote[field]} onChange={(event) => setScribeNote({ ...scribeNote, [field]: event.target.value })} className="mt-1 min-h-[62px] w-full rounded-lg border border-[#dce9e3] p-3 text-sm font-normal text-[#315a52] outline-none focus:border-[#8fc5b3]" /></label>)}<div className="flex gap-2"><button onClick={() => updateScribe("save")} disabled={scribeSaving} className="rounded-lg border border-[#b9decf] px-4 py-2 text-xs font-bold text-[#4f927a] disabled:opacity-50">Save draft</button><button onClick={() => updateScribe("approve")} disabled={scribeSaving} className="rounded-lg bg-[#07947f] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">Approve note</button></div></div> : <p className="mt-5 text-sm leading-6 text-[#82958f]">Your server-generated draft will appear here after you submit a transcript.</p>}</div></section>}
 
         {activeNav === "Clinical insights" && <section className="mt-8 grid gap-4 md:grid-cols-2">{insights.map((insight) => <article key={insight.id} className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#5a9b88]">{insight.priority} priority</p><h2 className="mt-2 text-lg font-bold text-[#244642]">{insight.title}</h2><p className="mt-2 text-sm leading-6 text-[#82958f]">{insight.detail}</p></div><button onClick={() => apiRequest("/api/insights", { method: "POST", body: JSON.stringify({ insightId: insight.id }) }).then(() => setInsights((current) => current.filter((item) => item.id !== insight.id))).catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Insight review failed."))} className="shrink-0 rounded-lg bg-[#eaf6f0] px-3 py-2 text-xs font-bold text-[#4f927a]">Mark reviewed</button></div></article>)}</section>}
-        {activeNav === "Symptom checker" && <section className="mt-8 grid gap-4 md:grid-cols-2"><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><h2 className="text-lg font-bold text-[#244642]">Patient symptom intake</h2><p className="mt-2 text-sm leading-6 text-[#82958f]">Enter symptoms to create a structured pre-visit summary from the serverless analysis endpoint.</p><textarea value={symptoms} onChange={(event) => setSymptoms(event.target.value)} placeholder="Describe symptoms, duration, and severity..." className="mt-5 h-28 w-full rounded-lg border border-[#e1e9e5] p-3 text-sm outline-none focus:border-[#8fc5b3]" /><button onClick={checkSymptoms} className="mt-4 rounded-lg bg-[#07947f] px-4 py-2 text-xs font-bold text-white">Analyse symptoms</button>{symptomResult && <p className="mt-4 rounded-lg bg-[#f1f7f2] p-3 text-xs leading-5 text-[#65806e]">{symptomResult}</p>}</div><div className="rounded-2xl bg-[#e6f4ee] p-6"><ShieldCheck className="h-6 w-6 text-[#4f927a]" /><h3 className="mt-5 font-bold text-[#244642]">Human review remains in control</h3><p className="mt-2 text-sm leading-6 text-[#6f8d83]">The API organises information and triage prompts; it does not diagnose or replace clinical judgment.</p></div></section>}
-        {activeNav === "Medical records" && <section className="mt-8 space-y-4"><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><h2 className="text-lg font-bold text-[#244642]">Recent documents</h2><p className="mt-2 text-sm text-[#82958f]">Reports loaded from the medical records service for Rohan Mehta.</p>{screenLoading && <p className="mt-4 text-sm text-[#5a967e]">Loading records...</p>}{reports.map((report) => <div key={report.id} className="mt-4 flex flex-col justify-between gap-3 rounded-xl border border-[#edf1ee] p-4 sm:flex-row sm:items-center"><div><strong className="block text-sm text-[#244642]">{report.title}</strong><span className="text-xs text-[#82958f]">{report.type} · {report.date} · {report.status}</span></div><button onClick={() => analyzeReport(report.id)} className="rounded-lg bg-[#124b47] px-3 py-2 text-xs font-bold text-white">Analyse report</button></div>)}{reportAnalyzed && <p className="mt-4 rounded-lg bg-[#f1f7f3] p-4 text-sm text-[#527167]">{revisitReport}</p>}</div></section>}
+        {activeNav === "Symptom checker" && <section className="mt-8 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><h2 className="text-lg font-bold text-[#244642]">Structured patient symptom intake</h2><p className="mt-2 text-sm leading-6 text-[#82958f]">Capture the context clinicians need before review. This organizes information; it does not diagnose.</p><label className="mt-5 block text-xs font-bold text-[#5f7c70]">Patient<select value={selectedPatientId} onChange={(event) => setSelectedPatientId(event.target.value)} className="mt-1 w-full rounded-lg border border-[#dce9e3] p-3 text-sm font-normal text-[#315a52]">{patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.name} ({patient.id})</option>)}</select></label><textarea value={symptoms} onChange={(event) => setSymptoms(event.target.value)} placeholder="What symptoms are you experiencing?" className="mt-3 h-24 w-full rounded-lg border border-[#e1e9e5] p-3 text-sm outline-none focus:border-[#8fc5b3]" /><div className="mt-3 grid gap-3 sm:grid-cols-2"><input value={symptomDuration} onChange={(event) => setSymptomDuration(event.target.value)} placeholder="Duration (e.g. 2 days)" className="rounded-lg border border-[#e1e9e5] p-3 text-sm outline-none" /><select value={symptomSeverity} onChange={(event) => setSymptomSeverity(event.target.value)} className="rounded-lg border border-[#e1e9e5] p-3 text-sm"><option>Mild</option><option>Moderate</option><option>Severe</option></select><input value={associatedSymptoms} onChange={(event) => setAssociatedSymptoms(event.target.value)} placeholder="Associated symptoms" className="rounded-lg border border-[#e1e9e5] p-3 text-sm outline-none" /><input value={medicines} onChange={(event) => setMedicines(event.target.value)} placeholder="Current medicines or allergies" className="rounded-lg border border-[#e1e9e5] p-3 text-sm outline-none" /></div><button onClick={checkSymptoms} disabled={!symptoms.trim() || screenLoading} className="mt-4 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">{screenLoading ? "Analysing..." : "Analyse symptoms"}</button>{symptomResult && <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-[#f1f7f2] p-4 text-xs leading-5 text-[#65806e]">{symptomResult}</pre>}</div><div className="rounded-2xl bg-[#e6f4ee] p-6"><ShieldCheck className="h-6 w-6 text-[#4f927a]" /><h3 className="mt-5 font-bold text-[#244642]">Human review remains in control</h3><p className="mt-2 text-sm leading-6 text-[#6f8d83]">The API returns structured follow-up questions, triage guidance, and red-flag reminders for clinician review.</p></div></section>}
+        {activeNav === "Medical records" && <section className="mt-8 space-y-4"><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><h2 className="text-lg font-bold text-[#244642]">Recent documents</h2><p className="mt-2 text-sm text-[#82958f]">Reports loaded from the medical records service for {patients.find((patient) => patient.id === selectedPatientId)?.name ?? selectedPatientId}.</p>{screenLoading && <p className="mt-4 text-sm text-[#5a967e]">Loading records...</p>}{reports.map((report) => <div key={report.id} className="mt-4 flex flex-col justify-between gap-3 rounded-xl border border-[#edf1ee] p-4 sm:flex-row sm:items-center"><div><strong className="block text-sm text-[#244642]">{report.title}</strong><span className="text-xs text-[#82958f]">{report.type} · {report.date} · {report.status}</span></div><button onClick={() => analyzeReport(report.id)} className="rounded-lg bg-[#124b47] px-3 py-2 text-xs font-bold text-white">Analyse report</button></div>        )}{reportAnalyzed && analysisText && <p className="mt-4 rounded-lg bg-[#f1f7f3] p-4 text-sm text-[#527167]">{analysisText}</p>}</div></section>}
         {screenError && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{screenError}</p>}
 
         {activeNav === "Medical records" && <section className="mt-4 rounded-2xl border border-[#e1e9e5] bg-white p-6">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-            <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#b0805e]">REVISIT WORKFLOW</p><h2 className="mt-2 text-xl font-bold text-[#244642]">Update and analyse Rohan&apos;s latest test report</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[#82958f]">Upload the report from today&apos;s revisit. The system keeps it linked to the patient timeline, compares it with the previous result, and prepares a reviewable doctor summary.</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#b0805e]">REVISIT WORKFLOW</p><h2 className="mt-2 text-xl font-bold text-[#244642]">Update and analyse {patients.find((patient) => patient.id === selectedPatientId)?.name ?? "patient"}&apos;s latest test report</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[#82958f]">Upload the report from today&apos;s revisit. The server stores it against the selected patient, compares it with previous results, and prepares a reviewable doctor summary.</p></div>
             <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${reportUpdated ? "bg-[#e3f5ec] text-[#4f927a]" : "bg-[#f5f0e9] text-[#a27d5b]"}`}>{reportUpdated ? "Record updated" : "Awaiting report"}</span>
           </div>
           <input ref={revisitFileInput} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => setRevisitReport(event.target.files?.[0]?.name ?? "")} className="hidden" />
@@ -243,7 +293,7 @@ export default function DoctorWorkspace() {
             <button onClick={() => revisitFileInput.current?.click()} className="flex min-h-[112px] items-center gap-4 rounded-xl border border-dashed border-[#cbded5] bg-[#f8fcfa] p-5 text-left hover:border-[#75b79d]"><span className="rounded-xl bg-[#e7f4ed] p-3 text-[#5a967e]"><UploadCloud className="h-5 w-5" /></span><span><strong className="block text-sm text-[#315a52]">{revisitReport || "Upload a new test report"}</strong><span className="mt-1 block text-xs text-[#82958f]">PDF or image · CBC, lipid profile, HbA1c, or other revisit report</span></span></button>
             <button disabled={!revisitReport || screenLoading} onClick={updateRevisitRecord} className="rounded-xl bg-[#eaf6f0] px-5 py-3 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#dcefe5] disabled:cursor-not-allowed disabled:opacity-50">{reportUpdated ? "Updated in timeline" : "Update patient record"}</button>
           </div>
-          {reportUpdated && <div className="mt-5 rounded-xl border border-[#d9e9e1] bg-[#fbfdfc] p-5"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><p className="text-xs font-bold text-[#315a52]">{revisitReport}</p><p className="mt-1 text-[11px] text-[#82958f]">Added to the selected patient&apos;s revisit</p></div><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[10px] font-bold text-[#5a967e]">New result</span></div><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => analyzeReport(reports[0]?.id ?? "report-cbc-102")} className="rounded-lg bg-[#124b47] px-4 py-2 text-xs font-bold text-white hover:bg-[#0d3e3b]">{reportAnalyzed ? "Analysis complete" : "Analyse changes"}</button><button disabled={!reportAnalyzed} onClick={() => summarizeReport(reports[0]?.id ?? "report-cbc-102", revisitReport)} className="rounded-lg border border-[#cbded5] px-4 py-2 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#edf7f2] disabled:cursor-not-allowed disabled:opacity-50">{reportSummary ? "Summary ready" : "Summarise for doctor"}</button></div>{reportAnalyzed && <div className="mt-4 grid gap-3 rounded-lg bg-[#f1f7f3] p-4 text-xs text-[#5f7c70] md:grid-cols-3"><span><strong className="block text-[#315a52]">Trend</strong>HbA1c improved by 0.6%</span><span><strong className="block text-[#315a52]">Flag</strong>LDL remains above target</span><span><strong className="block text-[#315a52]">Confidence</strong>High · 2 linked reports</span></div>}{reportSummary && <div className="mt-4 rounded-lg border-l-4 border-[#65a889] bg-white p-4 text-sm leading-6 text-[#527167]"><strong className="text-[#315a52]">Doctor summary:</strong> Compared with the previous report, glycaemic control is improving. LDL remains elevated and should be reviewed alongside adherence, diet, and the current statin plan at today&apos;s revisit.</div>}</div>}
+          {reportUpdated && <div className="mt-5 rounded-xl border border-[#d9e9e1] bg-[#fbfdfc] p-5"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><p className="text-xs font-bold text-[#315a52]">{revisitReport}</p><p className="mt-1 text-[11px] text-[#82958f]">Added to the selected patient&apos;s revisit</p></div><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[10px] font-bold text-[#5a967e]">New result</span></div><div className="mt-4 flex flex-wrap gap-2"><button disabled={!revisitReportId} onClick={() => analyzeReport(revisitReportId)} className="rounded-lg bg-[#124b47] px-4 py-2 text-xs font-bold text-white hover:bg-[#0d3e3b] disabled:opacity-50">{reportAnalyzed ? "Analysis complete" : "Analyse changes"}</button><button disabled={!reportAnalyzed || !revisitReportId} onClick={() => summarizeReport(revisitReportId, revisitReport)} className="rounded-lg border border-[#cbded5] px-4 py-2 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#edf7f2] disabled:cursor-not-allowed disabled:opacity-50">{reportSummary ? "Summary ready" : "Summarise for doctor"}</button></div>{reportAnalyzed && analysisText && <div className="mt-4 rounded-lg bg-[#f1f7f3] p-4 text-xs leading-5 text-[#5f7c70]">{analysisText}</div>}{reportSummary && <div className="mt-4 rounded-lg border-l-4 border-[#65a889] bg-white p-4 text-sm leading-6 text-[#527167]"><strong className="text-[#315a52]">Doctor summary:</strong> {summaryText}</div>}</div>}
         </section>}
       </div>
     );
@@ -256,12 +306,17 @@ export default function DoctorWorkspace() {
       .catch((error: unknown) => setServiceError(error instanceof Error ? error.message : "Copilot request failed."));
   }
 
-  function handleFile(event: ChangeEvent<HTMLInputElement>) {
+  async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (file) {
-      setUploadedFile(file.name);
-      apiRequest<{ report: { id: string } }>("/api/medical-records/reports", { method: "POST", body: JSON.stringify({ patientId: "RM-102", title: file.name, type: "Lab report" }) })
-        .catch((error: unknown) => setServiceError(error instanceof Error ? error.message : "Document upload failed."));
+    if (!file) return;
+    setUploadedFile(file.name);
+    setUploadedReportId("");
+    try {
+      const { report } = await apiRequest<{ report: { id: string } }>("/api/medical-records/reports", { method: "POST", body: JSON.stringify({ patientId: "RM-102", title: file.name, type: "Lab report" }) });
+      setUploadedReportId(report.id);
+    } catch (error: unknown) {
+      setUploadedFile("");
+      setServiceError(error instanceof Error ? error.message : "Document upload failed.");
     }
   }
 
@@ -276,9 +331,9 @@ export default function DoctorWorkspace() {
   }
 
   async function summarizeDocument() {
-    if (!uploadedFile) return;
+    if (!uploadedFile || !uploadedReportId) return;
     try {
-      const { summary } = await apiRequest<{ summary: { keyFindings: string[]; nextStep: string } }>("/api/medical-records/summarize", { method: "POST", body: JSON.stringify({ reportId: uploadedFile, title: uploadedFile }) });
+      const { summary } = await apiRequest<{ summary: { keyFindings: string[]; nextStep: string } }>("/api/medical-records/summarize", { method: "POST", body: JSON.stringify({ reportId: uploadedReportId, title: uploadedFile }) });
       setDocumentSummary(`${summary.keyFindings.join(" · ")} Next step: ${summary.nextStep}`);
     } catch (error: unknown) {
       setServiceError(error instanceof Error ? error.message : "Document summary failed.");
@@ -398,14 +453,14 @@ export default function DoctorWorkspace() {
               <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#af8b66]">Document intelligence</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Summarise a medical document</h3><p className="mt-2 text-sm text-[#818b85]">Upload a PDF and get the key points at a glance.</p></div><FileText className="h-5 w-5 text-[#bd956d]" /></div>
               <input ref={fileInput} type="file" accept=".pdf,application/pdf" onChange={handleFile} className="hidden" />
               <button onClick={() => fileInput.current?.click()} className="mt-6 flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#d9ddd7] bg-[#fbfcfa] px-4 py-7 text-center hover:border-[#a9c0ae]"><UploadCloud className="h-6 w-6 text-[#a8b8ad]" /><span className="mt-2 text-xs font-semibold text-[#7d8b82]">{uploadedFile || "Drop a PDF here or browse"}</span><span className="mt-1 text-[10px] text-[#a4ada7]">PDF up to 10 MB · DEMO MODE</span></button>
-              <div className="mt-4 flex items-center justify-between"><span className="flex items-center gap-2 text-[11px] text-[#8b958e]"><ShieldCheck className="h-4 w-4 text-[#76a287]" /> Your data stays private</span><button disabled={!uploadedFile} onClick={summarizeDocument} className="rounded-lg bg-[#f2eee8] px-4 py-2 text-xs font-bold text-[#a2876c] enabled:hover:bg-[#e9dfd2] disabled:cursor-not-allowed disabled:opacity-50">Summarise document</button></div>
+              <div className="mt-4 flex items-center justify-between"><span className="flex items-center gap-2 text-[11px] text-[#8b958e]"><ShieldCheck className="h-4 w-4 text-[#76a287]" /> Your data stays private</span><button disabled={!uploadedReportId} onClick={summarizeDocument} className="rounded-lg bg-[#f2eee8] px-4 py-2 text-xs font-bold text-[#a2876c] enabled:hover:bg-[#e9dfd2] disabled:cursor-not-allowed disabled:opacity-50">Summarise document</button></div>
               {documentSummary && <p className="mt-4 rounded-lg bg-[#f6f2ec] p-3 text-xs leading-5 text-[#806c58]">{documentSummary}</p>}
             </article>
           </div>
         </section>
 
         <footer className="mt-12 flex flex-col gap-2 border-t border-[#e8e8e2] pt-6 text-xs text-[#9aa39d] sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2 font-semibold text-[#707b74]"><HeartPulse className="h-4 w-4 text-[#76a287]" /> AI UPCHAR</span><span>Designed for focused care <span className="text-[#d89182]">♥</span></span><span>DEMO MODE · AI responses are simulated</span></footer>
-      </div> : <WorkspaceScreen activeNav={activeNav} onNavigate={setActiveNav} />}
+      </div> : <WorkspaceScreen activeNav={activeNav} onNavigate={setActiveNav} selectedPatientId={selectedPatientId} setSelectedPatientId={setSelectedPatientId} />}
       </div>
     </main>
   );

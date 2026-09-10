@@ -1,4 +1,4 @@
-import { error, json, patientById, readObject, requiredString } from "../_lib/demo";
+import { error, json, optionalString, patientById, readObject, requiredString } from "../_lib/demo";
 
 export async function POST(request: Request) {
   const body = await readObject(request);
@@ -8,10 +8,18 @@ export async function POST(request: Request) {
   const patientId = body.patientId === undefined ? undefined : requiredString(body.patientId, "patientId", 30);
   if (body.patientId !== undefined && !patientId) return error("patientId must be a non-empty string.");
   if (patientId && !patientById(patientId)) return error("Patient not found.", 404);
+  const duration = optionalString(body.duration, 100);
+  const severity = optionalString(body.severity, 40);
+  const associatedSymptoms = optionalString(body.associatedSymptoms, 1000);
+  const medicines = optionalString(body.medicines, 1000);
   return json({
     analysis: {
       patientId: patientId ?? null,
       input: symptoms,
+      duration: duration ?? "Not provided",
+      severity: severity ?? "Not provided",
+      associatedSymptoms: associatedSymptoms ?? "None provided",
+      medicines: medicines ?? "None provided",
       questions: ["When did this start?", "How severe is it?", "What triggers or relieves it?", "Which medicines are being taken?"],
       triage: "schedule clinician review",
       redFlags: "Escalate immediately if symptoms are severe, rapidly worsening, or associated with an emergency warning sign.",

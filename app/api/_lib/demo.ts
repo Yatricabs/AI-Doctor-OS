@@ -17,6 +17,27 @@ export type Report = {
   status: "Ready for review" | "Reviewed";
 };
 
+export type ScribeNote = {
+  id: string;
+  patientId: string | null;
+  status: "draft" | "saved" | "approved";
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+  updatedAt: string;
+  disclaimer?: string;
+};
+
+export type Insight = {
+  id: string;
+  title: string;
+  detail: string;
+  priority: "High" | "Medium" | "Low";
+  status: "open" | "reviewed";
+  reviewedAt?: string;
+};
+
 export type ProfileSettings = {
   fullName: string;
   specialty: string;
@@ -44,6 +65,14 @@ export const reports: Report[] = [
   { id: "report-cbc-102", patientId: "RM-102", title: "CBC and lipid profile", type: "Lab report", date: "2026-09-10", status: "Ready for review" },
   { id: "report-rx-102", patientId: "RM-102", title: "Active prescriptions", type: "Prescription", date: "2026-09-05", status: "Reviewed" },
   { id: "report-thyroid-118", patientId: "AK-118", title: "Thyroid panel", type: "Lab report", date: "2026-09-09", status: "Ready for review" },
+];
+
+export const scribeNotes: ScribeNote[] = [];
+
+export const insights: Insight[] = [
+  { id: "insight-1", title: "Follow-up queue", detail: "Three follow-ups need review before the next clinic block.", priority: "High", status: "open" },
+  { id: "insight-2", title: "Report trend", detail: "Rohan Mehta's HbA1c improved while LDL remains above target.", priority: "Medium", status: "open" },
+  { id: "insight-3", title: "Documentation quality", detail: "Two draft notes need clinician approval before signing.", priority: "Low", status: "open" },
 ];
 
 export let profileSettings: ProfileSettings = {
