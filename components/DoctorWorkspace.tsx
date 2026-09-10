@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, RefObject, useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   BrainCircuit,
@@ -18,7 +18,6 @@ import {
   Plus,
   Search,
   Send,
-  ShieldCheck,
   Settings,
   Sparkles,
   Stethoscope,
@@ -27,22 +26,34 @@ import {
   X,
 } from "lucide-react";
 
+type Patient = { id: string; name: string; initials: string; appointment: string; status: string };
+type Report = { id: string; patientId: string; title: string; type: string; date: string; status: string };
+type Note = { id: string; patientId: string | null; status: string; subjective: string; objective: string; assessment: string; plan: string; disclaimer?: string };
+type Insight = { id: string; title: string; detail: string; priority: string; status?: string };
+type ApiEnvelope<T> = { ok: boolean; data?: T; error?: { message: string } };
+
 const stats = [
   { label: "Patients today", value: "12", detail: "↗ 18% vs last Tuesday", icon: Users, tone: "bg-[#eef7f2] text-[#4f9d78]" },
   { label: "Notes completed", value: "08", detail: "↗ 24% this week", icon: FileText, tone: "bg-[#f6f0e9] text-[#bd865b]" },
   { label: "Time saved", value: "2h 14m", detail: "AI-assisted documentation", icon: Clock3, tone: "bg-[#edf2f8] text-[#6682a5]" },
   { label: "Next appointment", value: "10:30 AM", detail: "Rohan Mehta · Follow-up", icon: CalendarDays, tone: "bg-[#f4eef7] text-[#9773a4]" },
 ];
-
 const waveform = [18, 34, 27, 45, 22, 38, 31, 52, 24, 40, 29, 47, 20, 35, 26, 44, 30, 55, 23, 39, 28, 48, 21, 34, 27, 43, 19, 37];
-
-type ApiEnvelope<T> = { ok: boolean; data?: T; error?: { message: string } };
-type ScribeNote = { id: string; patientId: string | null; status: string; subjective: string; objective: string; assessment: string; plan: string };
+const navItems = [
+  { label: "Overview", icon: LayoutDashboard },
+  { label: "Patients", icon: Users },
+  { label: "AI Scribe", icon: Mic },
+  { label: "Clinical insights", icon: BrainCircuit, badge: "NEW" },
+  { label: "Symptom checker", icon: HeartPulse },
+  { label: "Medical records", icon: NotebookTabs },
+];
 
 async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
   const payload = await response.json() as ApiEnvelope<T>;
-  if (!response.ok || !payload.ok || payload.data === undefined) throw new Error(payload.error?.message ?? "The demo service could not complete this request.");
+  if (!response.ok || !payload.ok || payload.data === undefined) {
+    throw new Error(payload.error?.message ?? "The demo service could not complete this request.");
+  }
   return payload.data;
 }
 
@@ -50,23 +61,27 @@ export default function DoctorWorkspace() {
   const [activeNav, setActiveNav] = useState("Overview");
   const [selectedPatientId, setSelectedPatientId] = useState("RM-102");
   const [language, setLanguage] = useState("हिन्दी");
-  const [search, setSearch] = useState("");
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [summaryStats, setSummaryStats] = useState(stats);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [serviceError, setServiceError] = useState("");
   const [sessionStarted, setSessionStarted] = useState(false);
-  const [scribeOpen, setScribeOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordingMode, setRecordingMode] = useState<"microphone" | "demo" | null>(null);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [symptoms, setSymptoms] = useState("");
   const [symptomResult, setSymptomResult] = useState("");
-  const [symptomDuration, setSymptomDuration] = useState("");
-  const [symptomSeverity, setSymptomSeverity] = useState("Mild");
-  const [associatedSymptoms, setAssociatedSymptoms] = useState("");
-  const [medicines, setMedicines] = useState("");
+  const [symptomLoading, setSymptomLoading] = useState(false);
   const [question, setQuestion] = useState("");
   const [copilotResult, setCopilotResult] = useState("");
+  const [copilotLoading, setCopilotLoading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState("");
   const [uploadedReportId, setUploadedReportId] = useState("");
   const [documentSummary, setDocumentSummary] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
-  const [summaryStats, setSummaryStats] = useState<typeof stats>(stats);
-  const [serviceError, setServiceError] = useState("");
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recordingChunks = useRef<Blob[]>([]);
 
   useEffect(() => {
     apiRequest<{ summary: { stats: { label: string; value: string; detail: string }[] } }>("/api/workspace/summary")
@@ -74,236 +89,97 @@ export default function DoctorWorkspace() {
       .catch((error: unknown) => setServiceError(error instanceof Error ? error.message : "Workspace data is unavailable."));
   }, []);
 
-  async function checkSymptoms() {
-    if (!symptoms.trim()) return;
+  useEffect(() => {
+    if (!recording) return;
+    const timer = window.setInterval(() => setRecordingSeconds((seconds) => seconds + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [recording]);
+
+  function navigate(nav: string) {
+    setServiceError("");
+    setActiveNav(nav);
+  }
+
+  const loadPatients = useCallback(async () => {
+    const { patients: data } = await apiRequest<{ patients: Patient[] }>("/api/patients");
+    setPatients(data);
+    return data;
+  }, []);
+
+  async function startRecording() {
+    if (recording) {
+      stopRecording();
+      return;
+    }
+    setServiceError("");
+    setRecordingSeconds(0);
     try {
-      const { analysis } = await apiRequest<{ analysis: { input: string; duration: string; severity: string; associatedSymptoms: string; medicines: string; questions: string[]; triage: string; redFlags: string } }>("/api/symptom-analysis", { method: "POST", body: JSON.stringify({ symptoms, patientId: selectedPatientId, duration: symptomDuration, severity: symptomSeverity, associatedSymptoms, medicines }) });
-      setSymptomResult(`Structured intake · Duration: ${analysis.duration} · Severity: ${analysis.severity} · Associated symptoms: ${analysis.associatedSymptoms} · Medicines: ${analysis.medicines}\n\nFollow-up questions: ${analysis.questions.join(" ")}\n\nTriage: ${analysis.triage}. ${analysis.redFlags}`);
+      await apiRequest("/api/sessions", { method: "POST", body: JSON.stringify({ action: "start" }) });
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") throw new Error("Microphone APIs are unavailable.");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      recordingChunks.current = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) recordingChunks.current.push(event.data); };
+      recorderRef.current = recorder;
+      recorder.start();
+      setRecordingMode("microphone");
+    } catch {
+      // A demo transcript keeps the core workflow usable when browser permission is denied.
+      setRecordingMode("demo");
+      setServiceError("Microphone permission is unavailable. Demo recording is active with a sample consultation.");
+    }
+    setRecording(true);
+  }
+
+  async function stopRecording() {
+    recorderRef.current?.stop();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    recorderRef.current = null;
+    streamRef.current = null;
+    setRecording(false);
+    try {
+      await apiRequest("/api/sessions", { method: "POST", body: JSON.stringify({ action: "stop" }) });
+    } catch (error: unknown) {
+      setServiceError(error instanceof Error ? error.message : "Recording session could not be stopped.");
+    }
+  }
+
+  async function checkSymptoms(input = symptoms) {
+    if (!input.trim()) {
+      setServiceError("Enter at least one symptom before checking.");
+      return;
+    }
+    setSymptomLoading(true);
+    setServiceError("");
+    try {
+      const { analysis } = await apiRequest<{ analysis: { duration: string; severity: string; associatedSymptoms: string; medicines: string; questions: string[]; triage: string; redFlags: string } }>("/api/symptom-analysis", {
+        method: "POST",
+        body: JSON.stringify({ symptoms: input, patientId: selectedPatientId }),
+      });
+      setSymptomResult(`Duration: ${analysis.duration} · Severity: ${analysis.severity}\n${analysis.associatedSymptoms} · Medicines: ${analysis.medicines}\n\nFollow-up: ${analysis.questions.join(" ")}\n\nTriage: ${analysis.triage}. ${analysis.redFlags}`);
     } catch (error: unknown) {
       setServiceError(error instanceof Error ? error.message : "Symptom analysis failed.");
+    } finally {
+      setSymptomLoading(false);
     }
   }
 
-  function WorkspaceScreen({ activeNav, onNavigate, selectedPatientId, setSelectedPatientId }: { activeNav: string; onNavigate: (nav: string) => void; selectedPatientId: string; setSelectedPatientId: (patientId: string) => void }) {
-    const [query, setQuery] = useState("");
-    const [added, setAdded] = useState(false);
-    const [saved, setSaved] = useState(false);
-    const [revisitReport, setRevisitReport] = useState("");
-    const [revisitReportId, setRevisitReportId] = useState("");
-    const [reportUpdated, setReportUpdated] = useState(false);
-    const [reportAnalyzed, setReportAnalyzed] = useState(false);
-    const [reportSummary, setReportSummary] = useState(false);
-    const [analysisText, setAnalysisText] = useState("");
-    const [summaryText, setSummaryText] = useState("");
-    const revisitFileInput = useRef<HTMLInputElement>(null);
-    const [profileSection, setProfileSection] = useState("Overview");
-    const [patients, setPatients] = useState<{ id: string; name: string; initials: string; appointment: string; status: string }[]>([]);
-    const [reports, setReports] = useState<{ id: string; patientId: string; title: string; type: string; date: string; status: string }[]>([]);
-    const [screenLoading, setScreenLoading] = useState(false);
-    const [screenError, setScreenError] = useState("");
-    const [transcript, setTranscript] = useState("");
-    const [scribeNote, setScribeNote] = useState<ScribeNote | null>(null);
-    const [scribePatientId, setScribePatientId] = useState(selectedPatientId);
-    const [scribeSaving, setScribeSaving] = useState(false);
-    const [insights, setInsights] = useState<{ id: string; title: string; detail: string; priority: string }[]>([]);
-    const [profileForm, setProfileForm] = useState({ fullName: "Dr. Ananya Arya", specialty: "General Medicine", clinicBio: "Clinician focused on practical, preventive adult care." });
-    const [accountForm, setAccountForm] = useState({ urgentFollowUps: true, weeklySummary: true, twoStepSignIn: true });
-    const [showAddPatient, setShowAddPatient] = useState(false);
-    const [newPatient, setNewPatient] = useState({ name: "", id: "", appointment: "" });
-
-    useEffect(() => {
-      setScreenError("");
-      if (["Patients", "AI Scribe", "Symptom checker", "Medical records"].includes(activeNav)) {
-        setScreenLoading(true);
-        apiRequest<{ patients: typeof patients }>("/api/patients").then(({ patients: data }) => setPatients(data)).catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Patients could not be loaded.")).finally(() => setScreenLoading(false));
-      }
-      if (activeNav === "Medical records") {
-        setScreenLoading(true);
-        apiRequest<{ reports: typeof reports }>(`/api/medical-records/reports?patientId=${selectedPatientId}`).then(({ reports: data }) => setReports(data)).catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Medical records could not be loaded.")).finally(() => setScreenLoading(false));
-      }
-      if (activeNav === "AI Scribe") {
-        apiRequest<{ notes: ScribeNote[] }>(`/api/scribe?patientId=${selectedPatientId}`)
-          .then(({ notes }) => setScribeNote(notes.at(-1) ?? null))
-          .catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Saved SOAP notes could not be loaded."));
-      }
-      if (activeNav === "Clinical insights") {
-        setScreenLoading(true);
-        apiRequest<{ insights: typeof insights }>("/api/insights").then(({ insights: data }) => setInsights(data)).catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Clinical insights could not be loaded.")).finally(() => setScreenLoading(false));
-      }
-      if (activeNav === "Profile") {
-        apiRequest<{ settings: { fullName: string; specialty: string; clinicBio: string; notifications: typeof accountForm } }>("/api/profile/settings")
-          .then(({ settings }) => { setProfileForm({ fullName: settings.fullName, specialty: settings.specialty, clinicBio: settings.clinicBio }); setAccountForm(settings.notifications); })
-          .catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Profile settings could not be loaded."));
-      }
-    }, [activeNav, selectedPatientId]);
-
-    async function addPatient() {
-      if (!newPatient.name.trim()) return;
-      try {
-        const { patient } = await apiRequest<{ patient: { id: string; name: string; initials: string; appointment: string; status: string } }>("/api/patients", { method: "POST", body: JSON.stringify(newPatient) });
-        setPatients((current) => [...current, patient]);
-        setSelectedPatientId(patient.id);
-        setNewPatient({ name: "", id: "", appointment: "" });
-        setShowAddPatient(false);
-      } catch (error: unknown) {
-        setScreenError(error instanceof Error ? error.message : "Patient could not be added.");
-      }
+  async function askCopilot() {
+    if (!question.trim()) {
+      setServiceError("Enter a question for the medical copilot.");
+      return;
     }
-
-    async function queueWorkspaceAction(action: string) {
-      try {
-        await apiRequest("/api/workspace/actions", { method: "POST", body: JSON.stringify({ action }) });
-        setAdded(true);
-      } catch (error: unknown) {
-        setScreenError(error instanceof Error ? error.message : "Workspace action failed.");
-      }
+    setCopilotLoading(true);
+    setServiceError("");
+    try {
+      const { response } = await apiRequest<{ response: string }>("/api/copilot", { method: "POST", body: JSON.stringify({ question, patientId: selectedPatientId }) });
+      setCopilotResult(response);
+    } catch (error: unknown) {
+      setServiceError(error instanceof Error ? error.message : "Copilot request failed.");
+    } finally {
+      setCopilotLoading(false);
     }
-
-    async function saveProfileSettings() {
-      try {
-        await apiRequest("/api/profile/settings", { method: "PATCH", body: JSON.stringify(profileForm) });
-        setProfileSection("Overview");
-      } catch (error: unknown) {
-        setScreenError(error instanceof Error ? error.message : "Profile settings could not be saved.");
-      }
-    }
-
-    async function saveAccountSettings() {
-      try {
-        await apiRequest("/api/profile/settings", { method: "PATCH", body: JSON.stringify({ notifications: accountForm }) });
-        setProfileSection("Overview");
-      } catch (error: unknown) {
-        setScreenError(error instanceof Error ? error.message : "Account settings could not be saved.");
-      }
-    }
-
-    async function generateScribeNote() {
-      if (!transcript.trim()) return;
-      setScreenLoading(true);
-      try {
-        const { note } = await apiRequest<{ note: ScribeNote }>("/api/scribe", { method: "POST", body: JSON.stringify({ transcript, patientId: scribePatientId }) });
-        setScribeNote(note);
-      } catch (error: unknown) {
-        setScreenError(error instanceof Error ? error.message : "Scribe generation failed.");
-      } finally {
-        setScreenLoading(false);
-      }
-
-    }
-
-    async function updateScribe(action: "save" | "approve") {
-      if (!scribeNote) return;
-      setScribeSaving(true);
-      try {
-        const { note } = await apiRequest<{ note: ScribeNote }>("/api/scribe", { method: "PATCH", body: JSON.stringify({ noteId: scribeNote.id, action, subjective: scribeNote.subjective, objective: scribeNote.objective, assessment: scribeNote.assessment, plan: scribeNote.plan }) });
-        setScribeNote(note);
-      } catch (error: unknown) {
-        setScreenError(error instanceof Error ? error.message : "SOAP note could not be updated.");
-      } finally {
-        setScribeSaving(false);
-      }
-    }
-
-    async function analyzeReport(reportId: string) {
-      setReportAnalyzed(false);
-      try {
-        const { analysis } = await apiRequest<{ analysis: { trend: string; flag: string; confidence: string; summary: string } }>("/api/medical-records/analyze", { method: "POST", body: JSON.stringify({ patientId: selectedPatientId, reportId }) });
-        setAnalysisText(`${analysis.trend} ${analysis.flag} ${analysis.confidence} ${analysis.summary}`);
-        setRevisitReportId(reportId);
-        setReportAnalyzed(true);
-      } catch (error: unknown) {
-        setScreenError(error instanceof Error ? error.message : "Report analysis failed.");
-      }
-    }
-
-    async function summarizeReport(reportId: string, title: string) {
-      try {
-        const { summary } = await apiRequest<{ summary: { keyFindings: string[]; nextStep: string } }>("/api/medical-records/summarize", { method: "POST", body: JSON.stringify({ reportId, title }) });
-        setSummaryText(`${summary.keyFindings.join(" · ")} Next step: ${summary.nextStep}`);
-        setReportSummary(true);
-      } catch (error: unknown) {
-        setScreenError(error instanceof Error ? error.message : "Report summary failed.");
-      }
-    }
-
-    async function updateRevisitRecord() {
-      const title = revisitFileInput.current?.files?.[0]?.name;
-      if (!title) return;
-      try {
-        const { report } = await apiRequest<{ report: { id: string; title: string; patientId: string; type: string; date: string; status: string } }>("/api/medical-records/reports", { method: "POST", body: JSON.stringify({ patientId: selectedPatientId, title, type: "Lab report" }) });
-        setReports((current) => [report, ...current]);
-        setRevisitReportId(report.id);
-        setRevisitReport(title);
-        setReportUpdated(true);
-      } catch (error: unknown) {
-        setScreenError(error instanceof Error ? error.message : "Report upload failed.");
-      }
-    }
-
-    const screenData: Record<string, { eyebrow: string; title: string; description: string }> = {
-      Patients: { eyebrow: "PATIENT DIRECTORY", title: "Patients", description: "Review patient records, appointments, and care status." },
-      "AI Scribe": { eyebrow: "CLINICAL DOCUMENTATION", title: "AI Scribe", description: "Capture a consultation and turn it into a structured SOAP note." },
-      "Clinical insights": { eyebrow: "CLINICAL INTELLIGENCE", title: "Clinical insights", description: "Explore evidence-linked summaries and decision support." },
-      "Symptom checker": { eyebrow: "PATIENT-FACING AI", title: "Symptom checker", description: "Organise symptoms before a visit for a focused consultation." },
-      "Medical records": { eyebrow: "DOCUMENT INTELLIGENCE", title: "Medical records", description: "Find reports, prescriptions, and source-linked clinical documents." },
-      Profile: { eyebrow: "CLINICIAN PROFILE", title: "Dr. Ananya Arya", description: "Manage your professional profile, clinic preferences, and account settings." },
-    };
-    const data = screenData[activeNav] ?? screenData.Patients;
-
-    return (
-      <div className="mx-auto max-w-[1280px] px-5 pb-12 pt-8 md:px-10">
-        <div className="flex flex-col justify-between gap-6 border-b border-[#e2ebe6] pb-8 lg:flex-row lg:items-end">
-          <div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#5a9b88]">{data.eyebrow}</p><h1 className="mt-3 text-3xl font-bold tracking-[-0.05em] text-[#173f3c]">{data.title}</h1><p className="mt-2 text-sm text-[#78908a]">{data.description}</p></div>
-          <button onClick={() => activeNav === "Patients" ? setShowAddPatient(true) : queueWorkspaceAction(`Create ${activeNav}`)} className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-3 text-sm font-bold text-white hover:bg-[#057e6d]"><Plus className="h-4 w-4" /> {added ? "Action queued" : activeNav === "Patients" ? "Add patient" : "Create new"}</button>
-        </div>
-
-        {activeNav === "Patients" && <section className="mt-8 space-y-4">
-          {showAddPatient && <div className="rounded-2xl border border-[#b9decf] bg-[#f5fcf8] p-5"><div className="flex items-center justify-between"><h2 className="font-bold text-[#244642]">Add patient</h2><button onClick={() => setShowAddPatient(false)} aria-label="Close add patient form"><X className="h-4 w-4 text-[#78908a]" /></button></div><div className="mt-4 grid gap-3 md:grid-cols-3"><input value={newPatient.name} onChange={(event) => setNewPatient({ ...newPatient, name: event.target.value })} placeholder="Full name *" className="rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none" /><input value={newPatient.id} onChange={(event) => setNewPatient({ ...newPatient, id: event.target.value })} placeholder="Patient ID (optional)" className="rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none" /><input value={newPatient.appointment} onChange={(event) => setNewPatient({ ...newPatient, appointment: event.target.value })} placeholder="Appointment (optional)" className="rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none" /></div><button onClick={addPatient} disabled={!newPatient.name.trim()} className="mt-4 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">Save patient</button></div>}
-          <div className="flex items-center gap-3 rounded-xl border border-[#e1e9e5] bg-white px-4 py-3"><Search className="h-4 w-4 text-[#91a49e]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search patient name or ID" className="flex-1 text-sm outline-none placeholder:text-[#a0b0ab]" /></div>
-          {screenLoading && <p className="rounded-xl bg-[#edf7f2] p-4 text-sm text-[#5a967e]">Loading patient directory from the clinic service...</p>}
-          {patients.filter(({ name, id }) => `${name} ${id}`.toLowerCase().includes(query.toLowerCase())).map(({ name, id, appointment: detail, status, initials }) => <button key={id} onClick={() => { setSelectedPatientId(id); onNavigate("Medical records"); }} className="flex w-full items-center gap-4 rounded-xl border border-[#e1e9e5] bg-white p-4 text-left hover:border-[#9ac8b8]"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e4f3ed] text-sm font-bold text-[#4e927d]">{initials}</span><span className="flex-1"><strong className="block text-sm text-[#244642]">{name}</strong><span className="mt-1 block text-xs text-[#82958f]">{id} · {detail}</span></span><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[11px] font-bold text-[#5a967e]">{status}</span><ChevronRight className="h-4 w-4 text-[#9ab0a9]" /></button>)}
-        </section>}
-
-        {activeNav === "Profile" && <section className="mt-8 grid gap-5 lg:grid-cols-[280px_1fr]">
-          <aside className="rounded-2xl border border-[#e1e9e5] bg-white p-4">
-            <div className="flex items-center gap-3 border-b border-[#edf1ee] pb-5"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#d5eee4] text-lg font-bold text-[#277a6b]">DA</span><div><strong className="block text-sm text-[#244642]">Dr. Ananya Arya</strong><span className="text-xs text-[#82958f]">General Medicine</span></div></div>
-            <nav className="mt-4 space-y-1">{["Overview", "Profile settings", "Account settings"].map((section) => <button key={section} onClick={() => setProfileSection(section)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${profileSection === section ? "bg-[#e8f5ef] text-[#27806b]" : "text-[#78908a] hover:bg-[#f4f8f5]"}`}><Settings className="h-4 w-4" />{section}</button>)}</nav>
-          </aside>
-          <div className="rounded-2xl border border-[#e1e9e5] bg-white p-6 md:p-8">
-            {profileSection === "Overview" && <><div className="flex flex-col justify-between gap-4 border-b border-[#edf1ee] pb-6 sm:flex-row sm:items-start"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#5a9b88]">Professional profile</p><h2 className="mt-2 text-2xl font-bold text-[#244642]">Dr. Ananya Arya, MBBS, MD</h2><p className="mt-1 text-sm text-[#82958f]">General Medicine · 12 years of clinical experience</p></div><button onClick={() => setProfileSection("Profile settings")} className="rounded-lg bg-[#07947f] px-4 py-2 text-xs font-bold text-white hover:bg-[#057e6d]">Edit profile</button></div><div className="mt-6 grid gap-5 md:grid-cols-2"><div><h3 className="font-bold text-[#315a52]">Education & qualifications</h3><p className="mt-2 text-sm leading-6 text-[#82958f]">MBBS, AIIMS New Delhi · 2010<br />MD, Internal Medicine, PGIMER Chandigarh · 2014<br />Certificate in Diabetes Care · 2018</p></div><div><h3 className="font-bold text-[#315a52]">Specialities</h3><p className="mt-2 text-sm leading-6 text-[#82958f]">Preventive care, diabetes management, hypertension, thyroid disorders, and adult wellness.</p></div><div><h3 className="font-bold text-[#315a52]">Experience & clinic history</h3><p className="mt-2 text-sm leading-6 text-[#82958f]">Lead physician at AI UPCHAR Care Clinic since 2019. Previously consultant at CityCare Hospital, Bengaluru.</p></div><div><h3 className="font-bold text-[#315a52]">Achievements</h3><p className="mt-2 text-sm leading-6 text-[#82958f]">15,000+ consultations · 3 published clinical audits · 2024 Patient Care Excellence award.</p></div></div></>}
-            {profileSection === "Profile settings" && <div><h2 className="text-xl font-bold text-[#244642]">Profile settings</h2><p className="mt-1 text-sm text-[#82958f]">Update the details shown to your care team and patients.</p><div className="mt-6 grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold text-[#5f7c70]">Full name<input value={profileForm.fullName} onChange={(event) => setProfileForm({ ...profileForm, fullName: event.target.value })} className="mt-2 w-full rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm font-normal text-[#244642] outline-none focus:border-[#8fc5b3]" /></label><label className="text-xs font-semibold text-[#5f7c70]">Speciality<input value={profileForm.specialty} onChange={(event) => setProfileForm({ ...profileForm, specialty: event.target.value })} className="mt-2 w-full rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm font-normal text-[#244642] outline-none focus:border-[#8fc5b3]" /></label><label className="text-xs font-semibold text-[#5f7c70] sm:col-span-2">Clinic bio<textarea value={profileForm.clinicBio} onChange={(event) => setProfileForm({ ...profileForm, clinicBio: event.target.value })} className="mt-2 h-24 w-full rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm font-normal text-[#244642] outline-none focus:border-[#8fc5b3]" /></label></div><button onClick={saveProfileSettings} className="mt-6 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#057e6d]">Save profile changes</button></div>}
-            {profileSection === "Account settings" && <div><h2 className="text-xl font-bold text-[#244642]">Account settings</h2><p className="mt-1 text-sm text-[#82958f]">Control sign-in, notifications, and workspace preferences.</p><div className="mt-6 space-y-3"><label className="flex items-center justify-between rounded-xl border border-[#edf1ee] p-4 text-sm text-[#315a52]"><span>Email notifications for urgent follow-ups</span><input type="checkbox" checked={accountForm.urgentFollowUps} onChange={(event) => setAccountForm({ ...accountForm, urgentFollowUps: event.target.checked })} className="h-4 w-4 accent-[#07947f]" /></label><label className="flex items-center justify-between rounded-xl border border-[#edf1ee] p-4 text-sm text-[#315a52]"><span>Weekly clinic performance summary</span><input type="checkbox" checked={accountForm.weeklySummary} onChange={(event) => setAccountForm({ ...accountForm, weeklySummary: event.target.checked })} className="h-4 w-4 accent-[#07947f]" /></label><label className="flex items-center justify-between rounded-xl border border-[#edf1ee] p-4 text-sm text-[#315a52]"><span>Two-step sign-in protection</span><input type="checkbox" checked={accountForm.twoStepSignIn} onChange={(event) => setAccountForm({ ...accountForm, twoStepSignIn: event.target.checked })} className="h-4 w-4 accent-[#07947f]" /></label></div><button onClick={saveAccountSettings} className="mt-6 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#057e6d]">Save account settings</button></div>}
-          </div>
-        </section>}
-
-        {activeNav === "AI Scribe" && <section className="mt-8 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]"><div className="rounded-2xl bg-[#124b47] p-7 text-white"><Mic className="h-7 w-7 text-[#9be2cb]" /><h2 className="mt-6 text-2xl font-bold">Ready to capture your consultation</h2><p className="mt-2 text-sm text-[#b8d2ce]">Choose the patient, capture the consultation, then edit and save or approve the SOAP draft.</p><select value={scribePatientId} onChange={(event) => setScribePatientId(event.target.value)} className="mt-5 w-full rounded-lg border border-[#39706a] bg-[#0d3d3a] p-3 text-sm text-white outline-none"><option value="">No patient selected</option>{patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.name} ({patient.id})</option>)}</select><textarea value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Paste or dictate consultation notes..." className="mt-3 h-28 w-full rounded-lg border border-[#39706a] bg-[#0d3d3a] p-3 text-sm text-white outline-none placeholder:text-[#8bbeb1]" /><div className="mt-4 flex items-center gap-3"><button onClick={generateScribeNote} disabled={screenLoading || !transcript.trim() || !scribePatientId} className="rounded-lg bg-white px-5 py-3 text-sm font-bold text-[#124b47] disabled:cursor-not-allowed disabled:opacity-60">{screenLoading ? "Generating..." : "Generate SOAP draft"}</button><span className="text-xs text-[#a7d9cd]">Server response · clinician review required</span></div></div><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><div className="flex items-center justify-between"><h3 className="font-bold text-[#244642]">Editable SOAP draft</h3>{scribeNote && <span className="rounded-full bg-[#edf7f2] px-2.5 py-1 text-[10px] font-bold uppercase text-[#4f927a]">{scribeNote.status}</span>}</div>{scribeNote ? <div className="mt-5 space-y-3">{(["subjective", "objective", "assessment", "plan"] as const).map((field) => <label key={field} className="block text-xs font-bold capitalize text-[#5f7c70]">{field}<textarea value={scribeNote[field]} onChange={(event) => setScribeNote({ ...scribeNote, [field]: event.target.value })} className="mt-1 min-h-[62px] w-full rounded-lg border border-[#dce9e3] p-3 text-sm font-normal text-[#315a52] outline-none focus:border-[#8fc5b3]" /></label>)}<div className="flex gap-2"><button onClick={() => updateScribe("save")} disabled={scribeSaving} className="rounded-lg border border-[#b9decf] px-4 py-2 text-xs font-bold text-[#4f927a] disabled:opacity-50">Save draft</button><button onClick={() => updateScribe("approve")} disabled={scribeSaving} className="rounded-lg bg-[#07947f] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">Approve note</button></div></div> : <p className="mt-5 text-sm leading-6 text-[#82958f]">Your server-generated draft will appear here after you submit a transcript.</p>}</div></section>}
-
-        {activeNav === "Clinical insights" && <section className="mt-8 grid gap-4 md:grid-cols-2">{insights.map((insight) => <article key={insight.id} className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#5a9b88]">{insight.priority} priority</p><h2 className="mt-2 text-lg font-bold text-[#244642]">{insight.title}</h2><p className="mt-2 text-sm leading-6 text-[#82958f]">{insight.detail}</p></div><button onClick={() => apiRequest("/api/insights", { method: "POST", body: JSON.stringify({ insightId: insight.id }) }).then(() => setInsights((current) => current.filter((item) => item.id !== insight.id))).catch((error: unknown) => setScreenError(error instanceof Error ? error.message : "Insight review failed."))} className="shrink-0 rounded-lg bg-[#eaf6f0] px-3 py-2 text-xs font-bold text-[#4f927a]">Mark reviewed</button></div></article>)}</section>}
-        {activeNav === "Symptom checker" && <section className="mt-8 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><h2 className="text-lg font-bold text-[#244642]">Structured patient symptom intake</h2><p className="mt-2 text-sm leading-6 text-[#82958f]">Capture the context clinicians need before review. This organizes information; it does not diagnose.</p><label className="mt-5 block text-xs font-bold text-[#5f7c70]">Patient<select value={selectedPatientId} onChange={(event) => setSelectedPatientId(event.target.value)} className="mt-1 w-full rounded-lg border border-[#dce9e3] p-3 text-sm font-normal text-[#315a52]">{patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.name} ({patient.id})</option>)}</select></label><textarea value={symptoms} onChange={(event) => setSymptoms(event.target.value)} placeholder="What symptoms are you experiencing?" className="mt-3 h-24 w-full rounded-lg border border-[#e1e9e5] p-3 text-sm outline-none focus:border-[#8fc5b3]" /><div className="mt-3 grid gap-3 sm:grid-cols-2"><input value={symptomDuration} onChange={(event) => setSymptomDuration(event.target.value)} placeholder="Duration (e.g. 2 days)" className="rounded-lg border border-[#e1e9e5] p-3 text-sm outline-none" /><select value={symptomSeverity} onChange={(event) => setSymptomSeverity(event.target.value)} className="rounded-lg border border-[#e1e9e5] p-3 text-sm"><option>Mild</option><option>Moderate</option><option>Severe</option></select><input value={associatedSymptoms} onChange={(event) => setAssociatedSymptoms(event.target.value)} placeholder="Associated symptoms" className="rounded-lg border border-[#e1e9e5] p-3 text-sm outline-none" /><input value={medicines} onChange={(event) => setMedicines(event.target.value)} placeholder="Current medicines or allergies" className="rounded-lg border border-[#e1e9e5] p-3 text-sm outline-none" /></div><button onClick={checkSymptoms} disabled={!symptoms.trim() || screenLoading} className="mt-4 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">{screenLoading ? "Analysing..." : "Analyse symptoms"}</button>{symptomResult && <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-[#f1f7f2] p-4 text-xs leading-5 text-[#65806e]">{symptomResult}</pre>}</div><div className="rounded-2xl bg-[#e6f4ee] p-6"><ShieldCheck className="h-6 w-6 text-[#4f927a]" /><h3 className="mt-5 font-bold text-[#244642]">Human review remains in control</h3><p className="mt-2 text-sm leading-6 text-[#6f8d83]">The API returns structured follow-up questions, triage guidance, and red-flag reminders for clinician review.</p></div></section>}
-        {activeNav === "Medical records" && <section className="mt-8 space-y-4"><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><h2 className="text-lg font-bold text-[#244642]">Recent documents</h2><p className="mt-2 text-sm text-[#82958f]">Reports loaded from the medical records service for {patients.find((patient) => patient.id === selectedPatientId)?.name ?? selectedPatientId}.</p>{screenLoading && <p className="mt-4 text-sm text-[#5a967e]">Loading records...</p>}{reports.map((report) => <div key={report.id} className="mt-4 flex flex-col justify-between gap-3 rounded-xl border border-[#edf1ee] p-4 sm:flex-row sm:items-center"><div><strong className="block text-sm text-[#244642]">{report.title}</strong><span className="text-xs text-[#82958f]">{report.type} · {report.date} · {report.status}</span></div><button onClick={() => analyzeReport(report.id)} className="rounded-lg bg-[#124b47] px-3 py-2 text-xs font-bold text-white">Analyse report</button></div>        )}{reportAnalyzed && analysisText && <p className="mt-4 rounded-lg bg-[#f1f7f3] p-4 text-sm text-[#527167]">{analysisText}</p>}</div></section>}
-        {screenError && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{screenError}</p>}
-
-        {activeNav === "Medical records" && <section className="mt-4 rounded-2xl border border-[#e1e9e5] bg-white p-6">
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-            <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#b0805e]">REVISIT WORKFLOW</p><h2 className="mt-2 text-xl font-bold text-[#244642]">Update and analyse {patients.find((patient) => patient.id === selectedPatientId)?.name ?? "patient"}&apos;s latest test report</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[#82958f]">Upload the report from today&apos;s revisit. The server stores it against the selected patient, compares it with previous results, and prepares a reviewable doctor summary.</p></div>
-            <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${reportUpdated ? "bg-[#e3f5ec] text-[#4f927a]" : "bg-[#f5f0e9] text-[#a27d5b]"}`}>{reportUpdated ? "Record updated" : "Awaiting report"}</span>
-          </div>
-          <input ref={revisitFileInput} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => setRevisitReport(event.target.files?.[0]?.name ?? "")} className="hidden" />
-          <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto]">
-            <button onClick={() => revisitFileInput.current?.click()} className="flex min-h-[112px] items-center gap-4 rounded-xl border border-dashed border-[#cbded5] bg-[#f8fcfa] p-5 text-left hover:border-[#75b79d]"><span className="rounded-xl bg-[#e7f4ed] p-3 text-[#5a967e]"><UploadCloud className="h-5 w-5" /></span><span><strong className="block text-sm text-[#315a52]">{revisitReport || "Upload a new test report"}</strong><span className="mt-1 block text-xs text-[#82958f]">PDF or image · CBC, lipid profile, HbA1c, or other revisit report</span></span></button>
-            <button disabled={!revisitReport || screenLoading} onClick={updateRevisitRecord} className="rounded-xl bg-[#eaf6f0] px-5 py-3 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#dcefe5] disabled:cursor-not-allowed disabled:opacity-50">{reportUpdated ? "Updated in timeline" : "Update patient record"}</button>
-          </div>
-          {reportUpdated && <div className="mt-5 rounded-xl border border-[#d9e9e1] bg-[#fbfdfc] p-5"><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><p className="text-xs font-bold text-[#315a52]">{revisitReport}</p><p className="mt-1 text-[11px] text-[#82958f]">Added to the selected patient&apos;s revisit</p></div><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[10px] font-bold text-[#5a967e]">New result</span></div><div className="mt-4 flex flex-wrap gap-2"><button disabled={!revisitReportId} onClick={() => analyzeReport(revisitReportId)} className="rounded-lg bg-[#124b47] px-4 py-2 text-xs font-bold text-white hover:bg-[#0d3e3b] disabled:opacity-50">{reportAnalyzed ? "Analysis complete" : "Analyse changes"}</button><button disabled={!reportAnalyzed || !revisitReportId} onClick={() => summarizeReport(revisitReportId, revisitReport)} className="rounded-lg border border-[#cbded5] px-4 py-2 text-xs font-bold text-[#4f927a] enabled:hover:bg-[#edf7f2] disabled:cursor-not-allowed disabled:opacity-50">{reportSummary ? "Summary ready" : "Summarise for doctor"}</button></div>{reportAnalyzed && analysisText && <div className="mt-4 rounded-lg bg-[#f1f7f3] p-4 text-xs leading-5 text-[#5f7c70]">{analysisText}</div>}{reportSummary && <div className="mt-4 rounded-lg border-l-4 border-[#65a889] bg-white p-4 text-sm leading-6 text-[#527167]"><strong className="text-[#315a52]">Doctor summary:</strong> {summaryText}</div>}</div>}
-        </section>}
-      </div>
-    );
-  }
-
-  function askCopilot() {
-    if (!question.trim()) return;
-    apiRequest<{ response: string }>("/api/copilot", { method: "POST", body: JSON.stringify({ question, patientId: "RM-102" }) })
-      .then(({ response }) => setCopilotResult(response))
-      .catch((error: unknown) => setServiceError(error instanceof Error ? error.message : "Copilot request failed."));
   }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
@@ -312,11 +188,22 @@ export default function DoctorWorkspace() {
     setUploadedFile(file.name);
     setUploadedReportId("");
     try {
-      const { report } = await apiRequest<{ report: { id: string } }>("/api/medical-records/reports", { method: "POST", body: JSON.stringify({ patientId: "RM-102", title: file.name, type: "Lab report" }) });
+      const { report } = await apiRequest<{ report: Report }>("/api/medical-records/reports", { method: "POST", body: JSON.stringify({ patientId: selectedPatientId, title: file.name, type: "Lab report" }) });
       setUploadedReportId(report.id);
+      setServiceError("");
     } catch (error: unknown) {
       setUploadedFile("");
       setServiceError(error instanceof Error ? error.message : "Document upload failed.");
+    }
+  }
+
+  async function summarizeDocument() {
+    if (!uploadedReportId) return;
+    try {
+      const { summary } = await apiRequest<{ summary: { keyFindings: string[]; nextStep: string } }>("/api/medical-records/summarize", { method: "POST", body: JSON.stringify({ reportId: uploadedReportId, title: uploadedFile }) });
+      setDocumentSummary(`${summary.keyFindings.join(" · ")} Next step: ${summary.nextStep}`);
+    } catch (error: unknown) {
+      setServiceError(error instanceof Error ? error.message : "Document summary failed.");
     }
   }
 
@@ -330,138 +217,185 @@ export default function DoctorWorkspace() {
     }
   }
 
-  async function summarizeDocument() {
-    if (!uploadedFile || !uploadedReportId) return;
-    try {
-      const { summary } = await apiRequest<{ summary: { keyFindings: string[]; nextStep: string } }>("/api/medical-records/summarize", { method: "POST", body: JSON.stringify({ reportId: uploadedReportId, title: uploadedFile }) });
-      setDocumentSummary(`${summary.keyFindings.join(" · ")} Next step: ${summary.nextStep}`);
-    } catch (error: unknown) {
-      setServiceError(error instanceof Error ? error.message : "Document summary failed.");
-    }
-  }
-
   return (
     <main className="min-h-screen bg-[#f7faf8] text-[#183b39]">
-      <aside className="fixed inset-y-0 left-0 z-50 flex w-[78px] flex-col border-r border-[#dce9e3] bg-[#edf8f3] px-3 py-5 md:w-[292px] md:px-6 md:py-9">
-        <Link href="/" className="flex items-center gap-3 px-2">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#078d79] text-white shadow-[0_8px_16px_rgba(7,141,121,0.18)]"><Stethoscope className="h-6 w-6" /></span>
-          <span className="hidden text-[23px] font-bold tracking-[-0.06em] text-[#193d3a] md:inline">AI UPCHAR</span>
-        </Link>
+      <aside className="fixed inset-y-0 left-0 z-40 flex w-[78px] flex-col border-r border-[#dce9e3] bg-[#edf8f3] px-3 py-5 md:w-[292px] md:px-6 md:py-9">
+        <Link href="/" className="flex items-center gap-3 px-2"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#078d79] text-white"><Stethoscope className="h-6 w-6" /></span><span className="hidden text-[23px] font-bold tracking-[-0.06em] text-[#193d3a] md:inline">AI UPCHAR</span></Link>
         <p className="mt-10 hidden px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#86a09a] md:mt-16 md:block">Workspace</p>
-        <nav className="mt-5 space-y-2">
-          {[
-            { label: "Overview", icon: LayoutDashboard },
-            { label: "Patients", icon: Users },
-            { label: "AI Scribe", icon: Mic },
-            { label: "Clinical insights", icon: BrainCircuit, badge: "NEW" },
-            { label: "Symptom checker", icon: HeartPulse },
-            { label: "Medical records", icon: NotebookTabs },
-          ].map(({ label, icon: Icon, badge }) => (
-            <button key={label} onClick={() => setActiveNav(label)} aria-label={label} className={`flex w-full items-center justify-center gap-4 rounded-xl px-3 py-3.5 text-left text-[16px] font-semibold transition md:justify-start md:px-4 ${activeNav === label ? "bg-[#153f3c] text-white shadow-[0_10px_20px_rgba(21,63,60,0.14)]" : "text-[#6c8782] hover:bg-white/60 hover:text-[#315d57]"}`}>
-              <Icon className="h-5 w-5 shrink-0" />
-              <span className="hidden flex-1 md:inline">{label}</span>
-              {badge && <span className="hidden rounded bg-[#a9e6d2] px-1.5 py-0.5 text-[9px] font-bold text-[#27806b] md:inline">{badge}</span>}
-            </button>
-          ))}
-        </nav>
-        <div className="mt-auto">
-          <button onClick={() => setActiveNav("Overview")} aria-label="Demo workspace" className="w-full rounded-xl border border-[#c5e9dd] bg-[#d8f3e8] p-3 text-left transition hover:bg-[#cceee0] md:p-4">
-            <span className="flex items-center justify-center gap-3 text-sm font-bold text-[#078b78] md:justify-start"><Sparkles className="h-5 w-5" /><span className="hidden md:inline">Demo workspace</span></span>
-            <span className="mt-1 hidden pl-8 text-xs text-[#6d958b] md:block">Explore AI UPCHAR</span>
-          </button>
-          <button onClick={() => setActiveNav("Profile")} aria-label="Dr. Ananya Arya profile" className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl p-1 text-left hover:bg-white/60 md:justify-start">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#d5eee4] text-xs font-bold text-[#277a6b]">DA</span>
-            <span className="hidden flex-1 md:block"><strong className="block text-sm text-[#214440]">Dr. Ananya Arya</strong><span className="mt-1 block text-xs text-[#78918c]">General Medicine</span></span>
-            <ChevronRight className="h-5 w-5 text-[#87aaa0]" />
-          </button>
-        </div>
+        <nav className="mt-5 space-y-2">{navItems.map(({ label, icon: Icon, badge }) => <button key={label} onClick={() => navigate(label)} aria-label={label} className={`flex w-full items-center justify-center gap-4 rounded-xl px-3 py-3.5 text-left text-[16px] font-semibold transition md:justify-start md:px-4 ${activeNav === label ? "bg-[#153f3c] text-white shadow-[0_10px_20px_rgba(21,63,60,0.14)]" : "text-[#6c8782] hover:bg-white/60 hover:text-[#315d57]"}`}><Icon className="h-5 w-5 shrink-0" /><span className="hidden flex-1 md:inline">{label}</span>{badge && <span className="hidden rounded bg-[#a9e6d2] px-1.5 py-0.5 text-[9px] font-bold text-[#27806b] md:inline">{badge}</span>}</button>)}</nav>
+        <div className="mt-auto"><button onClick={() => navigate("Overview")} className="w-full rounded-xl border border-[#c5e9dd] bg-[#d8f3e8] p-3 text-left hover:bg-[#cceee0] md:p-4"><span className="flex items-center justify-center gap-3 text-sm font-bold text-[#078b78] md:justify-start"><Sparkles className="h-5 w-5" /><span className="hidden md:inline">Demo workspace</span></span><span className="mt-1 hidden pl-8 text-xs text-[#6d958b] md:block">Explore AI UPCHAR</span></button><button onClick={() => navigate("Profile")} aria-label="Open clinician profile" className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl p-1 text-left hover:bg-white/60 md:justify-start"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#d5eee4] text-xs font-bold text-[#277a6b]">DA</span><span className="hidden flex-1 md:block"><strong className="block text-sm text-[#214440]">Dr. Ananya Arya</strong><span className="mt-1 block text-xs text-[#78918c]">General Medicine</span></span><ChevronRight className="h-5 w-5 text-[#87aaa0]" /></button></div>
       </aside>
 
       <div className="ml-[78px] md:ml-[292px]">
-      <header className="border-b border-[#e4ebe7] bg-[#fbfdfc]">
-        <div className="mx-auto flex h-[64px] max-w-[1440px] items-center gap-3 px-3 sm:gap-5 sm:px-5 md:px-10">
-          <Link href="/" className="hidden shrink-0 items-center text-[17px] font-bold tracking-[-0.04em] sm:flex">
-            AI UPCHAR
-          </Link>
-          <div className="relative flex max-w-[430px] flex-1">
-            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8da09b]" />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search patients or records" placeholder="Search patients or records" className="h-10 w-full rounded-xl border-0 bg-transparent pl-10 pr-4 text-sm outline-none placeholder:text-[#94a39f]" />
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            <button onClick={() => setLanguage(language === "हिन्दी" ? "English" : "हिन्दी")} aria-label="Change language" className="flex items-center gap-2 rounded-lg border border-[#e4ebe7] px-2.5 py-2 text-xs font-semibold text-[#54716d] hover:bg-[#f0f6f3] sm:px-3"><Languages className="h-4 w-4" /><span className="hidden sm:inline">{language}</span></button>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#164642] text-xs font-bold text-white">DA</span>
-          </div>
-        </div>
-      </header>
-
-      {activeNav === "Overview" ? <div className="mx-auto max-w-[1280px] overflow-hidden px-4 pb-12 pt-6 sm:px-5 md:px-10 md:pt-8">
-        <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#78908a]">Tuesday, 24 June 2025 <span className="mx-2 text-[#0b9c87]">•</span> Live clinic</p>
-            <h1 className="mt-3 text-[28px] font-bold tracking-[-0.05em] text-[#173f3c] sm:text-3xl md:text-[40px]">Good morning, Dr. Arya</h1>
-            <p className="mt-2 text-sm text-[#78908a]">Here&apos;s what&apos;s happening in your clinic today.</p>
-          </div>
-          <button onClick={toggleSession} className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#07947f] px-5 py-3 text-sm font-bold text-white shadow-[0_8px_22px_rgba(7,148,127,0.18)] transition hover:bg-[#057e6d] lg:w-fit">
-            {sessionStarted ? <Check className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            {sessionStarted ? "Session active" : "Start new session"}
-            {sessionStarted ? <X className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
-          </button>
-        </section>
-
-        <section className="mt-10 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">
-          {summaryStats.map(({ label, value, detail, icon: Icon, tone }) => (
-            <div key={label} className={`relative h-[121px] rounded-xl border border-[#e1e9e5] p-4 ${label === "Next appointment" ? "bg-[#dff4ec]" : "bg-white"}`}>
-              <div className="flex items-start justify-between"><p className="text-xs font-semibold text-[#6d827c]">{label}</p><span className={`rounded-lg p-2 ${tone}`}><Icon className="h-5 w-5" /></span></div>
-              <p className="absolute left-4 top-[52px] text-2xl font-bold tracking-[-0.03em] text-[#173f3c]">{value}</p>
-              <p className="absolute bottom-4 left-4 text-[11px] text-[#77908a]">{detail}</p>
-            </div>
-          ))}
-        </section>
-
-        <section className="mt-12">
-          <div className="flex items-end justify-between"><div><h2 className="text-xl font-semibold tracking-[-0.03em]">Your clinical command centre</h2><p className="mt-1 text-sm text-[#818b85]">Everything you need, in one calm place.</p></div><button onClick={() => setActiveNav("Patients")} className="hidden items-center gap-1 text-xs font-semibold text-[#56896d] hover:underline sm:flex">View all <ChevronRight className="h-3.5 w-3.5" /></button></div>
-
-          <div className="mt-6 grid grid-cols-1 gap-3 xl:grid-cols-2">
-            <article className="min-h-[235px] rounded-2xl bg-[#124b47] p-6 text-white">
-              <div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#8bd4be]">Live scribe</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Stay present. Let AI take notes.</h3><p className="mt-2 max-w-sm text-sm leading-6 text-[#b8d2ce]">Turn your consultation into a structured SOAP note in seconds.</p></div><span className="rounded-full bg-[#2c7069] p-4 text-[#a5e4d0]"><Mic className="h-5 w-5" /></span></div>
-              <div className="mt-8 flex h-14 items-center gap-1" role="img" aria-label={scribeOpen ? "Voice recording in progress" : "Voice frequency preview"}>
-                {waveform.map((height, index) => <span key={`${height}-${index}`} className={`w-1 rounded-full transition-all duration-300 ${index % 3 === 0 ? "bg-[#4fc4a7]" : "bg-[#8ed8c2]"} ${scribeOpen ? "animate-pulse" : ""}`} style={{ height: `${height}px`, animationDelay: `${index * 45}ms` }} />)}
-              </div>
-              <div className="mt-4 border-t border-[#39706a] pt-4 flex items-center justify-between"><span className={`flex items-center gap-2 text-xs font-semibold ${scribeOpen ? "text-[#a7e4cb]" : "text-[#b8d2ce]"}`}><span className={`h-2 w-2 rounded-full ${scribeOpen ? "bg-[#72e5b5]" : "bg-[#79b6a7]"}`} />{scribeOpen ? "Listening to consultation" : "Ready to listen"}</span><button onClick={() => setScribeOpen(!scribeOpen)} className="rounded-lg bg-white px-4 py-2 text-xs font-bold text-[#124b47] hover:bg-[#e6f5f0]">{scribeOpen ? "Pause scribe" : "Open scribe"} <ArrowUpRight className="ml-1 inline h-3.5 w-3.5" /></button></div>
-            </article>
-
-            <article className="min-h-[235px] rounded-2xl bg-[#f1e8df] p-6">
-              <div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#b0805e]">Patient snapshot</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Rohan Mehta</h3><p className="mt-1 text-sm text-[#8d837a]">32 years · Male · Patient since 2023</p></div><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#dfc6b0] text-xs font-bold text-[#8b654d]">RM</span></div>
-              <div className="mt-6 grid grid-cols-2 gap-y-3 text-xs"><span className="text-[#a09083]">Last visit <strong className="mt-1 block font-semibold text-[#655e57]">18 Jun 2025</strong></span><span className="text-[#a09083]">Blood group <strong className="mt-1 block font-semibold text-[#655e57]">B+</strong></span><span className="text-[#a09083]">Follow-up scheduled <strong className="mt-1 block font-semibold text-[#655e57]">Today, 10:30 AM</strong></span><span className="text-[#a09083]">Prescription updated <strong className="mt-1 block font-semibold text-[#655e57]">18 Jun 2025</strong></span></div>
-              <button onClick={() => setActiveNav("Patients")} className="mt-5 flex items-center gap-1 text-xs font-bold text-[#9b704f] hover:underline">Open patient record <ChevronRight className="h-3.5 w-3.5" /></button>
-            </article>
-
-            <article className="rounded-2xl border border-[#e8e8e2] bg-white p-6">
-              <div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#7ca28d]">Patient-facing AI</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Symptom checker</h3><p className="mt-2 text-sm text-[#818b85]">Help patients organise what they&apos;re feeling before a visit.</p></div><HeartPulse className="h-5 w-5 text-[#82ae96]" /></div>
-              <div className="mt-6 flex gap-2"><input value={symptoms} onChange={(event) => setSymptoms(event.target.value)} placeholder="e.g. headache, mild fever for two days..." className="min-w-0 flex-1 rounded-lg border border-[#e5e8e3] bg-[#fbfcfa] px-3 py-2.5 text-xs outline-none focus:border-[#9fbea9]" /><button onClick={checkSymptoms} className="rounded-lg bg-[#ebf4ed] px-3 text-xs font-bold text-[#5c916e] hover:bg-[#dceee1]">Check symptoms</button></div>
-              {symptomResult && <p className="mt-3 rounded-lg bg-[#f1f7f2] p-3 text-xs leading-5 text-[#65806e]">{symptomResult}</p>}
-            </article>
-
-            <article className="rounded-2xl border border-[#e8e8e2] bg-white p-6">
-              <div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#8a91b2]">Clinical intelligence</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Ask your medical copilot</h3><p className="mt-2 text-sm text-[#818b85]">Structure a question and get a clear starting point.</p></div><BrainCircuit className="h-5 w-5 text-[#8995bf]" /></div>
-              <div className="mt-6 flex rounded-lg border border-[#e5e8e3] bg-[#fbfcfa] p-1"><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => event.key === "Enter" && askCopilot()} placeholder="Ask about a case or guideline..." className="min-w-0 flex-1 bg-transparent px-2 text-xs outline-none" /><button onClick={askCopilot} aria-label="Ask copilot" className="rounded-md bg-[#e9edf7] p-2 text-[#6b7eac] hover:bg-[#dfe6f5]"><Send className="h-3.5 w-3.5" /></button></div>
-              <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setQuestion("Respiratory follow-up")} className="rounded-full bg-[#f5f5fa] px-3 py-1.5 text-[10px] font-semibold text-[#7b82a1]">Respiratory follow-up</button><button onClick={() => setQuestion("Red flags to document")} className="rounded-full bg-[#f5f5fa] px-3 py-1.5 text-[10px] font-semibold text-[#7b82a1]">Red flags to document</button></div>
-              {copilotResult && <p className="mt-3 rounded-lg bg-[#f3f4fa] p-3 text-xs leading-5 text-[#687493]">{copilotResult}</p>}
-            </article>
-
-            <article className="rounded-2xl border border-[#e8e8e2] bg-white p-6 lg:col-span-2">
-              <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#af8b66]">Document intelligence</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.035em]">Summarise a medical document</h3><p className="mt-2 text-sm text-[#818b85]">Upload a PDF and get the key points at a glance.</p></div><FileText className="h-5 w-5 text-[#bd956d]" /></div>
-              <input ref={fileInput} type="file" accept=".pdf,application/pdf" onChange={handleFile} className="hidden" />
-              <button onClick={() => fileInput.current?.click()} className="mt-6 flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#d9ddd7] bg-[#fbfcfa] px-4 py-7 text-center hover:border-[#a9c0ae]"><UploadCloud className="h-6 w-6 text-[#a8b8ad]" /><span className="mt-2 text-xs font-semibold text-[#7d8b82]">{uploadedFile || "Drop a PDF here or browse"}</span><span className="mt-1 text-[10px] text-[#a4ada7]">PDF up to 10 MB · DEMO MODE</span></button>
-              <div className="mt-4 flex items-center justify-between"><span className="flex items-center gap-2 text-[11px] text-[#8b958e]"><ShieldCheck className="h-4 w-4 text-[#76a287]" /> Your data stays private</span><button disabled={!uploadedReportId} onClick={summarizeDocument} className="rounded-lg bg-[#f2eee8] px-4 py-2 text-xs font-bold text-[#a2876c] enabled:hover:bg-[#e9dfd2] disabled:cursor-not-allowed disabled:opacity-50">Summarise document</button></div>
-              {documentSummary && <p className="mt-4 rounded-lg bg-[#f6f2ec] p-3 text-xs leading-5 text-[#806c58]">{documentSummary}</p>}
-            </article>
-          </div>
-        </section>
-
-        <footer className="mt-12 flex flex-col gap-2 border-t border-[#e8e8e2] pt-6 text-xs text-[#9aa39d] sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2 font-semibold text-[#707b74]"><HeartPulse className="h-4 w-4 text-[#76a287]" /> AI UPCHAR</span><span>Designed for focused care <span className="text-[#d89182]">♥</span></span><span>DEMO MODE · AI responses are simulated</span></footer>
-      </div> : <WorkspaceScreen activeNav={activeNav} onNavigate={setActiveNav} selectedPatientId={selectedPatientId} setSelectedPatientId={setSelectedPatientId} />}
+        <header className="border-b border-[#e4ebe7] bg-[#fbfdfc]"><div className="mx-auto flex h-[64px] max-w-[1440px] items-center gap-3 px-3 sm:gap-5 sm:px-5 md:px-10"><Link href="/" className="hidden shrink-0 text-[17px] font-bold tracking-[-0.04em] sm:flex">AI UPCHAR</Link><div className="relative flex max-w-[430px] flex-1"><Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8da09b]" /><input value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") navigate("Patients"); }} aria-label="Search patients or records" placeholder="Search patients or records" className="h-10 w-full bg-transparent pl-10 pr-4 text-sm outline-none placeholder:text-[#94a39f]" /></div><div className="ml-auto flex items-center gap-3"><button onClick={() => setLanguage(language === "हिन्दी" ? "English" : "हिन्दी")} aria-label="Change language" className="flex items-center gap-2 rounded-lg border border-[#e4ebe7] px-2.5 py-2 text-xs font-semibold text-[#54716d] hover:bg-[#f0f6f3]"><Languages className="h-4 w-4" /><span className="hidden sm:inline">{language}</span></button><span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#164642] text-xs font-bold text-white">DA</span></div></div></header>
+        {serviceError && <div role="alert" className="mx-auto mt-4 flex max-w-[1280px] items-center justify-between gap-3 rounded-xl border border-[#efc7c0] bg-[#fff5f2] px-4 py-3 text-sm text-[#a45649] md:mx-10"><span>{serviceError}</span><button onClick={() => setServiceError("")} aria-label="Dismiss error"><X className="h-4 w-4" /></button></div>}
+        {activeNav === "Overview" ? <Overview summaryStats={summaryStats} sessionStarted={sessionStarted} toggleSession={toggleSession} recording={recording} navigate={navigate} symptoms={symptoms} setSymptoms={setSymptoms} checkSymptoms={checkSymptoms} symptomResult={symptomResult} symptomLoading={symptomLoading} question={question} setQuestion={setQuestion} askCopilot={askCopilot} copilotResult={copilotResult} copilotLoading={copilotLoading} fileInput={fileInput} handleFile={handleFile} uploadedFile={uploadedFile} uploadedReportId={uploadedReportId} summarizeDocument={summarizeDocument} documentSummary={documentSummary} /> : <WorkspaceScreen activeNav={activeNav} navigate={navigate} selectedPatientId={selectedPatientId} setSelectedPatientId={setSelectedPatientId} patients={patients} loadPatients={loadPatients} recording={recording} recordingMode={recordingMode} recordingSeconds={recordingSeconds} startRecording={startRecording} stopRecording={stopRecording} globalSearch={globalSearch} /> }
       </div>
     </main>
   );
+}
+
+function Overview({ summaryStats, sessionStarted, toggleSession, recording, navigate, symptoms, setSymptoms, checkSymptoms, symptomResult, symptomLoading, question, setQuestion, askCopilot, copilotResult, copilotLoading, fileInput, handleFile, uploadedFile, uploadedReportId, summarizeDocument, documentSummary }: {
+  summaryStats: typeof stats; sessionStarted: boolean; toggleSession: () => void; recording: boolean; navigate: (nav: string) => void; symptoms: string; setSymptoms: (value: string) => void; checkSymptoms: () => void; symptomResult: string; symptomLoading: boolean; question: string; setQuestion: (value: string) => void; askCopilot: () => void; copilotResult: string; copilotLoading: boolean;   fileInput: RefObject<HTMLInputElement>; handleFile: (event: ChangeEvent<HTMLInputElement>) => void; uploadedFile: string; uploadedReportId: string; summarizeDocument: () => void; documentSummary: string;
+}) {
+  return <div className="mx-auto max-w-[1280px] overflow-hidden px-4 pb-12 pt-6 sm:px-5 md:px-10 md:pt-8">
+    <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end"><div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#78908a]">Live clinic <span className="mx-2 text-[#0b9c87]">•</span> Tuesday, 24 June 2025</p><h1 className="mt-3 text-[28px] font-bold tracking-[-0.05em] text-[#173f3c] sm:text-3xl md:text-[40px]">Good morning, Dr. Arya</h1><p className="mt-2 text-sm text-[#78908a]">Here&apos;s what&apos;s happening in your clinic today.</p></div><button onClick={toggleSession} className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#07947f] px-5 py-3 text-sm font-bold text-white lg:w-fit">{sessionStarted ? <Check className="h-4 w-4" /> : <Mic className="h-4 w-4" />}{sessionStarted ? "Session active · Stop" : "Start new session"}<ArrowUpRight className="h-4 w-4" /></button></section>
+    <section className="mt-10 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 lg:grid-cols-4">{summaryStats.map(({ label, value, detail, icon: Icon, tone }) => <div key={label} className="relative h-[121px] rounded-xl border border-[#e1e9e5] bg-white p-4"><div className="flex items-start justify-between"><p className="text-xs font-semibold text-[#6d827c]">{label}</p><span className={`rounded-lg p-2 ${tone}`}><Icon className="h-5 w-5" /></span></div><p className="absolute left-4 top-[52px] text-2xl font-bold text-[#173f3c]">{value}</p><p className="absolute bottom-4 left-4 text-[11px] text-[#77908a]">{detail}</p></div>)}</section>
+    <section className="mt-12"><div className="flex items-end justify-between"><div><h2 className="text-xl font-semibold">Your clinical command centre</h2><p className="mt-1 text-sm text-[#818b85]">Everything you need, in one calm place.</p></div><button onClick={() => navigate("Patients")} className="flex items-center gap-1 text-xs font-semibold text-[#56896d] hover:underline">View all <ChevronRight className="h-3.5 w-3.5" /></button></div>
+      <div className="mt-6 grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <article className="min-h-[235px] rounded-2xl bg-[#124b47] p-6 text-white"><div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#8bd4be]">Live scribe</p><h3 className="mt-3 text-xl font-semibold">Stay present. Let AI take notes.</h3><p className="mt-2 max-w-sm text-sm leading-6 text-[#b8d2ce]">Record a consultation and turn it into a structured SOAP note.</p></div><Mic className="h-5 w-5 text-[#a5e4d0]" /></div><div className="mt-8 flex h-14 items-center gap-1" role="img" aria-label={recording ? "Voice recording in progress" : "Voice frequency preview"}>{waveform.map((height, index) => <span key={`${height}-${index}`} className={`w-1 rounded-full ${index % 3 === 0 ? "bg-[#4fc4a7]" : "bg-[#8ed8c2]"} ${recording ? "animate-pulse" : ""}`} style={{ height: `${height}px` }} />)}</div><div className="mt-4 flex items-center justify-between border-t border-[#39706a] pt-4"><span className="text-xs font-semibold text-[#b8d2ce]">{recording ? "Recording consultation" : "Ready to listen"}</span><button onClick={() => navigate("AI Scribe")} className="rounded-lg bg-white px-4 py-2 text-xs font-bold text-[#124b47]">Open AI Scribe <ArrowUpRight className="ml-1 inline h-3.5 w-3.5" /></button></div></article>
+        <article className="min-h-[235px] rounded-2xl bg-[#f1e8df] p-6"><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#b0805e]">Patient snapshot</p><h3 className="mt-3 text-xl font-semibold">Rohan Mehta</h3><p className="mt-1 text-sm text-[#8d837a]">32 years · Male · Patient since 2023</p><div className="mt-6 grid grid-cols-2 gap-y-3 text-xs text-[#a09083]"><span>Last visit<strong className="mt-1 block text-[#655e57]">18 Jun 2025</strong></span><span>Blood group<strong className="mt-1 block text-[#655e57]">B+</strong></span><span>Follow-up scheduled<strong className="mt-1 block text-[#655e57]">Today, 10:30 AM</strong></span><span>Prescription updated<strong className="mt-1 block text-[#655e57]">18 Jun 2025</strong></span></div><button onClick={() => navigate("Medical records")} className="mt-5 flex items-center gap-1 text-xs font-bold text-[#9b704f] hover:underline">Open patient record <ChevronRight className="h-3.5 w-3.5" /></button></article>
+        <article className="rounded-2xl border border-[#e8e8e2] bg-white p-6"><h3 className="text-xl font-semibold">Symptom checker</h3><p className="mt-2 text-sm text-[#818b85]">Organise symptoms before a focused consultation.</p><div className="mt-6 flex gap-2"><input value={symptoms} onChange={(event) => setSymptoms(event.target.value)} placeholder="e.g. headache, mild fever..." className="min-w-0 flex-1 rounded-lg border border-[#e5e8e3] px-3 py-2.5 text-xs outline-none" /><button onClick={checkSymptoms} disabled={symptomLoading} className="rounded-lg bg-[#ebf4ed] px-3 text-xs font-bold text-[#5c916e] disabled:opacity-60">{symptomLoading ? "Checking…" : "Check symptoms"}</button></div>{symptomResult && <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-[#f1f7f2] p-3 text-xs leading-5 text-[#65806e]">{symptomResult}</pre>}<button onClick={() => navigate("Symptom checker")} className="mt-4 text-xs font-bold text-[#5c916e] hover:underline">Open full symptom checker →</button></article>
+        <article className="rounded-2xl border border-[#e8e8e2] bg-white p-6"><h3 className="text-xl font-semibold">Ask your medical copilot</h3><p className="mt-2 text-sm text-[#818b85]">Structure a question and get a clear starting point.</p><div className="mt-6 flex rounded-lg border border-[#e5e8e3] p-1"><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => event.key === "Enter" && askCopilot()} placeholder="Ask about a case or guideline..." className="min-w-0 flex-1 bg-transparent px-2 text-xs outline-none" /><button onClick={askCopilot} disabled={copilotLoading} aria-label="Ask copilot" className="rounded-md bg-[#e9edf7] p-2 text-[#6b7eac] disabled:opacity-60">{copilotLoading ? "…" : <Send className="h-3.5 w-3.5" />}</button></div>{copilotResult && <p className="mt-3 rounded-lg bg-[#f3f4fa] p-3 text-xs leading-5 text-[#687493]">{copilotResult}</p>}<button onClick={() => navigate("Clinical insights")} className="mt-4 text-xs font-bold text-[#687493] hover:underline">Review clinical insights →</button></article>
+        <article className="rounded-2xl border border-[#e8e8e2] bg-white p-6 xl:col-span-2"><div className="flex items-start justify-between"><div><h3 className="text-xl font-semibold">Summarise a medical document</h3><p className="mt-2 text-sm text-[#818b85]">Upload a PDF and get the key points at a glance.</p></div><FileText className="h-5 w-5 text-[#bd956d]" /></div><input ref={fileInput} type="file" accept=".pdf,application/pdf" onChange={handleFile} className="hidden" /><button onClick={() => fileInput.current?.click()} className="mt-6 flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#d9ddd7] px-4 py-7 text-center hover:border-[#a9c0ae]"><UploadCloud className="h-6 w-6 text-[#a8b8ad]" /><span className="mt-2 text-xs font-semibold text-[#7d8b82]">{uploadedFile || "Drop a PDF here or browse"}</span><span className="mt-1 text-[10px] text-[#a4ada7]">DEMO MODE · source-linked record created</span></button><div className="mt-4 flex items-center justify-between"><span className="text-[11px] text-[#8b958e]">Your data stays private</span><button disabled={!uploadedReportId} onClick={summarizeDocument} className="rounded-lg bg-[#f2eee8] px-4 py-2 text-xs font-bold text-[#a2876c] disabled:opacity-50">Summarise document</button></div>{documentSummary && <p className="mt-4 rounded-lg bg-[#f6f2ec] p-3 text-xs leading-5 text-[#806c58]">{documentSummary}</p>}</article>
+      </div>
+    </section>
+  </div>;
+}
+
+function WorkspaceScreen({ activeNav, navigate, selectedPatientId, setSelectedPatientId, patients, loadPatients, recording, recordingMode, recordingSeconds, startRecording, stopRecording, globalSearch }: {
+  activeNav: string; navigate: (nav: string) => void; selectedPatientId: string; setSelectedPatientId: (id: string) => void; patients: Patient[]; loadPatients: () => Promise<Patient[]>; recording: boolean; recordingMode: "microphone" | "demo" | null; recordingSeconds: number; startRecording: () => Promise<void>; stopRecording: () => Promise<void>; globalSearch: string;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [errorText, setErrorText] = useState("");
+  const [showAddPatient, setShowAddPatient] = useState(false);
+  const [newPatient, setNewPatient] = useState({ name: "", id: "", appointment: "" });
+  const [query, setQuery] = useState(globalSearch);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [insights, setInsights] = useState<Insight[]>([]);
+  const [note, setNote] = useState<Note | null>(null);
+  const [transcript, setTranscript] = useState("");
+  const [scribeSaving, setScribeSaving] = useState(false);
+  const [symptoms, setSymptoms] = useState("");
+  const [duration, setDuration] = useState("");
+  const [severity, setSeverity] = useState("Mild");
+  const [associatedSymptoms, setAssociatedSymptoms] = useState("");
+  const [medicines, setMedicines] = useState("");
+  const [symptomResult, setSymptomResult] = useState("");
+  const [profileSection, setProfileSection] = useState("Overview");
+  const [profile, setProfile] = useState({ fullName: "Dr. Ananya Arya", specialty: "General Medicine", clinicBio: "" });
+  const [notifications, setNotifications] = useState({ urgentFollowUps: true, weeklySummary: true, twoStepSignIn: true });
+  const [notice, setNotice] = useState("");
+  const [selectedReport, setSelectedReport] = useState("");
+
+  useEffect(() => {
+    setQuery(globalSearch);
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setErrorText("");
+      try {
+        if (["Patients", "AI Scribe", "Symptom checker", "Medical records"].includes(activeNav) && patients.length === 0) await loadPatients();
+        if (activeNav === "Medical records") {
+          const { reports: data } = await apiRequest<{ reports: Report[] }>(`/api/medical-records/reports?patientId=${selectedPatientId}`);
+          if (!cancelled) setReports(data);
+        }
+        if (activeNav === "Clinical insights") {
+          const { insights: data } = await apiRequest<{ insights: Insight[] }>("/api/insights");
+          if (!cancelled) setInsights(data);
+        }
+        if (activeNav === "AI Scribe") {
+          const { notes } = await apiRequest<{ notes: Note[] }>(`/api/scribe?patientId=${selectedPatientId}`);
+          if (!cancelled) setNote(notes.at(-1) ?? null);
+        }
+        if (activeNav === "Profile") {
+          const { settings } = await apiRequest<{ settings: typeof profile & { notifications: typeof notifications } }>("/api/profile/settings");
+          if (!cancelled) { setProfile(settings); setNotifications(settings.notifications); }
+        }
+      } catch (error: unknown) {
+        if (!cancelled) setErrorText(error instanceof Error ? error.message : "This workspace service is unavailable.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => { cancelled = true; };
+  }, [activeNav, selectedPatientId, patients.length, loadPatients, globalSearch]);
+
+  async function addPatient() {
+    if (!newPatient.name.trim()) { setErrorText("Patient name is required."); return; }
+    try {
+      await apiRequest("/api/patients", { method: "POST", body: JSON.stringify(newPatient) });
+      await loadPatients();
+      setNewPatient({ name: "", id: "", appointment: "" });
+      setShowAddPatient(false);
+      setNotice("Patient added and directory refreshed.");
+    } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Patient could not be added."); }
+  }
+
+  async function generateNote() {
+    const content = transcript.trim() || (recordingMode ? "Patient reports intermittent headache and fatigue for two days. No emergency warning signs reported." : "");
+    if (!content) { setErrorText("Record a consultation or enter a transcript first."); return; }
+    setLoading(true);
+    try {
+      const { note: created } = await apiRequest<{ note: Note }>("/api/scribe", { method: "POST", body: JSON.stringify({ transcript: content, patientId: selectedPatientId }) });
+      setNote(created);
+      setTranscript(content);
+      setNotice("SOAP draft generated. Review and edit every field before saving.");
+    } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Scribe generation failed."); } finally { setLoading(false); }
+  }
+
+  async function updateNote(action: "save" | "approve") {
+    if (!note) return;
+    setScribeSaving(true);
+    try {
+      const { note: updated } = await apiRequest<{ note: Note }>("/api/scribe", { method: "PATCH", body: JSON.stringify({ noteId: note.id, action, subjective: note.subjective, objective: note.objective, assessment: note.assessment, plan: note.plan }) });
+      setNote(updated);
+      setNotice(action === "approve" ? "SOAP note approved." : "SOAP note saved.");
+    } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "SOAP note could not be updated."); } finally { setScribeSaving(false); }
+  }
+
+  async function runSymptomCheck() {
+    if (!symptoms.trim()) { setErrorText("Enter symptoms before checking."); return; }
+    try {
+      const { analysis } = await apiRequest<{ analysis: { questions: string[]; triage: string; redFlags: string; duration: string; severity: string } }>("/api/symptom-analysis", { method: "POST", body: JSON.stringify({ symptoms, patientId: selectedPatientId, duration, severity, associatedSymptoms, medicines }) });
+      setSymptomResult(`Duration: ${analysis.duration} · Severity: ${analysis.severity}\nFollow-up: ${analysis.questions.join(" ")}\nTriage: ${analysis.triage}. ${analysis.redFlags}`);
+    } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Symptom analysis failed."); }
+  }
+
+  async function reviewInsight(id: string) {
+    try {
+      await apiRequest("/api/insights", { method: "POST", body: JSON.stringify({ insightId: id }) });
+      setInsights((current) => current.filter((item) => item.id !== id));
+      setNotice("Insight marked reviewed.");
+    } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Insight could not be reviewed."); }
+  }
+
+  async function reportAction(reportId: string, action: "analyze" | "summarize") {
+    try {
+      const endpoint = action === "analyze" ? "/api/medical-records/analyze" : "/api/medical-records/summarize";
+      const body = action === "analyze" ? { patientId: selectedPatientId, reportId } : { reportId, title: reports.find((report) => report.id === reportId)?.title };
+      const result = await apiRequest<{ analysis?: { trend: string; flag: string; summary: string }; summary?: { keyFindings: string[]; nextStep: string } }>(endpoint, { method: "POST", body: JSON.stringify(body) });
+      const text = result.analysis ? `${result.analysis.trend} ${result.analysis.flag} ${result.analysis.summary}` : `${result.summary?.keyFindings.join(" · ")} Next step: ${result.summary?.nextStep}`;
+      setNotice(text);
+    } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Report action failed."); }
+  }
+
+  async function saveProfile() {
+    try { await apiRequest("/api/profile/settings", { method: "PATCH", body: JSON.stringify(profileSection === "Account settings" ? { notifications } : profile) }); setNotice("Settings saved."); setProfileSection("Overview"); }
+    catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Settings could not be saved."); }
+  }
+
+  const filteredPatients = patients.filter(({ name, id }) => `${name} ${id}`.toLowerCase().includes(query.toLowerCase()));
+  const title = activeNav === "Profile" ? "Dr. Ananya Arya" : activeNav;
+  const descriptions: Record<string, string> = { Patients: "Review patient records, appointments, and care status.", "AI Scribe": "Capture a consultation and turn it into a structured SOAP note.", "Clinical insights": "Explore evidence-linked summaries and decision support.", "Symptom checker": "Organise symptoms before a visit for a focused consultation.", "Medical records": "Find reports, prescriptions, and source-linked clinical documents.", Profile: "Manage your professional profile and account settings." };
+
+  return <div className="mx-auto max-w-[1280px] px-5 pb-12 pt-8 md:px-10">
+    <div className="flex flex-col justify-between gap-6 border-b border-[#e2ebe6] pb-8 lg:flex-row lg:items-end"><div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#5a9b88]">{activeNav === "Profile" ? "CLINICIAN PROFILE" : "WORKSPACE"}</p><h1 className="mt-3 text-3xl font-bold tracking-[-0.05em] text-[#173f3c]">{title}</h1><p className="mt-2 text-sm text-[#78908a]">{descriptions[activeNav]}</p></div>{activeNav === "Patients" && <button onClick={() => setShowAddPatient(true)} className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-3 text-sm font-bold text-white"><Plus className="h-4 w-4" /> Add patient</button>}</div>
+    {notice && <p role="status" className="mt-5 rounded-xl border border-[#b9decf] bg-[#f0faf5] p-4 text-sm text-[#317b67]">{notice}</p>}
+    {errorText && <p role="alert" className="mt-5 rounded-xl border border-[#efc7c0] bg-[#fff5f2] p-4 text-sm text-[#a45649]">{errorText}</p>}
+    {loading && <p className="mt-6 rounded-xl bg-[#edf7f2] p-4 text-sm text-[#5a967e]">Loading {activeNav.toLowerCase()} from the clinic service…</p>}
+
+    {activeNav === "Patients" && <section className="mt-8 space-y-4">{showAddPatient && <div role="dialog" aria-modal="true" aria-labelledby="add-patient-title" className="fixed inset-0 z-50 flex items-center justify-center bg-[#173f3c]/30 p-4"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-center justify-between"><h2 id="add-patient-title" className="text-lg font-bold text-[#244642]">Add patient</h2><button onClick={() => setShowAddPatient(false)} aria-label="Close add patient form"><X className="h-5 w-5" /></button></div><div className="mt-5 grid gap-3"><input autoFocus value={newPatient.name} onChange={(event) => setNewPatient({ ...newPatient, name: event.target.value })} placeholder="Full name *" className="rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none" /><input value={newPatient.id} onChange={(event) => setNewPatient({ ...newPatient, id: event.target.value })} placeholder="Patient ID (optional)" className="rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none" /><input value={newPatient.appointment} onChange={(event) => setNewPatient({ ...newPatient, appointment: event.target.value })} placeholder="Appointment (optional)" className="rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none" /></div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setShowAddPatient(false)} className="rounded-lg px-4 py-2.5 text-sm font-semibold text-[#6b827a]">Cancel</button><button onClick={addPatient} disabled={!newPatient.name.trim()} className="rounded-lg bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">Save patient</button></div></div></div>}<div className="flex items-center gap-3 rounded-xl border border-[#e1e9e5] bg-white px-4 py-3"><Search className="h-4 w-4 text-[#91a49e]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search patient name or ID" className="flex-1 text-sm outline-none" /></div>{filteredPatients.map((patient) => <button key={patient.id} onClick={() => { setSelectedPatientId(patient.id); navigate("Medical records"); }} className="flex w-full items-center gap-4 rounded-xl border border-[#e1e9e5] bg-white p-4 text-left hover:border-[#9ac8b8]"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e4f3ed] text-sm font-bold text-[#4e927d]">{patient.initials}</span><span className="flex-1"><strong className="block text-sm text-[#244642]">{patient.name}</strong><span className="mt-1 block text-xs text-[#82958f]">{patient.id} · {patient.appointment}</span></span><span className="rounded-full bg-[#edf7f2] px-3 py-1 text-[11px] font-bold text-[#5a967e]">{patient.status}</span><ChevronRight className="h-4 w-4" /></button>)}</section>}
+
+    {activeNav === "AI Scribe" && <section className="mt-8 grid gap-5 lg:grid-cols-[360px_1fr]"><div className="rounded-2xl bg-[#124b47] p-6 text-white"><p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#8bd4be]">Consultation recorder</p><h2 className="mt-3 text-xl font-semibold">{recording ? "Recording in progress" : "Ready to record"}</h2><p className="mt-2 text-sm leading-6 text-[#b8d2ce]">Microphone access is optional in demo mode. A sample transcript is available when permission is denied.</p><div className="mt-8 flex items-center justify-center gap-1">{waveform.slice(0, 20).map((height, index) => <span key={index} className={`w-1 rounded-full ${recording ? "animate-pulse bg-[#72e5b5]" : "bg-[#8ed8c2]"}`} style={{ height: `${height}px` }} />)}</div><p className="mt-5 text-center text-sm font-semibold text-[#b8d2ce]">{Math.floor(recordingSeconds / 60).toString().padStart(2, "0")}:{(recordingSeconds % 60).toString().padStart(2, "0")} · {recordingMode === "demo" ? "Demo fallback" : recordingMode === "microphone" ? "Microphone" : "Not started"}</p><button onClick={recording ? stopRecording : startRecording} className="mt-6 w-full rounded-xl bg-white px-4 py-3 text-sm font-bold text-[#124b47]">{recording ? "Stop recording" : "Start recording"}</button>{!recording && recordingMode && <button onClick={() => void generateNote()} className="mt-3 w-full rounded-xl border border-[#7fcbb4] px-4 py-3 text-sm font-bold text-white">Generate SOAP note</button>}</div><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6"><label className="text-xs font-bold uppercase tracking-[0.14em] text-[#5a9b88]">Patient</label><select value={selectedPatientId} onChange={(event) => setSelectedPatientId(event.target.value)} className="mt-2 w-full rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm">{patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.name} · {patient.id}</option>)}</select><label className="mt-5 block text-xs font-bold uppercase tracking-[0.14em] text-[#5a9b88]">Transcript / demo note</label><textarea value={transcript} onChange={(event) => setTranscript(event.target.value)} placeholder="Paste consultation text or use the recorder…" className="mt-2 h-28 w-full rounded-lg border border-[#dce9e3] p-3 text-sm outline-none" /><button onClick={() => void generateNote()} disabled={loading} className="mt-3 rounded-lg bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">Generate SOAP draft</button>{note && <div className="mt-6 space-y-4 border-t border-[#edf1ee] pt-5"><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#5a9b88]">SOAP note · <span className="normal-case">{note.status}</span></p>{(["subjective", "objective", "assessment", "plan"] as const).map((field) => <label key={field} className="block text-xs font-bold capitalize text-[#5f7c70]">{field}<textarea value={note[field]} onChange={(event) => setNote({ ...note, [field]: event.target.value })} className="mt-1 min-h-20 w-full rounded-lg border border-[#dce9e3] p-3 text-sm font-normal text-[#244642] outline-none" /></label>)}<div className="flex flex-wrap gap-2"><button onClick={() => void updateNote("save")} disabled={scribeSaving} className="rounded-lg border border-[#9ccbb8] px-4 py-2.5 text-sm font-bold text-[#277a6b]">Save draft</button><button onClick={() => void updateNote("approve")} disabled={scribeSaving || note.status === "approved"} className="rounded-lg bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{note.status === "approved" ? "Approved" : "Approve SOAP note"}</button></div>{note.disclaimer && <p className="text-xs text-[#8b958e]">{note.disclaimer}</p>}</div>}</div></section>}
+
+    {activeNav === "Clinical insights" && <section className="mt-8 space-y-4">{insights.map((insight) => <article key={insight.id} className="rounded-2xl border border-[#e1e9e5] bg-white p-5"><div className="flex items-start justify-between gap-4"><div><span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#5a9b88]">{insight.priority} priority</span><h2 className="mt-2 text-lg font-bold text-[#244642]">{insight.title}</h2><p className="mt-2 text-sm leading-6 text-[#78908a]">{insight.detail}</p></div><button onClick={() => void reviewInsight(insight.id)} className="shrink-0 rounded-lg bg-[#edf7f2] px-3 py-2 text-xs font-bold text-[#317b67]">Mark reviewed</button></div></article>)}{!loading && insights.length === 0 && <p className="rounded-xl bg-[#edf7f2] p-5 text-sm text-[#317b67]">All clinical insights are reviewed.</p>}</section>}
+
+    {activeNav === "Symptom checker" && <section className="mt-8 max-w-3xl rounded-2xl border border-[#e1e9e5] bg-white p-6"><h2 className="text-xl font-bold text-[#244642]">Structured symptom intake</h2><p className="mt-2 text-sm text-[#78908a]">This demo organises information for clinician review; it does not diagnose.</p><textarea value={symptoms} onChange={(event) => setSymptoms(event.target.value)} placeholder="Describe symptoms, onset, and anything that makes them better or worse" className="mt-6 h-28 w-full rounded-lg border border-[#dce9e3] p-3 text-sm outline-none" /><div className="mt-4 grid gap-3 sm:grid-cols-2"><input value={duration} onChange={(event) => setDuration(event.target.value)} placeholder="Duration (e.g. 2 days)" className="rounded-lg border border-[#dce9e3] p-3 text-sm" /><select value={severity} onChange={(event) => setSeverity(event.target.value)} className="rounded-lg border border-[#dce9e3] p-3 text-sm"><option>Mild</option><option>Moderate</option><option>Severe</option></select><input value={associatedSymptoms} onChange={(event) => setAssociatedSymptoms(event.target.value)} placeholder="Associated symptoms" className="rounded-lg border border-[#dce9e3] p-3 text-sm" /><input value={medicines} onChange={(event) => setMedicines(event.target.value)} placeholder="Current medicines" className="rounded-lg border border-[#dce9e3] p-3 text-sm" /></div><button onClick={() => void runSymptomCheck()} className="mt-5 rounded-lg bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white">Check symptoms</button>{symptomResult && <pre role="status" className="mt-5 whitespace-pre-wrap rounded-xl bg-[#f1f7f2] p-4 text-sm leading-6 text-[#65806e]">{symptomResult}</pre>}</section>}
+
+    {activeNav === "Medical records" && <section className="mt-8 space-y-4">{reports.map((report) => <article key={report.id} className="rounded-2xl border border-[#e1e9e5] bg-white p-5"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#5a9b88]">{report.type} · {report.date}</p><h2 className="mt-2 font-bold text-[#244642]">{report.title}</h2><p className="mt-1 text-xs text-[#82958f]">{report.status}</p></div><div className="flex gap-2"><button onClick={() => void reportAction(report.id, "analyze")} className="rounded-lg bg-[#edf2f8] px-3 py-2 text-xs font-bold text-[#6682a5]">Analyze</button><button onClick={() => void reportAction(report.id, "summarize")} className="rounded-lg bg-[#f6f0e9] px-3 py-2 text-xs font-bold text-[#a2876c]">Summarize</button></div></div></article>)}{!loading && reports.length === 0 && <p className="rounded-xl bg-[#edf7f2] p-5 text-sm text-[#317b67]">No records for this patient.</p>}<button onClick={() => setSelectedReport(selectedReport ? "" : "upload")} className="rounded-lg border border-dashed border-[#9ccbb8] px-4 py-3 text-sm font-bold text-[#317b67]">{selectedReport ? "Hide upload form" : "Add a medical record"}</button>{selectedReport && <label className="flex cursor-pointer flex-col items-center rounded-xl border border-dashed border-[#d9ddd7] bg-white p-8 text-sm text-[#7d8b82]"><UploadCloud className="mb-2 h-6 w-6" />Choose a PDF demo record<input type="file" accept=".pdf,application/pdf" className="hidden" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { await apiRequest("/api/medical-records/reports", { method: "POST", body: JSON.stringify({ patientId: selectedPatientId, title: file.name, type: "Lab report" }) }); const { reports: data } = await apiRequest<{ reports: Report[] }>(`/api/medical-records/reports?patientId=${selectedPatientId}`); setReports(data); setNotice("Medical record added and list refreshed."); } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Record upload failed."); } }} /></label>}</section>}
+
+    {activeNav === "Profile" && <section className="mt-8 grid gap-5 lg:grid-cols-[280px_1fr]"><aside className="rounded-2xl border border-[#e1e9e5] bg-white p-4"><div className="flex items-center gap-3 border-b border-[#edf1ee] pb-5"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#d5eee4] text-lg font-bold text-[#277a6b]">DA</span><div><strong className="block text-sm text-[#244642]">{profile.fullName}</strong><span className="text-xs text-[#82958f]">{profile.specialty}</span></div></div><nav className="mt-4 space-y-1">{["Overview", "Profile settings", "Account settings"].map((section) => <button key={section} onClick={() => setProfileSection(section)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${profileSection === section ? "bg-[#e8f5ef] text-[#27806b]" : "text-[#78908a]"}`}><Settings className="h-4 w-4" />{section}</button>)}</nav></aside><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6">{profileSection === "Overview" && <div><h2 className="text-2xl font-bold text-[#244642]">{profile.fullName}, MBBS, MD</h2><p className="mt-2 text-sm text-[#82958f]">{profile.specialty} · 12 years of clinical experience</p><button onClick={() => setProfileSection("Profile settings")} className="mt-6 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white">Edit profile</button></div>}{profileSection === "Profile settings" && <div><h2 className="text-xl font-bold text-[#244642]">Profile settings</h2><div className="mt-5 grid gap-4"><input value={profile.fullName} onChange={(event) => setProfile({ ...profile, fullName: event.target.value })} className="rounded-lg border border-[#dce9e3] p-3 text-sm" /><input value={profile.specialty} onChange={(event) => setProfile({ ...profile, specialty: event.target.value })} className="rounded-lg border border-[#dce9e3] p-3 text-sm" /><textarea value={profile.clinicBio} onChange={(event) => setProfile({ ...profile, clinicBio: event.target.value })} placeholder="Clinic bio" className="h-24 rounded-lg border border-[#dce9e3] p-3 text-sm" /></div><button onClick={() => void saveProfile()} className="mt-5 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white">Save profile changes</button></div>}{profileSection === "Account settings" && <div><h2 className="text-xl font-bold text-[#244642]">Account settings</h2>{(["urgentFollowUps", "weeklySummary", "twoStepSignIn"] as const).map((field) => <label key={field} className="mt-5 flex items-center gap-3 text-sm text-[#5f7c70]"><input type="checkbox" checked={notifications[field]} onChange={(event) => setNotifications({ ...notifications, [field]: event.target.checked })} />{field === "twoStepSignIn" ? "Two-step sign-in" : field === "weeklySummary" ? "Weekly summary" : "Urgent follow-up alerts"}</label>)}<button onClick={() => void saveProfile()} className="mt-6 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white">Save account settings</button></div>}</div></section>}
+  </div>;
 }
