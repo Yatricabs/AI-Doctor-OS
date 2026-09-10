@@ -41,7 +41,7 @@ export default function DemoDialog({ open, onClose }: DemoDialogProps) {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <h2 id="demo-dialog-title" className="text-2xl font-bold text-white">Request a free demo</h2>
-              <p className="mt-2 text-sm text-slate-400">See how AI Doctor OS can fit your clinical workflow.</p>
+              <p className="mt-2 text-sm text-slate-400">See how AI UPCHAR can fit your clinical workflow.</p>
             </div>
             <label className="block text-sm font-medium text-slate-300">Work email
               <input required type="email" placeholder="doctor@clinic.com" className="mt-2 w-full rounded-lg border border-white/10 bg-slate-950/60 px-3 py-3 text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-400" />

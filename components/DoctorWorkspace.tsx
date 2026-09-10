@@ -145,7 +145,7 @@ export default function DoctorWorkspace() {
         <div className="mt-auto">
           <button aria-label="Demo workspace" className="w-full rounded-xl border border-[#c5e9dd] bg-[#d8f3e8] p-3 text-left transition hover:bg-[#cceee0] md:p-4">
             <span className="flex items-center justify-center gap-3 text-sm font-bold text-[#078b78] md:justify-start"><Sparkles className="h-5 w-5" /><span className="hidden md:inline">Demo workspace</span></span>
-            <span className="mt-1 hidden pl-8 text-xs text-[#6d958b] md:block">Explore AI Doctor OS</span>
+            <span className="mt-1 hidden pl-8 text-xs text-[#6d958b] md:block">Explore AI UPCHAR</span>
           </button>
           <button aria-label="Dr. Ananya Arya profile" className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl p-1 text-left hover:bg-white/60 md:justify-start">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#d5eee4] text-xs font-bold text-[#277a6b]">DA</span>
@@ -236,7 +236,7 @@ export default function DoctorWorkspace() {
           </div>
         </section>
 
-        <footer className="mt-12 flex flex-col gap-2 border-t border-[#e8e8e2] pt-6 text-xs text-[#9aa39d] sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2 font-semibold text-[#707b74]"><HeartPulse className="h-4 w-4 text-[#76a287]" /> AI Doctor OS</span><span>Designed for focused care <span className="text-[#d89182]">♥</span></span><span>DEMO MODE · AI responses are simulated</span></footer>
+        <footer className="mt-12 flex flex-col gap-2 border-t border-[#e8e8e2] pt-6 text-xs text-[#9aa39d] sm:flex-row sm:items-center sm:justify-between"><span className="flex items-center gap-2 font-semibold text-[#707b74]"><HeartPulse className="h-4 w-4 text-[#76a287]" /> AI UPCHAR</span><span>Designed for focused care <span className="text-[#d89182]">♥</span></span><span>DEMO MODE · AI responses are simulated</span></footer>
       </div> : <WorkspaceScreen activeNav={activeNav} onNavigate={setActiveNav} />}
       </div>
     </main>

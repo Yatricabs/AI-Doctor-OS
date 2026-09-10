@@ -22,7 +22,7 @@ export default function AIDoctorOSLandingEnhanced() {
               <Activity className="w-6 h-6 stroke-[2.5]" />
             </div>
             <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-              AI Doctor OS
+              AI UPCHAR
             </span>
           </div>
 
@@ -75,7 +75,7 @@ export default function AIDoctorOSLandingEnhanced() {
       <section id="interactive-demo" className="py-20 max-w-6xl mx-auto px-6">
         <div className="text-center mb-12 space-y-2">
           <h2 className="text-xs font-mono text-emerald-400 tracking-wider uppercase">Experience The AI Engine</h2>
-          <p className="text-3xl font-extrabold text-white">How AI Doctor OS Powers Your Consultation</p>
+          <p className="text-3xl font-extrabold text-white">How AI UPCHAR Powers Your Consultation</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
@@ -209,10 +209,10 @@ export default function AIDoctorOSLandingEnhanced() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-3">
             <Activity className="w-5 h-5 text-emerald-400" />
-            <span className="font-bold text-slate-300 text-sm">AI Doctor OS</span>
+            <span className="font-bold text-slate-300 text-sm">AI UPCHAR</span>
           </div>
           <p className="text-xs text-slate-500">
-            © 2026 AI Doctor OS. AI assists. Doctors decide. Patients remain at the center[cite: 1].
+            © 2026 AI UPCHAR. AI assists. Doctors decide. Patients remain at the center[cite: 1].
           </p>
         </div>
       </footer>
