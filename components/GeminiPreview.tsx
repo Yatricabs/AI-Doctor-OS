@@ -112,7 +112,7 @@ export default function AIDoctorOSLandingEnhanced() {
           {activeTab === 'scribe' && (
             <div className="space-y-4 animate-fadeIn">
               <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-mono rounded">LIVE AMBIENT SIMULATION</span>
-              <p className="text-sm text-slate-300 italic">"Patient reports mild dizziness since 2 days, no chest pain. BP is stable. Continuing Metformin."</p>
+              <p className="text-sm text-slate-300 italic">&quot;Patient reports mild dizziness since 2 days, no chest pain. BP is stable. Continuing Metformin.&quot;</p>
               <div className="p-4 rounded-xl bg-slate-900/80 border border-white/5 space-y-2 font-mono text-xs">
                 <p className="text-emerald-400">[S] Subjective: Dizziness for 2 days, denies acute chest pain.</p>
                 <p className="text-cyan-400">[O] Objective: BP recorded at 130/85 mmHg, lungs clear.</p>
