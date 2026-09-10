@@ -9,6 +9,12 @@ const floatingBadges = [
   { label: "Safe and secure", className: "-rotate-2" },
   { label: "Clinic-ready", className: "rotate-1" },
 ];
+const floatingCaptions = [
+  "Patient context before the visit",
+  "Human approval before action",
+  "Every step stays auditable",
+  "Ready for focused care",
+];
 
 export default function Hero() {
   function scrollToSection(id: string) {
@@ -17,7 +23,7 @@ export default function Hero() {
 
   return (
     <section id="product" className="pt-20 pb-16 px-6 max-w-7xl mx-auto relative">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-emerald-500/20 via-teal-500/10 to-transparent blur-[140px] pointer-events-none rounded-full" />
+      <div className="pointer-events-none absolute left-1/2 top-0 h-[500px] w-[min(1000px,100%)] -translate-x-1/2 rounded-full bg-gradient-to-tr from-emerald-500/20 via-teal-500/10 to-transparent blur-[140px]" />
       <div className="text-center max-w-4xl mx-auto space-y-6 relative">
         <p className="text-xs font-bold uppercase tracking-[0.24em] text-emerald-400">The clinical operating layer for modern practices</p>
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1] text-white">The clinical workspace that helps doctors{" "}<span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">remember, reason, and act</span>{" "}with confidence.</h1>
@@ -26,10 +32,13 @@ export default function Hero() {
         <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-2 text-xs font-medium text-slate-500"><span>Patient context before the visit</span><span>Human approval before action</span><span>Every step stays auditable</span></div>
       </div>
       <div className="relative">
-        <div className="mx-auto mb-2 hidden max-w-6xl items-center justify-between gap-3 px-8 lg:flex">
-          {floatingBadges.map((b) => <span key={b.label} className={`${b.className} inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-semibold text-slate-300`}>
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />{b.label}
-          </span>)}
+        <div className="mx-auto mb-2 hidden max-w-6xl items-start justify-between gap-4 px-8 lg:flex">
+          {floatingBadges.map((b, index) => <div key={b.label} className="flex min-w-0 flex-col items-center gap-2 text-center">
+            <span className="text-[11px] font-medium text-slate-500">{floatingCaptions[index]}</span>
+            <span className={`${b.className} inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-semibold text-slate-300`}>
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />{b.label}
+            </span>
+          </div>)}
         </div>
         <DashboardMockup />
       </div>

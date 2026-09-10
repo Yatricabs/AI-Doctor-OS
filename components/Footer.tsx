@@ -6,10 +6,10 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-6">
         <div className="flex items-center gap-3">
           <Activity className="w-5 h-5 text-emerald-400" />
-          <span className="font-bold text-slate-300 text-sm">AI Doctor OS</span>
+          <span className="font-bold text-slate-300 text-sm">AI UPCHAR</span>
         </div>
         <p className="text-xs text-slate-500">
-          © 2026 AI Doctor OS. AI assists. Doctors decide. Patients remain at the center.
+          © 2026 AI UPCHAR. AI assists. Doctors decide. Patients remain at the center.
         </p>
       </div>
     </footer>

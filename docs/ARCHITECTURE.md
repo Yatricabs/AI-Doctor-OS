@@ -1,4 +1,4 @@
-# AI Doctor OS Architecture
+# AI UPCHAR Architecture
 
 **Status:** Product and architecture baseline  
 **Audience:** Product, frontend, backend, AI, security, and clinical operations teams  
@@ -6,7 +6,7 @@
 
 ## 1. Product Definition
 
-AI Doctor OS is a clinician-controlled operating layer for doctor-led clinics. It brings patient context, consultation documentation, reports, prescription safety, communication, and follow-up work into one longitudinal workspace.
+AI UPCHAR is a clinician-controlled operating layer for doctor-led clinics. It brings patient context, consultation documentation, reports, prescription safety, communication, and follow-up work into one longitudinal workspace.
 
 > **AI assists. Doctors decide. Structured clinical data remains the source of truth.**
 

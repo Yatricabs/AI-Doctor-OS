@@ -24,7 +24,7 @@ export default function DashboardMockup() {
             <div className="w-3 h-3 rounded-full bg-red-500/80" />
             <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
             <div className="w-3 h-3 rounded-full bg-green-500/80" />
-            <span className="ml-2 truncate text-xs font-mono text-slate-500 sm:ml-4">app.aidoctoros.com/workspace</span>
+            <span className="ml-2 truncate text-xs font-mono text-slate-500 sm:ml-4">app.aiupchar.com/workspace</span>
           </div>
           <span className="text-xs px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 font-mono">
             Secure live node

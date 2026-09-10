@@ -1,6 +1,6 @@
-# AI Doctor OS
+# AI UPCHAR
 
-AI Doctor OS is a clinician-controlled workspace for patient context, clinical documentation, reports, prescription safety, AI assistance, and follow-up workflows.
+AI UPCHAR is a clinician-controlled workspace for patient context, clinical documentation, reports, prescription safety, AI assistance, and follow-up workflows.
 
 ## Public routes
 
@@ -9,7 +9,7 @@ AI Doctor OS is a clinician-controlled workspace for patient context, clinical d
 - `/workflow` - Connected clinical workflow
 - `/for-doctors` - Doctor experience
 - `/security` - Safety, privacy, and governance
-- `/about` - About AI Doctor OS
+- `/about` - About AI UPCHAR
 - `/contact` - Clinic demo and contact form
 - `/demo` - Interactive doctor workspace demo
 - `/gemini-preview` - Isolated Gemini concept preview
