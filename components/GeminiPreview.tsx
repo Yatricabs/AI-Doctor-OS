@@ -5,7 +5,7 @@ import {
   FileText, ArrowRight, CheckCircle2, Clock, Brain, Zap, Lock, Mic, Cpu, MessageSquare 
 } from 'lucide-react';
 
-export default function AIDoctorOSLandingEnhanced() {
+export default function AIUpcharLandingEnhanced() {
   const [activeTab, setActiveTab] = useState<'scribe' | 'safety' | 'brief'>('scribe');
 
   return (

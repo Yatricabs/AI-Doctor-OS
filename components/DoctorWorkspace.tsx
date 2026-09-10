@@ -123,7 +123,7 @@ export default function DoctorWorkspace() {
       <aside className="fixed inset-y-0 left-0 z-50 flex w-[78px] flex-col border-r border-[#dce9e3] bg-[#edf8f3] px-3 py-5 md:w-[292px] md:px-6 md:py-9">
         <Link href="/" className="flex items-center gap-3 px-2">
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#078d79] text-white shadow-[0_8px_16px_rgba(7,141,121,0.18)]"><Stethoscope className="h-6 w-6" /></span>
-          <span className="hidden text-[23px] font-bold tracking-[-0.06em] text-[#193d3a] md:inline">AI Doctor <span className="text-[#07947f]">OS</span></span>
+          <span className="hidden text-[23px] font-bold tracking-[-0.06em] text-[#193d3a] md:inline">AI UPCHAR</span>
         </Link>
         <p className="mt-10 hidden px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#86a09a] md:mt-16 md:block">Workspace</p>
         <nav className="mt-5 space-y-2">
@@ -159,7 +159,7 @@ export default function DoctorWorkspace() {
       <header className="border-b border-[#e4ebe7] bg-[#fbfdfc]">
         <div className="mx-auto flex h-[64px] max-w-[1440px] items-center gap-3 px-3 sm:gap-5 sm:px-5 md:px-10">
           <Link href="/" className="hidden shrink-0 items-center text-[17px] font-bold tracking-[-0.04em] sm:flex">
-            AI Doctor <span className="text-[#07947f]">&nbsp;OS</span>
+            AI UPCHAR
           </Link>
           <div className="relative flex max-w-[430px] flex-1">
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8da09b]" />
