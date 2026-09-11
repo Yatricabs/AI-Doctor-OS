@@ -3,9 +3,26 @@ import "./globals.css";
 import ScrollReset from "@/components/ScrollReset";
 
 export const metadata: Metadata = {
-  title: "AI UPCHAR — The intelligent workspace for doctors",
+  title: "AI UPCHAR — Intelligent Clinical Workspace for Doctors",
   description:
-    "AI UPCHAR brings patient context, clinical documentation, reports, safe prescribing, and follow-ups into one clinician-controlled workspace.",
+    "AI UPCHAR brings patient context, clinical documentation, reports, safe prescribing, and follow-ups into one clinician-controlled workspace. For government hospitals, private hospitals, and clinics.",
+  keywords: ["healthcare", "AI", "clinical", "doctors", "medical records", "patient care", "telemedicine"],
+  authors: [{ name: "AI UPCHAR" }],
+  creator: "AI UPCHAR",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+  },
+  viewport: {
+    width: "device-width",
+    initialScale: 1.0,
+  },
+  openGraph: {
+    title: "AI UPCHAR — Intelligent Clinical Workspace",
+    description: "Patient context, clinical AI, and doctor-controlled decision making in one workspace",
+    type: "website",
+    siteName: "AI UPCHAR",
+  },
 };
 
 export default function RootLayout({

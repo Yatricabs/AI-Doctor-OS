@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Background -->
+  <rect width="64" height="64" fill="#080D14" rx="12"/>
+  
+  <!-- Stethoscope outline -->
+  <g stroke="#07947f" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Left ear piece -->
+    <path d="M 16 20 Q 16 28 24 28" />
+    <!-- Right ear piece -->
+    <path d="M 48 20 Q 48 28 40 28" />
+    <!-- Main tube -->
+    <path d="M 24 28 Q 32 32 32 40" />
+    <!-- Right side of main tube -->
+    <path d="M 40 28 Q 32 32 32 40" />
+    <!-- Diaphragm -->
+    <circle cx="32" cy="48" r="6" stroke="#07947f" stroke-width="2.5"/>
+  </g>
+  
+  <!-- AI indicator - small dot in corner -->
+  <circle cx="54" cy="10" r="3" fill="#06d6a0"/>
+</svg>
