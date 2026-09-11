@@ -4,10 +4,10 @@ import { PlayCircle } from "lucide-react";
 import DashboardMockup from "./DashboardMockup";
 
 const floatingBadges = [
-  { label: "WhatsApp-ready", className: "-rotate-3" },
-  { label: "Voice call-ready", className: "rotate-2" },
-  { label: "Clinician-controlled", className: "-rotate-2" },
-  { label: "Every setting", className: "rotate-1" },
+  { label: "WhatsApp-ready", className: "" },
+  { label: "Voice call-ready", className: "" },
+  { label: "Clinician-controlled", className: "" },
+  { label: "Every setting", className: "" },
 ];
 const floatingCaptions = [
   "Patient intake before the visit",
@@ -32,8 +32,8 @@ export default function Hero() {
         <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-2 text-xs font-medium text-slate-500"><span>Pre-visit intake on WhatsApp or a call</span><span>Priority &amp; live queue for every patient</span><span>Doctor approves every action</span></div>
       </div>
       <div className="relative">
-        <div className="mx-auto mb-2 hidden max-w-6xl items-start justify-between gap-4 px-8 lg:flex">
-          {floatingBadges.map((b, index) => <div key={b.label} className="flex min-w-0 flex-col items-center gap-2 text-center">
+        <div className="mx-auto mb-8 hidden max-w-6xl items-center justify-between gap-6 px-8 lg:flex">
+          {floatingBadges.map((b, index) => <div key={b.label} className="flex flex-1 flex-col items-center gap-3 text-center">
             <span className="text-[11px] font-medium text-slate-500">{floatingCaptions[index]}</span>
             <span className={`${b.className} inline-flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1.5 text-xs font-semibold text-slate-300`}>
               <span className="h-2 w-2 rounded-full bg-emerald-400" />{b.label}
