@@ -1,4 +1,4 @@
-import { error, json, patientById, readObject, requiredString, scribeNotes, ScribeNote } from "../_lib/demo";
+import { error, json, patientById, persistScribeNote, readObject, requiredString, scribeNotes, ScribeNote } from "../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
@@ -48,5 +48,6 @@ export async function PATCH(request: Request) {
   }
   note.status = action === "approve" ? "approved" : "saved";
   note.updatedAt = new Date().toISOString();
+  persistScribeNote(note.id, note);
   return json({ note });
 }

@@ -40,6 +40,7 @@ AI-generated suggestions in the demo are illustrative and require human review b
 ## Documentation
 
 - [Architecture and system flows](docs/ARCHITECTURE.md)
+- SQLite persistence is stored locally in `data/ai-upchar.sqlite` and is ignored by Git.
 - [Interactive doctor workspace](app/demo/page.tsx)
 - [Landing page](app/page.tsx)
 

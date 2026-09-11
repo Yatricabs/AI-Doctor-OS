@@ -1,4 +1,4 @@
-import { error, insights, json, requiredString, readObject } from "../_lib/demo";
+import { error, insights, json, persistInsight, requiredString, readObject } from "../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
@@ -15,5 +15,6 @@ export async function POST(request: Request) {
   if (!insight) return error("Insight not found.", 404);
   insight.status = "reviewed";
   insight.reviewedAt = new Date().toISOString();
+  persistInsight(insightId, { status: insight.status, reviewedAt: insight.reviewedAt });
   return json({ insight });
 }

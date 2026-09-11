@@ -1,4 +1,4 @@
-import { error, json, profileSettings, readObject, requiredString } from "../../_lib/demo";
+import { error, json, persistProfileSettings, profileSettings, readObject, requiredString } from "../../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
@@ -30,5 +30,6 @@ export async function PATCH(request: Request) {
     next.notifications = notifications;
   }
   Object.assign(profileSettings, next);
+  persistProfileSettings();
   return json({ settings: profileSettings });
 }

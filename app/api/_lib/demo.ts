@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { all, getProfileSettings, insert, saveProfileSettings, update } from "./database";
 
 export type Patient = {
   id: string;
@@ -55,32 +56,15 @@ export type WorkspaceSummary = {
   clinicalBrief: string;
 };
 
-export const patients: Patient[] = [
-  { id: "RM-102", name: "Rohan Mehta", initials: "RM", appointment: "Follow-up today · 10:30 AM", status: "Stable" },
-  { id: "AK-118", name: "Ananya Kapoor", initials: "AK", appointment: "Annual wellness review · 11:00 AM", status: "Waiting" },
-  { id: "VN-306", name: "Vikram Nair", initials: "VN", appointment: "Lab results review · 11:30 AM", status: "In review" },
-];
+export const patients = new Proxy([] as Patient[], { get: (_, property) => { const values = all<Patient>("patients"); if (property === "push") return (...items: Patient[]) => { items.forEach((item) => insert("patients", item)); return values.length + items.length; }; if (property === "length") return values.length; if (property === "filter") return (fn: (item: Patient) => boolean) => values.filter(fn); if (property === "find") return (fn: (item: Patient) => boolean) => values.find(fn); if (typeof property === "string" && /^\d+$/.test(property)) return values[Number(property)]; return (values as unknown as Record<PropertyKey, unknown>)[property]; } });
+export const reports = new Proxy([] as Report[], { get: (_, property) => { const values = all<Report>("reports"); if (property === "push") return (...items: Report[]) => { items.forEach((item) => insert("reports", item)); return values.length + items.length; }; if (property === "length") return values.length; if (property === "filter") return (fn: (item: Report) => boolean) => values.filter(fn); if (property === "find") return (fn: (item: Report) => boolean) => values.find(fn); return (values as unknown as Record<PropertyKey, unknown>)[property]; } });
+export const scribeNotes = new Proxy([] as ScribeNote[], { get: (_, property) => { const values = all<ScribeNote>("scribe_notes"); if (property === "push") return (...items: ScribeNote[]) => { items.forEach((item) => insert("scribe_notes", item)); return values.length + items.length; }; if (property === "filter") return (fn: (item: ScribeNote) => boolean) => values.filter(fn); if (property === "find") return (fn: (item: ScribeNote) => boolean) => values.find(fn); if (property === "length") return values.length; return (values as unknown as Record<PropertyKey, unknown>)[property]; } });
+export const insights = new Proxy([] as Insight[], { get: (_, property) => { const values = all<Insight>("insights"); if (property === "filter") return (fn: (item: Insight) => boolean) => values.filter(fn); if (property === "find") return (fn: (item: Insight) => boolean) => values.find(fn); return (values as unknown as Record<PropertyKey, unknown>)[property]; } });
+export const profileSettings = getProfileSettings();
 
-export const reports: Report[] = [
-  { id: "report-cbc-102", patientId: "RM-102", title: "CBC and lipid profile", type: "Lab report", date: "2026-09-10", status: "Ready for review" },
-  { id: "report-rx-102", patientId: "RM-102", title: "Active prescriptions", type: "Prescription", date: "2026-09-05", status: "Reviewed" },
-  { id: "report-thyroid-118", patientId: "AK-118", title: "Thyroid panel", type: "Lab report", date: "2026-09-09", status: "Ready for review" },
-];
-
-export const scribeNotes: ScribeNote[] = [];
-
-export const insights: Insight[] = [
-  { id: "insight-1", title: "Follow-up queue", detail: "Three follow-ups need review before the next clinic block.", priority: "High", status: "open" },
-  { id: "insight-2", title: "Report trend", detail: "Rohan Mehta's HbA1c improved while LDL remains above target.", priority: "Medium", status: "open" },
-  { id: "insight-3", title: "Documentation quality", detail: "Two draft notes need clinician approval before signing.", priority: "Low", status: "open" },
-];
-
-export let profileSettings: ProfileSettings = {
-  fullName: "Dr. Ananya Arya",
-  specialty: "General Medicine",
-  clinicBio: "Clinician focused on practical, preventive adult care.",
-  notifications: { urgentFollowUps: true, weeklySummary: true, twoStepSignIn: true },
-};
+export function persistInsight(id: string, values: Partial<Insight>) { update("insights", id, values); }
+export function persistScribeNote(id: string, values: Partial<ScribeNote>) { update("scribe_notes", id, values); }
+export function persistProfileSettings() { saveProfileSettings(profileSettings); }
 
 export function json<T>(data: T, status = 200) {
   return NextResponse.json({ ok: status < 400, data }, { status });
