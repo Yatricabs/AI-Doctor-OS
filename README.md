@@ -41,6 +41,7 @@ AI-generated suggestions in the demo are illustrative and require human review b
 
 - [Architecture and system flows](docs/ARCHITECTURE.md)
 - SQLite persistence is stored locally in `data/ai-upchar.sqlite` and is ignored by Git.
+- For hosted persistence, copy `.env.example`, run `supabase/schema.sql` in Supabase SQL Editor, and set `SUPABASE_URL` plus the server-only `SUPABASE_SERVICE_ROLE_KEY`.
 - [Interactive doctor workspace](app/demo/page.tsx)
 - [Landing page](app/page.tsx)
 

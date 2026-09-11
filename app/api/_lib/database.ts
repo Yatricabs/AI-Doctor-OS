@@ -1,6 +1,11 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
+  : null;
 
 const dataDir = path.join(process.cwd(), "data");
 fs.mkdirSync(dataDir, { recursive: true });
@@ -88,12 +93,21 @@ export function insert(table: string, values: Record<string, unknown>) {
   const keys = Object.keys(values);
   const columns = keys.map((key) => key.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`));
   database.prepare(`INSERT INTO ${table} (${columns.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`).run(...keys.map((key) => values[key]));
+  void syncToSupabase(table, values);
 }
 
 export function update(table: string, id: string, values: Record<string, unknown>) {
   const keys = Object.keys(values);
   const columns = keys.map((key) => `${key.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`)} = ?`);
   database.prepare(`UPDATE ${table} SET ${columns.join(", ")} WHERE id = ?`).run(...keys.map((key) => values[key]), id);
+  void syncToSupabase(table, { id, ...values });
+}
+
+async function syncToSupabase(table: string, values: Record<string, unknown>) {
+  if (!supabase) return;
+  const payload = Object.fromEntries(Object.entries(values).map(([key, value]) => [key.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`), value]));
+  const { error } = await supabase.from(table).upsert(payload, { onConflict: "id" });
+  if (error) console.error(`[supabase] ${table} sync failed:`, error.message);
 }
 
 export function getProfileSettings() {
@@ -103,4 +117,5 @@ export function getProfileSettings() {
 
 export function saveProfileSettings(settings: { fullName: string; specialty: string; clinicBio: string; notifications: { urgentFollowUps: boolean; weeklySummary: boolean; twoStepSignIn: boolean } }) {
   database.prepare("UPDATE profile_settings SET full_name = ?, specialty = ?, clinic_bio = ?, urgent_follow_ups = ?, weekly_summary = ?, two_step_sign_in = ? WHERE id = 1").run(settings.fullName, settings.specialty, settings.clinicBio, Number(settings.notifications.urgentFollowUps), Number(settings.notifications.weeklySummary), Number(settings.notifications.twoStepSignIn));
+  void syncToSupabase("profile_settings", { id: 1, fullName: settings.fullName, specialty: settings.specialty, clinicBio: settings.clinicBio, urgentFollowUps: settings.notifications.urgentFollowUps, weeklySummary: settings.notifications.weeklySummary, twoStepSignIn: settings.notifications.twoStepSignIn });
 }
