@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { all, getProfileSettings, insert, saveProfileSettings, update, query, queryOne } from "./database";
+import { all, getProfileSettings, insert, saveProfileSettings, update, query, queryOne, remove } from "./database";
 
 // ─── ORIGINAL TYPES (preserved) ─────────────────────────────────────────────
 export type Patient = {
