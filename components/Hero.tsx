@@ -4,16 +4,16 @@ import { PlayCircle } from "lucide-react";
 import DashboardMockup from "./DashboardMockup";
 
 const floatingBadges = [
-  { label: "AI-assisted", className: "-rotate-3" },
-  { label: "Clinician-controlled", className: "rotate-2" },
-  { label: "Safe and secure", className: "-rotate-2" },
-  { label: "Clinic-ready", className: "rotate-1" },
+  { label: "WhatsApp-ready", className: "-rotate-3" },
+  { label: "Voice call-ready", className: "rotate-2" },
+  { label: "Clinician-controlled", className: "-rotate-2" },
+  { label: "Every setting", className: "rotate-1" },
 ];
 const floatingCaptions = [
-  "Patient context before the visit",
-  "Human approval before action",
-  "Every step stays auditable",
-  "Ready for focused care",
+  "Patient intake before the visit",
+  "Reaches anyone with a phone",
+  "Doctor approves every action",
+  "Govt hospital, private hospital, clinic",
 ];
 
 export default function Hero() {
@@ -25,11 +25,11 @@ export default function Hero() {
     <section id="product" className="pt-20 pb-16 px-6 max-w-7xl mx-auto relative">
       <div className="pointer-events-none absolute left-1/2 top-0 h-[500px] w-[min(1000px,100%)] -translate-x-1/2 rounded-full bg-gradient-to-tr from-emerald-500/20 via-teal-500/10 to-transparent blur-[140px]" />
       <div className="text-center max-w-4xl mx-auto space-y-6 relative">
-        <p className="text-xs font-bold uppercase tracking-[0.24em] text-emerald-400">The clinical operating layer for modern practices</p>
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1] text-white">The clinical workspace that helps doctors{" "}<span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">remember, reason, and act</span>{" "}with confidence.</h1>
-        <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto leading-relaxed">Bring patient history, reports, consultation notes, prescriptions, and follow-ups into one clinician-controlled workspace. AI prepares the context and drafts the work; the doctor reviews every clinical decision.</p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"><button onClick={() => scrollToSection("workflow")} className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-cyan-400 hover:opacity-90 transition shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2"><PlayCircle className="w-5 h-5" /> See how it works</button><button onClick={() => scrollToSection("clinics")} className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold text-slate-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] transition">For clinics</button></div>
-        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-2 text-xs font-medium text-slate-500"><span>Patient context before the visit</span><span>Human approval before action</span><span>Every step stays auditable</span></div>
+        <p className="text-xs font-bold uppercase tracking-[0.24em] text-emerald-400">Website · App · WhatsApp · Voice call</p>
+        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1] text-white">Every visit starts{" "}<span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">before the patient walks in</span>{" "}and the doctor knows it.</h1>
+        <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto leading-relaxed">Patients book, upload reports, and describe their problem on WhatsApp, in the app, or with a phone call. AI UPCHAR turns that into a prepared, prioritized visit — for government hospitals, private hospitals, and clinics alike. AI prepares the context; the doctor reviews every decision.</p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"><button onClick={() => scrollToSection("channels")} className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-cyan-400 hover:opacity-90 transition shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2"><PlayCircle className="w-5 h-5" /> See how it works</button><button onClick={() => scrollToSection("clinics")} className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold text-slate-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] transition">For clinics &amp; hospitals</button></div>
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-2 text-xs font-medium text-slate-500"><span>Pre-visit intake on WhatsApp or a call</span><span>Priority &amp; live queue for every patient</span><span>Doctor approves every action</span></div>
       </div>
       <div className="relative">
         <div className="mx-auto mb-2 hidden max-w-6xl items-start justify-between gap-4 px-8 lg:flex">

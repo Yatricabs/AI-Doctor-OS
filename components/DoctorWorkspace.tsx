@@ -15,6 +15,7 @@ import {
   Languages,
   Mic,
   NotebookTabs,
+  Pill,
   Plus,
   Search,
   Send,
@@ -24,7 +25,12 @@ import {
   UploadCloud,
   Users,
   X,
+  Inbox,
+  ListTodo,
+  FlaskConical,
 } from "lucide-react";
+import PreVisitBrief from "./workspace/PreVisitBrief";
+import PrescriptionBuilder from "./workspace/PrescriptionBuilder";
 
 type Patient = { id: string; name: string; initials: string; appointment: string; status: string };
 type Report = { id: string; patientId: string; title: string; type: string; date: string; status: string };
@@ -46,6 +52,8 @@ const navItems = [
   { label: "Clinical insights", icon: BrainCircuit, badge: "NEW" },
   { label: "Symptom checker", icon: HeartPulse },
   { label: "Medical records", icon: NotebookTabs },
+  { label: "Prescriptions", icon: Pill, badge: "NEW" },
+  { label: "Pre-visit Brief", icon: FlaskConical, badge: "NEW" },
 ];
 
 async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
@@ -223,7 +231,16 @@ export default function DoctorWorkspace() {
         <Link href="/" className="flex items-center gap-3 px-2"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#078d79] text-white"><Stethoscope className="h-6 w-6" /></span><span className="hidden text-[23px] font-bold tracking-[-0.06em] text-[#193d3a] md:inline">AI UPCHAR</span></Link>
         <p className="mt-10 hidden px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#86a09a] md:mt-16 md:block">Workspace</p>
         <nav className="mt-5 space-y-2">{navItems.map(({ label, icon: Icon, badge }) => <button key={label} onClick={() => navigate(label)} aria-label={label} className={`flex w-full items-center justify-center gap-4 rounded-xl px-3 py-3.5 text-left text-[16px] font-semibold transition md:justify-start md:px-4 ${activeNav === label ? "bg-[#153f3c] text-white shadow-[0_10px_20px_rgba(21,63,60,0.14)]" : "text-[#6c8782] hover:bg-white/60 hover:text-[#315d57]"}`}><Icon className="h-5 w-5 shrink-0" /><span className="hidden flex-1 md:inline">{label}</span>{badge && <span className="hidden rounded bg-[#a9e6d2] px-1.5 py-0.5 text-[9px] font-bold text-[#27806b] md:inline">{badge}</span>}</button>)}</nav>
-        <div className="mt-auto"><button onClick={() => navigate("Overview")} className="w-full rounded-xl border border-[#c5e9dd] bg-[#d8f3e8] p-3 text-left hover:bg-[#cceee0] md:p-4"><span className="flex items-center justify-center gap-3 text-sm font-bold text-[#078b78] md:justify-start"><Sparkles className="h-5 w-5" /><span className="hidden md:inline">Demo workspace</span></span><span className="mt-1 hidden pl-8 text-xs text-[#6d958b] md:block">Explore AI UPCHAR</span></button><button onClick={() => navigate("Profile")} aria-label="Open clinician profile" className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl p-1 text-left hover:bg-white/60 md:justify-start"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#d5eee4] text-xs font-bold text-[#277a6b]">DA</span><span className="hidden flex-1 md:block"><strong className="block text-sm text-[#214440]">Dr. Ananya Arya</strong><span className="mt-1 block text-xs text-[#78918c]">General Medicine</span></span><ChevronRight className="h-5 w-5 text-[#87aaa0]" /></button></div>
+        <div className="mt-auto"><button onClick={() => navigate("Overview")} className="w-full rounded-xl border border-[#c5e9dd] bg-[#d8f3e8] p-3 text-left hover:bg-[#cceee0] md:p-4"><span className="flex items-center justify-center gap-3 text-sm font-bold text-[#078b78] md:justify-start"><Sparkles className="h-5 w-5" /><span className="hidden md:inline">Demo workspace</span></span><span className="mt-1 hidden pl-8 text-xs text-[#6d958b] md:block">Explore AI UPCHAR</span></button>
+          {/* Quick links to new pages */}
+          <div className="mt-3 hidden space-y-1 md:block">
+            <Link href="/doctor/morning-brief" className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-[#6c8782] hover:bg-white/60 hover:text-[#315d57]"><LayoutDashboard className="h-3.5 w-3.5" />Morning Brief</Link>
+            <Link href="/doctor/queue" className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-[#6c8782] hover:bg-white/60 hover:text-[#315d57]"><Users className="h-3.5 w-3.5" />Queue</Link>
+            <Link href="/doctor/inbox" className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-[#6c8782] hover:bg-white/60 hover:text-[#315d57]"><Inbox className="h-3.5 w-3.5" />AI Inbox</Link>
+            <Link href="/patient/book" className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-[#6c8782] hover:bg-white/60 hover:text-[#315d57]"><CalendarDays className="h-3.5 w-3.5" />Book Appointment</Link>
+            <Link href="/admin/analytics" className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-[#6c8782] hover:bg-white/60 hover:text-[#315d57]"><ListTodo className="h-3.5 w-3.5" />Analytics</Link>
+          </div>
+          <button onClick={() => navigate("Profile")} aria-label="Open clinician profile" className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl p-1 text-left hover:bg-white/60 md:justify-start"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#d5eee4] text-xs font-bold text-[#277a6b]">DA</span><span className="hidden flex-1 md:block"><strong className="block text-sm text-[#214440]">Dr. Ananya Arya</strong><span className="mt-1 block text-xs text-[#78918c]">General Medicine</span></span><ChevronRight className="h-5 w-5 text-[#87aaa0]" /></button></div>
       </aside>
 
       <div className="ml-[78px] md:ml-[292px]">
@@ -395,6 +412,20 @@ function WorkspaceScreen({ activeNav, navigate, selectedPatientId, setSelectedPa
     {activeNav === "Symptom checker" && <section className="mt-8 max-w-3xl rounded-2xl border border-[#e1e9e5] bg-white p-6"><h2 className="text-xl font-bold text-[#244642]">Structured symptom intake</h2><p className="mt-2 text-sm text-[#78908a]">This demo organises information for clinician review; it does not diagnose.</p><textarea value={symptoms} onChange={(event) => setSymptoms(event.target.value)} placeholder="Describe symptoms, onset, and anything that makes them better or worse" className="mt-6 h-28 w-full rounded-lg border border-[#dce9e3] p-3 text-sm outline-none" /><div className="mt-4 grid gap-3 sm:grid-cols-2"><input value={duration} onChange={(event) => setDuration(event.target.value)} placeholder="Duration (e.g. 2 days)" className="rounded-lg border border-[#dce9e3] p-3 text-sm" /><select value={severity} onChange={(event) => setSeverity(event.target.value)} className="rounded-lg border border-[#dce9e3] p-3 text-sm"><option>Mild</option><option>Moderate</option><option>Severe</option></select><input value={associatedSymptoms} onChange={(event) => setAssociatedSymptoms(event.target.value)} placeholder="Associated symptoms" className="rounded-lg border border-[#dce9e3] p-3 text-sm" /><input value={medicines} onChange={(event) => setMedicines(event.target.value)} placeholder="Current medicines" className="rounded-lg border border-[#dce9e3] p-3 text-sm" /></div><button onClick={() => void runSymptomCheck()} className="mt-5 rounded-lg bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white">Check symptoms</button>{symptomResult && <pre role="status" className="mt-5 whitespace-pre-wrap rounded-xl bg-[#f1f7f2] p-4 text-sm leading-6 text-[#65806e]">{symptomResult}</pre>}</section>}
 
     {activeNav === "Medical records" && <section className="mt-8 space-y-4">{reports.map((report) => <article key={report.id} className="rounded-2xl border border-[#e1e9e5] bg-white p-5"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#5a9b88]">{report.type} · {report.date}</p><h2 className="mt-2 font-bold text-[#244642]">{report.title}</h2><p className="mt-1 text-xs text-[#82958f]">{report.status}</p></div><div className="flex gap-2"><button onClick={() => void reportAction(report.id, "analyze")} className="rounded-lg bg-[#edf2f8] px-3 py-2 text-xs font-bold text-[#6682a5]">Analyze</button><button onClick={() => void reportAction(report.id, "summarize")} className="rounded-lg bg-[#f6f0e9] px-3 py-2 text-xs font-bold text-[#a2876c]">Summarize</button></div></div></article>)}{!loading && reports.length === 0 && <p className="rounded-xl bg-[#edf7f2] p-5 text-sm text-[#317b67]">No records for this patient.</p>}<button onClick={() => setSelectedReport(selectedReport ? "" : "upload")} className="rounded-lg border border-dashed border-[#9ccbb8] px-4 py-3 text-sm font-bold text-[#317b67]">{selectedReport ? "Hide upload form" : "Add a medical record"}</button>{selectedReport && <label className="flex cursor-pointer flex-col items-center rounded-xl border border-dashed border-[#d9ddd7] bg-white p-8 text-sm text-[#7d8b82]"><UploadCloud className="mb-2 h-6 w-6" />Choose a PDF demo record<input type="file" accept=".pdf,application/pdf" className="hidden" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { await apiRequest("/api/medical-records/reports", { method: "POST", body: JSON.stringify({ patientId: selectedPatientId, title: file.name, type: "Lab report" }) }); const { reports: data } = await apiRequest<{ reports: Report[] }>(`/api/medical-records/reports?patientId=${selectedPatientId}`); setReports(data); setNotice("Medical record added and list refreshed."); } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Record upload failed."); } }} /></label>}</section>}
+
+    {activeNav === "Prescriptions" && (
+      <section className="mt-8">
+        <p className="mb-4 text-sm text-[#78908a]">Build, safety-check, and sign prescriptions. All safety checks run automatically. Explicit sign-off required before dispatch.</p>
+        <PrescriptionBuilder patientId={selectedPatientId} />
+      </section>
+    )}
+
+    {activeNav === "Pre-visit Brief" && (
+      <section className="mt-8">
+        <p className="mb-4 text-sm text-[#78908a]">AI-generated pre-visit context for the selected patient. Review all information before clinical use.</p>
+        <PreVisitBrief patientId={selectedPatientId} />
+      </section>
+    )}
 
     {activeNav === "Profile" && <section className="mt-8 grid gap-5 lg:grid-cols-[280px_1fr]"><aside className="rounded-2xl border border-[#e1e9e5] bg-white p-4"><div className="flex items-center gap-3 border-b border-[#edf1ee] pb-5"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#d5eee4] text-lg font-bold text-[#277a6b]">DA</span><div><strong className="block text-sm text-[#244642]">{profile.fullName}</strong><span className="text-xs text-[#82958f]">{profile.specialty}</span></div></div><nav className="mt-4 space-y-1">{["Overview", "Profile settings", "Account settings"].map((section) => <button key={section} onClick={() => setProfileSection(section)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${profileSection === section ? "bg-[#e8f5ef] text-[#27806b]" : "text-[#78908a]"}`}><Settings className="h-4 w-4" />{section}</button>)}</nav></aside><div className="rounded-2xl border border-[#e1e9e5] bg-white p-6">{profileSection === "Overview" && <div><h2 className="text-2xl font-bold text-[#244642]">{profile.fullName}, MBBS, MD</h2><p className="mt-2 text-sm text-[#82958f]">{profile.specialty} · 12 years of clinical experience</p><button onClick={() => setProfileSection("Profile settings")} className="mt-6 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white">Edit profile</button></div>}{profileSection === "Profile settings" && <div><h2 className="text-xl font-bold text-[#244642]">Profile settings</h2><div className="mt-5 grid gap-4"><input value={profile.fullName} onChange={(event) => setProfile({ ...profile, fullName: event.target.value })} className="rounded-lg border border-[#dce9e3] p-3 text-sm" /><input value={profile.specialty} onChange={(event) => setProfile({ ...profile, specialty: event.target.value })} className="rounded-lg border border-[#dce9e3] p-3 text-sm" /><textarea value={profile.clinicBio} onChange={(event) => setProfile({ ...profile, clinicBio: event.target.value })} placeholder="Clinic bio" className="h-24 rounded-lg border border-[#dce9e3] p-3 text-sm" /></div><button onClick={() => void saveProfile()} className="mt-5 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white">Save profile changes</button></div>}{profileSection === "Account settings" && <div><h2 className="text-xl font-bold text-[#244642]">Account settings</h2>{(["urgentFollowUps", "weeklySummary", "twoStepSignIn"] as const).map((field) => <label key={field} className="mt-5 flex items-center gap-3 text-sm text-[#5f7c70]"><input type="checkbox" checked={notifications[field]} onChange={(event) => setNotifications({ ...notifications, [field]: event.target.checked })} />{field === "twoStepSignIn" ? "Two-step sign-in" : field === "weeklySummary" ? "Weekly summary" : "Urgent follow-up alerts"}</label>)}<button onClick={() => void saveProfile()} className="mt-6 rounded-lg bg-[#07947f] px-4 py-2.5 text-xs font-bold text-white">Save account settings</button></div>}</div></section>}
   </div>;
