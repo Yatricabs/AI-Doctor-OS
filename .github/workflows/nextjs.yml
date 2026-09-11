@@ -1,4 +1,4 @@
-# Build the static Next.js site and publish the generated artifact.
+# Build the Next.js application, including its serverless API routes.
 #
 # To get started with Next.js see: https://nextjs.org/docs/getting-started
 #
@@ -62,8 +62,8 @@ jobs:
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
       - name: Build with Next.js
         run: ${{ steps.detect-package-manager.outputs.runner }} next build
-      - name: Upload static site artifact
+      - name: Upload Next.js build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nextjs-site
-          path: ./out
+          name: nextjs-build
+          path: ./.next
