@@ -541,4 +541,4 @@ export function nowIso(): string {
 }
 
 // Re-export database primitives
-export { query, queryOne };
+export { query, queryOne, insert, update, remove };
