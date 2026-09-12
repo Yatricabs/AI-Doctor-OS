@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import "./globals.css";
 import ScrollReset from "@/components/ScrollReset";
 
@@ -35,15 +34,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        {/*
-          Puter.js — client-side AI gateway (https://developer.puter.com/ai/).
-          Runs entirely in the browser: no API keys and no server cost to us, because
-          it uses Puter's "User-Pays" model (each user covers their own AI usage).
-          Loaded afterInteractive so window.puter is ready before the workspace calls it.
-        */}
-        <Script src="https://js.puter.com/v2/" strategy="afterInteractive" />
-      </head>
       <body className="bg-[#080D14] text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-black">
         <ScrollReset />
         {children}

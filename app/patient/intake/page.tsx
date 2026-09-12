@@ -1,29 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Send, Stethoscope } from "lucide-react";
-import { aiChat, aiChatStream, PuterUnavailableError } from "@/lib/puterAI";
-import {
-  buildIntakeMessages,
-  buildIntakeSummaryMessages,
-  parseIntakeTurn,
-  type IntakeLanguage,
-} from "@/lib/medicalPrompts";
 
-type Turn = { role: "user" | "assistant"; content: string };
+type Turn = { role: "assistant" | "user"; content: string };
 type Phase = "start" | "chat" | "done";
+type Language = "hinglish" | "english";
 
 const DEMO_PATIENT_ID = "RM-102";
+
+type NextResponse = {
+  ok: boolean;
+  data?: {
+    sessionId: string;
+    stepId?: string;
+    question?: string;
+    options?: string[];
+    emergency?: boolean;
+    done: boolean;
+    closing?: string;
+  };
+  error?: { message: string };
+};
 
 export default function IntakePage() {
   const [phase, setPhase] = useState<Phase>("start");
   const [patientId, setPatientId] = useState(DEMO_PATIENT_ID);
-  const [language, setLanguage] = useState<IntakeLanguage>("hinglish");
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [language, setLanguage] = useState<Language>("hinglish");
 
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [stepId, setStepId] = useState<string | null>(null);
+  const [options, setOptions] = useState<string[]>([]);
   const [turns, setTurns] = useState<Turn[]>([]);
-  const [streaming, setStreaming] = useState(""); // in-progress assistant text
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [urgent, setUrgent] = useState(false);
@@ -31,140 +40,66 @@ export default function IntakePage() {
   const [handoff, setHandoff] = useState<{ token: string; eta: string } | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [turns, streaming]);
+  }, [turns, busy]);
 
-  // Persist one turn to the intake API (best-effort; failure never blocks the chat).
-  const persistTurn = useCallback(
-    async (sid: string, role: string, content: string) => {
-      try {
-        await fetch("/api/intake", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "log_turn",
-            sessionId: sid,
-            questionKey: `${role}-${Date.now()}`,
-            responseValue: `${role}: ${content}`,
-          }),
-        });
-      } catch {
-        /* non-blocking */
-      }
-    },
-    []
-  );
-
-  // Ask the AI for its next message, given the running transcript.
-  const runAssistant = useCallback(
-    async (history: Turn[], sid: string | null) => {
-      setBusy(true);
-      setError("");
-      setStreaming("");
-      const messages = buildIntakeMessages(history, language, { name: patientId });
-      let full = "";
-      try {
-        // Low temperature keeps the assistant disciplined: one short question per turn.
-        full = await aiChatStream(
-          messages,
-          (_d, f) => {
-            // Show streaming text without the trailing control tag.
-            setStreaming(parseIntakeTurn(f).text);
-          },
-          { temperature: 0.3, maxTokens: 200 }
-        );
-      } catch (e) {
-        setStreaming("");
-        if (e instanceof PuterUnavailableError) {
-          setError("AI service is unavailable right now. Please try again, or proceed to the reception.");
-        } else {
-          setError(e instanceof Error ? e.message : "Something went wrong.");
-        }
-        setBusy(false);
-        return;
-      }
-
-      const { text, state } = parseIntakeTurn(full);
-      const next: Turn = { role: "assistant", content: text };
-      setTurns((prev) => [...prev, next]);
-      setStreaming("");
-      if (sid) void persistTurn(sid, "assistant", text);
-
-      if (state === "urgent") setUrgent(true);
-      if (state === "complete") {
-        await finish([...history, next], sid);
-      }
-      setBusy(false);
-    },
-    [language, patientId, persistTurn]
-  );
-
-  // Begin the interview: create a session, then get the first question.
-  async function start() {
-    if (!patientId.trim()) {
-      setError("Patient ID is required.");
-      return;
+  async function callNext(payload: Record<string, unknown>): Promise<NextResponse["data"] | null> {
+    const res = await fetch("/api/intake/next", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = (await res.json()) as NextResponse;
+    if (!json.ok || !json.data) {
+      setError(json.error?.message ?? "Something went wrong. Please try again.");
+      return null;
     }
+    return json.data;
+  }
+
+  async function start() {
+    if (!patientId.trim()) { setError("Patient ID is required."); return; }
+    setBusy(true); setError("");
+    const data = await callNext({ action: "start", patientId, language });
+    setBusy(false);
+    if (!data) return;
+    setSessionId(data.sessionId);
+    setStepId(data.stepId ?? null);
+    setOptions(data.options ?? []);
+    setTurns([{ role: "assistant", content: data.question ?? "" }]);
+    if (data.emergency) setUrgent(true);
+    setPhase("chat");
+  }
+
+  async function answer(value: string) {
+    const text = value.trim();
+    if (!text || busy || !sessionId || !stepId) return;
+    setTurns((prev) => [...prev, { role: "user", content: text }]);
+    setInput("");
+    setOptions([]);
     setBusy(true);
     setError("");
-    let sid: string | null = null;
-    try {
-      const res = await fetch("/api/intake", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start", patientId, visitType: "new_complaint" }),
-      });
-      const payload = (await res.json()) as { ok: boolean; data?: { session?: { id: string } } };
-      if (payload.ok && payload.data?.session?.id) sid = payload.data.session.id;
-    } catch {
-      /* session is optional; chat still works without persistence */
-    }
-    setSessionId(sid);
-    setPhase("chat");
-    await runAssistant([], sid);
-  }
 
-  // Patient sends an answer.
-  async function send() {
-    const value = input.trim();
-    if (!value || busy) return;
-    const userTurn: Turn = { role: "user", content: value };
-    const history = [...turns, userTurn];
-    setTurns(history);
-    setInput("");
-    if (sessionId) void persistTurn(sessionId, "patient", value);
-    await runAssistant(history, sessionId);
-  }
+    const data = await callNext({ action: "answer", sessionId, stepId, answer: text, language });
+    setBusy(false);
+    if (!data) return;
 
-  // Generate the pre-visit brief and move to the handoff screen.
-  async function finish(history: Turn[], sid: string | null) {
-    try {
-      const raw = await aiChat(buildIntakeSummaryMessages(history), { temperature: 0.2 });
-      if (sid) {
-        await fetch("/api/intake", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "log_turn",
-            sessionId: sid,
-            questionKey: "pre_visit_brief",
-            responseValue: raw,
-          }),
-        });
-      }
-    } catch {
-      /* brief generation is best-effort */
+    if (data.emergency) setUrgent(true);
+
+    if (data.done) {
+      setTurns((prev) => [...prev, { role: "assistant", content: data.closing ?? "Thank you." }]);
+      // Demo token + ETA for the handoff card.
+      const token = Math.floor(5 + Math.random() * 20);
+      const eta = new Date(Date.now() + token * 4 * 60000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      setHandoff({ token: `#${token}`, eta });
+      setTimeout(() => setPhase("done"), 1200);
+      return;
     }
-    // Simple demo ETA/token.
-    const token = Math.floor(5 + Math.random() * 20);
-    const eta = new Date(Date.now() + token * 4 * 60000).toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    setHandoff({ token: `#${token}`, eta });
-    setPhase("done");
+
+    setStepId(data.stepId ?? null);
+    setOptions(data.options ?? []);
+    setTurns((prev) => [...prev, { role: "assistant", content: data.question ?? "" }]);
   }
 
   return (
@@ -189,30 +124,25 @@ export default function IntakePage() {
       </header>
 
       <div className="mx-auto max-w-xl px-5 py-8">
-        {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div>
-        )}
+        {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div>}
 
-        {/* Emergency banner */}
         {urgent && (
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
             <div>
               <p className="text-sm font-bold text-red-700">This may be an emergency</p>
-              <p className="mt-1 text-xs text-red-600">
-                Please go to the nearest emergency room or call for help immediately. Do not wait for the intake to finish.
-              </p>
+              <p className="mt-1 text-xs text-red-600">Please go to the nearest emergency room or call for help immediately.</p>
             </div>
           </div>
         )}
 
-        {/* Start screen */}
+        {/* Start */}
         {phase === "start" && (
           <div className="rounded-2xl border border-[#e1e9e5] bg-white p-6">
             <h1 className="text-xl font-bold text-[#173f3c]">Pre-visit intake</h1>
             <p className="mt-2 text-sm text-[#5a7a6e] leading-6">
-              A short chat with our assistant so the doctor already knows your story before you sit down. It asks one
-              question at a time and never diagnoses — the doctor decides everything.
+              A short chat so the doctor already knows your story before you sit down. It asks one question at a time
+              and never diagnoses — the doctor decides everything.
             </p>
             <div className="mt-6">
               <label className="text-xs font-bold uppercase tracking-wide text-[#5a967e]">Patient ID</label>
@@ -223,11 +153,7 @@ export default function IntakePage() {
                 className="mt-1.5 w-full rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none focus:border-[#07947f]"
               />
             </div>
-            <button
-              onClick={() => void start()}
-              disabled={busy}
-              className="mt-5 w-full rounded-xl bg-[#07947f] py-3 text-sm font-bold text-white disabled:opacity-60"
-            >
+            <button onClick={() => void start()} disabled={busy} className="mt-5 w-full rounded-xl bg-[#07947f] py-3 text-sm font-bold text-white disabled:opacity-60">
               {busy ? "Starting…" : "Start intake"}
             </button>
             <p className="mt-3 text-center text-xs text-[#78908a]">Takes about 3–5 minutes · Completely private</p>
@@ -237,59 +163,31 @@ export default function IntakePage() {
         {/* Chat */}
         {phase === "chat" && (
           <div className="flex h-[70vh] flex-col overflow-hidden rounded-2xl border border-[#e1e9e5] bg-white shadow-sm">
-            {/* Chat header */}
             <div className="flex items-center gap-3 border-b border-[#eef4f1] bg-[#f7fbf9] px-4 py-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#07947f] text-white">
-                <Stethoscope className="h-4 w-4" />
-              </span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#07947f] text-white"><Stethoscope className="h-4 w-4" /></span>
               <div>
                 <p className="text-sm font-bold text-[#1f3a37]">AI Upchar Assistant</p>
-                <p className="flex items-center gap-1.5 text-[11px] text-[#5a967e]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Pre-visit conversation
-                </p>
+                <p className="flex items-center gap-1.5 text-[11px] text-[#5a967e]"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Pre-visit conversation</p>
               </div>
             </div>
 
-            {/* Messages */}
             <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-[#fbfdfc] px-4 py-5">
               {turns.map((t, i) =>
                 t.role === "assistant" ? (
                   <div key={i} className="flex items-end gap-2">
-                    <span className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e2f1ea] text-[#07947f]">
-                      <Stethoscope className="h-3.5 w-3.5" />
-                    </span>
-                    <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-[#e4efe9] bg-white px-4 py-2.5 text-sm leading-6 text-[#2f4a43] shadow-sm">
-                      {t.content}
-                    </div>
+                    <span className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e2f1ea] text-[#07947f]"><Stethoscope className="h-3.5 w-3.5" /></span>
+                    <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-[#e4efe9] bg-white px-4 py-2.5 text-sm leading-6 text-[#2f4a43] shadow-sm">{t.content}</div>
                   </div>
                 ) : (
                   <div key={i} className="flex justify-end">
-                    <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#07947f] px-4 py-2.5 text-sm leading-6 text-white shadow-sm">
-                      {t.content}
-                    </div>
+                    <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#07947f] px-4 py-2.5 text-sm leading-6 text-white shadow-sm">{t.content}</div>
                   </div>
                 )
               )}
 
-              {/* Live streaming assistant message */}
-              {streaming && (
+              {busy && (
                 <div className="flex items-end gap-2">
-                  <span className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e2f1ea] text-[#07947f]">
-                    <Stethoscope className="h-3.5 w-3.5" />
-                  </span>
-                  <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-[#e4efe9] bg-white px-4 py-2.5 text-sm leading-6 text-[#2f4a43] shadow-sm">
-                    {streaming}
-                    <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-[#7f9b90] align-middle" />
-                  </div>
-                </div>
-              )}
-
-              {/* Typing indicator (three dots) before the first token arrives */}
-              {busy && !streaming && (
-                <div className="flex items-end gap-2">
-                  <span className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e2f1ea] text-[#07947f]">
-                    <Stethoscope className="h-3.5 w-3.5" />
-                  </span>
+                  <span className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e2f1ea] text-[#07947f]"><Stethoscope className="h-3.5 w-3.5" /></span>
                   <div className="flex items-center gap-1 rounded-2xl rounded-bl-md border border-[#e4efe9] bg-white px-4 py-3 shadow-sm">
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#9db3aa] [animation-delay:-0.3s]" />
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#9db3aa] [animation-delay:-0.15s]" />
@@ -299,30 +197,35 @@ export default function IntakePage() {
               )}
             </div>
 
-            {/* Input */}
+            {/* Quick-reply chips for steps that offer options */}
+            {options.length > 0 && !busy && (
+              <div className="flex flex-wrap gap-2 border-t border-[#eef4f1] bg-white px-3 pt-3">
+                {options.map((opt) => (
+                  <button key={opt} onClick={() => void answer(opt)} className="rounded-full border border-[#c2ddd5] bg-[#f1f7f2] px-3 py-1.5 text-xs font-semibold text-[#317b67] hover:bg-[#e3f0ea]">
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center gap-2 border-t border-[#eef4f1] bg-white p-3">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && send()}
+                onKeyDown={(e) => e.key === "Enter" && answer(input)}
                 disabled={busy}
                 placeholder="Type your reply…"
                 autoFocus
                 className="min-w-0 flex-1 rounded-full border border-[#dce9e3] px-4 py-2.5 text-sm outline-none focus:border-[#07947f] disabled:bg-[#f7faf8]"
               />
-              <button
-                onClick={() => void send()}
-                disabled={busy || !input.trim()}
-                aria-label="Send"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#07947f] text-white transition hover:bg-[#066d66] disabled:opacity-50"
-              >
+              <button onClick={() => void answer(input)} disabled={busy || !input.trim()} aria-label="Send" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#07947f] text-white transition hover:bg-[#066d66] disabled:opacity-50">
                 <Send className="h-4 w-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* Done / handoff */}
+        {/* Done */}
         {phase === "done" && (
           <div className="rounded-2xl border border-[#b9decf] bg-[#f0faf5] p-8 text-center">
             <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-[#07947f]" />
@@ -344,12 +247,8 @@ export default function IntakePage() {
               </div>
             )}
             <div className="mt-6 space-y-2">
-              <Link href="/patient/portal" className="block w-full rounded-xl bg-[#07947f] py-3 text-sm font-bold text-white">
-                Go to patient portal
-              </Link>
-              <Link href="/patient/book" className="block w-full rounded-xl border border-[#c2ddd5] py-3 text-sm font-semibold text-[#317b67]">
-                Book another appointment
-              </Link>
+              <Link href="/patient/portal" className="block w-full rounded-xl bg-[#07947f] py-3 text-sm font-bold text-white">Go to patient portal</Link>
+              <Link href="/patient/book" className="block w-full rounded-xl border border-[#c2ddd5] py-3 text-sm font-semibold text-[#317b67]">Book another appointment</Link>
             </div>
           </div>
         )}

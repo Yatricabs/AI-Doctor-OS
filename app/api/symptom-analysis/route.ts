@@ -1,4 +1,8 @@
 import { error, json, optionalString, patientById, readObject, requiredString, safeRoute } from "../_lib/demo";
+import { aiComplete, aiConfigured, MODELS } from "../_lib/ai";
+import { buildSymptomMessages } from "../_lib/prompts";
+
+export const dynamic = "force-dynamic";
 
 export const POST = safeRoute(async (request: Request) => {
   const body = await readObject(request);
@@ -7,11 +11,36 @@ export const POST = safeRoute(async (request: Request) => {
   if (!symptoms) return error("symptoms is required.");
   const patientId = body.patientId === undefined ? undefined : requiredString(body.patientId, "patientId", 30);
   if (body.patientId !== undefined && !patientId) return error("patientId must be a non-empty string.");
-  if (patientId && !(await patientById(patientId))) return error("Patient not found.", 404);
+
+  let patientName: string | undefined;
+  if (patientId) {
+    const p = await patientById(patientId);
+    if (!p) return error("Patient not found.", 404);
+    patientName = p.name;
+  }
+
   const duration = optionalString(body.duration, 100);
   const severity = optionalString(body.severity, 40);
   const associatedSymptoms = optionalString(body.associatedSymptoms, 1000);
   const medicines = optionalString(body.medicines, 1000);
+
+  // Real AI triage support when configured.
+  if (aiConfigured()) {
+    const text = await aiComplete(
+      buildSymptomMessages(
+        { symptoms, duration, severity, associatedSymptoms, medicines },
+        patientName ? { name: patientName } : undefined
+      ),
+      { model: MODELS.symptom, temperature: 0.4, maxTokens: 700 }
+    );
+    return json({
+      text,
+      reviewRequired: true,
+      disclaimer: "AI triage support only; it organises information and is not a diagnosis.",
+    });
+  }
+
+  // Structured stub fallback (kept identical to the previous contract).
   return json({
     analysis: {
       patientId: patientId ?? null,
