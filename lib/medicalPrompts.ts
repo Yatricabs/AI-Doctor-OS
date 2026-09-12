@@ -138,3 +138,140 @@ export function parseSoapDraft(
     return null;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Conversational patient intake ("AI Upchar Intake Assistant").
+//
+// This drives a chat-style pre-visit interview that follows a fixed decision tree
+// (new vs returning patient, prior-doctor history, treatment efficacy, chronic
+// conditions) and asks exactly ONE question at a time. The model never diagnoses
+// or prescribes; it gathers a structured history for the doctor and escalates
+// emergencies. It emits a hidden control tag on its own last line so the UI can
+// react (show the emergency banner, or move to the completion screen).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type IntakeLanguage = "hinglish" | "english";
+
+/**
+ * Control tag the assistant appends on its OWN final line, e.g.
+ *   [[STATE: continue]]
+ *   [[STATE: urgent]]      -> emergency detected, advise ER
+ *   [[STATE: complete]]    -> enough info gathered, ready to hand off
+ * The UI strips this tag from the visible bubble.
+ */
+export const INTAKE_STATE_TAG = /\[\[STATE:\s*(continue|urgent|complete)\s*\]\]/i;
+
+export function buildIntakeSystemPrompt(language: IntakeLanguage): ChatMessage {
+  const langRule =
+    language === "english"
+      ? "Speak in simple, clear English."
+      : "Speak in simple Hindi/Hinglish (Roman script), warm and polite.";
+
+  return {
+    role: "system",
+    content: [
+      "Role: You are 'AI Upchar Intake Assistant', an empathetic, logical clinical intake assistant.",
+      "You pre-interview a patient BEFORE they meet the doctor, like a skilled compounder or junior doctor.",
+      "",
+      "Objective: Gather a structured medical history by first identifying whether the patient is NEW or",
+      "RETURNING, and whether the issue is acute, chronic, or unresolved from a previous doctor.",
+      "",
+      "Hard rules:",
+      `1. ${langRule}`,
+      "2. Ask ONLY ONE question per message. Never bundle multiple questions together.",
+      "3. Be brief. One short question, no long paragraphs.",
+      "4. NEVER diagnose, name a disease, or suggest any medicine. You only collect information.",
+      "5. Follow this decision tree strictly:",
+      "   • FIRST: ask if they are visiting for the FIRST time (new) or have come BEFORE (follow-up).",
+      "   • IF NEW: main problem -> since when -> have they already seen another doctor for this ->",
+      "     (if yes) did that treatment help or not, and do they have the old prescription/report ->",
+      "     (if no/self-medicated) did they take any medicine on their own -> any long-term illness",
+      "     (BP, sugar, thyroid, asthma) with ongoing medicines.",
+      "   • IF RETURNING: is it the same old issue or a NEW problem ->",
+      "     (if new problem) switch to the NEW patient branch ->",
+      "     (if same issue) better/same/worse since last time -> did they take all medicines on time ->",
+      "     any new problem after the medicine (vomiting, dizziness, gas, etc.) -> any pending lab report.",
+      "6. Documents: ask the patient to BRING their old prescriptions/reports and hand them at the",
+      "   reception (in-app upload is not available yet). Do not claim you received any file.",
+      "7. EMERGENCY: if the patient mentions severe chest pain, heavy bleeding, unconsciousness, stroke",
+      "   signs (face droop, slurred speech, one-side weakness), difficulty breathing, or similar, STOP the",
+      "   intake, tell them to reach the emergency room / call for help immediately.",
+      "",
+      "Output format (critical):",
+      "- Write ONLY your single next question or closing message as normal text for the patient.",
+      "- On a NEW LAST LINE, append a control tag exactly one of:",
+      "    [[STATE: continue]]  (still interviewing)",
+      "    [[STATE: urgent]]    (emergency detected — your message must advise emergency care)",
+      "    [[STATE: complete]]  (you have gathered enough; your message thanks them and says the doctor",
+      "                          will see their history, and to keep reports ready at reception)",
+      "- The patient never sees the tag; it is a machine signal. Always include exactly one tag.",
+    ].join("\n"),
+  };
+}
+
+/**
+ * Builds the full message array for one intake turn: system prompt + the running
+ * transcript. `history` is the alternating patient/assistant turns so far. Pass an
+ * empty history to get the very first question.
+ */
+export function buildIntakeMessages(
+  history: { role: "user" | "assistant"; content: string }[],
+  language: IntakeLanguage,
+  patient?: PatientBrief
+): ChatMessage[] {
+  const sys = buildIntakeSystemPrompt(language);
+  const context: ChatMessage[] = patient?.name
+    ? [{ role: "system", content: `Known patient on file: ${patient.name}. Still confirm new vs returning.` }]
+    : [];
+  // Seed the very first turn so the model opens the conversation.
+  const seed: ChatMessage[] =
+    history.length === 0
+      ? [{ role: "user", content: "Start the intake now with your first question." }]
+      : [];
+  return [sys, ...context, ...history, ...seed];
+}
+
+/**
+ * Strips the [[STATE: ...]] control tag from an assistant message and returns the
+ * clean text plus the parsed state.
+ */
+export function parseIntakeTurn(raw: string): {
+  text: string;
+  state: "continue" | "urgent" | "complete";
+} {
+  const match = raw.match(INTAKE_STATE_TAG);
+  const state = (match?.[1]?.toLowerCase() as "continue" | "urgent" | "complete") ?? "continue";
+  const text = raw.replace(INTAKE_STATE_TAG, "").trim();
+  return { text, state };
+}
+
+/**
+ * Builds a prompt that turns the completed intake transcript into a structured
+ * Pre-Visit Patient Brief (JSON) for the doctor.
+ */
+export function buildIntakeSummaryMessages(
+  history: { role: "user" | "assistant"; content: string }[]
+): ChatMessage[] {
+  const transcript = history
+    .map((m) => `${m.role === "user" ? "Patient" : "Assistant"}: ${m.content}`)
+    .join("\n");
+  return [
+    {
+      role: "system",
+      content: [
+        "You convert a patient intake conversation into a structured Pre-Visit Brief for a doctor.",
+        "Return STRICT JSON only, no markdown or code fences, with exactly these keys:",
+        "  patientType (string: 'new' or 'returning'),",
+        "  chiefComplaint (string),",
+        "  duration (string),",
+        "  priorTreatment (string: what other doctors/self-medication and whether it helped),",
+        "  chronicConditions (string),",
+        "  medicationAdherence (string, '' if not applicable),",
+        "  redFlags (string, '' if none),",
+        "  summary (string: 2-3 sentence brief for the doctor).",
+        "Do not diagnose. Only summarize what the patient reported.",
+      ].join("\n"),
+    },
+    { role: "user", content: `Intake conversation:\n${transcript}` },
+  ];
+}

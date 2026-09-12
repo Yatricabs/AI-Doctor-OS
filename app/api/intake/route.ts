@@ -177,5 +177,40 @@ export const POST = safeRoute(async (request: Request) => {
     return json({ nextQuestion: nextQuestion ?? null, skipped: questionKey });
   }
 
-  return error("Unknown action. Use: start, answer, skip");
+  // ── Log a free-form conversational turn (for the AI-driven chat intake) ──
+  // Unlike "answer", this does NOT validate against the fixed question bank, so it
+  // can store the running chat transcript and the generated pre-visit brief.
+  if (action === "log_turn") {
+    const sessionId = requiredString(body.sessionId, "sessionId");
+    const questionKey = requiredString(body.questionKey, "questionKey", 120);
+    const responseValue = requiredString(body.responseValue, "responseValue", 8000);
+    if (!sessionId || !questionKey || !responseValue) return error("sessionId, questionKey, and responseValue are required");
+
+    const session = await queryOne<Record<string, unknown>>("SELECT * FROM intake_sessions WHERE id = ?", [sessionId]);
+    if (!session) return error("Intake session not found", 404);
+
+    await insert("intake_responses", {
+      id: generateId("ir"),
+      intakeSessionId: sessionId,
+      questionKey,
+      questionText: "",
+      responseValue,
+      responseType: questionKey === "pre_visit_brief" ? "brief" : "chat",
+      createdAt: nowIso(),
+    });
+
+    // The pre_visit_brief turn signals the interview is finished.
+    if (questionKey === "pre_visit_brief") {
+      await update("intake_sessions", sessionId, { status: "completed", completedAt: nowIso(), updatedAt: nowIso() });
+      if (session.appointmentId) {
+        await update("appointments", String(session.appointmentId), { status: "intake_complete", updatedAt: nowIso() });
+      }
+    } else {
+      await update("intake_sessions", sessionId, { updatedAt: nowIso() });
+    }
+
+    return json({ logged: true });
+  }
+
+  return error("Unknown action. Use: start, answer, skip, log_turn");
 });
