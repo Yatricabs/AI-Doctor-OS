@@ -72,53 +72,78 @@ export default function AppointmentFlowPage() {
   const [finalizeMsg, setFinalizeMsg] = useState("Preparing your details for the doctor…");
 
   const stepRef = useRef(0);
+  const pendingFollowUpRef = useRef<StepKey | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns, busy, analyzing]);
 
-  // The ordered script. Existing patients skip name/age/sex/location.
-  function script(): { key: StepKey; intent: string; options?: string[]; skip?: (a: Answers) => boolean }[] {
+  // The ordered script. Each step has a GUARANTEED base question (Hinglish +
+  // English) so a bubble is NEVER empty — the AI only warms up the wording.
+  // `intent` guides the AI; `base` is the fallback that always shows.
+  type Step = { key: StepKey; intent: string; base: { hinglish: string; english: string }; options?: string[]; skip?: (a: Answers) => boolean };
+  function script(): Step[] {
     return [
-      { key: "identity", intent: "Ask if they are a new patient or have visited before.", options: ["New patient", "Visited before"] },
-      { key: "phone", intent: "Ask for their mobile number so we can find or create their record." },
-      { key: "name", intent: "Ask their full name.", skip: () => isReturning },
-      { key: "age", intent: "Ask their age in years.", skip: () => isReturning },
-      { key: "sex", intent: "Ask their sex.", options: ["Male", "Female", "Other"], skip: () => isReturning },
-      { key: "location", intent: "Ask their city or area.", skip: () => isReturning },
-      { key: "date", intent: "Ask which date they would like the appointment (YYYY-MM-DD or a day)." },
-      { key: "time", intent: "Ask what time of day they prefer for the appointment." },
-      { key: "complaint", intent: "Ask the main problem or reason for the visit today." },
-      { key: "duration", intent: "Ask since when they have had this problem." },
-      { key: "seen_doctor", intent: "Ask if they have already shown this to a doctor before. If yes, invite them to upload the old prescription using the attach button.", options: ["Yes", "No"] },
-      { key: "upload_prompt", intent: "Ask if they have any test report or scan (blood test, MRI, CT, ultrasound, prescription) to upload now using the attach button — or they can type 'no'.", options: ["I'll upload", "No reports"] },
-      { key: "symptoms", intent: "Ask what specific difficulties or symptoms they are facing right now due to this problem (e.g. pain, breathing, eating, movement, energy)." },
+      { key: "identity", intent: "Ask whether they are a new patient or have visited this clinic before.", base: { hinglish: "Aap naye patient hain ya pehle bhi yahan aa chuke hain?", english: "Are you a new patient, or have you visited us before?" }, options: ["New patient", "Visited before"] },
+      { key: "phone", intent: "Ask for their 10-digit mobile number so we can find or create their record.", base: { hinglish: "Kripya apna 10-digit mobile number bataiye, taaki hum aapka record bana/dhoondh sakein.", english: "Please share your 10-digit mobile number so we can find or create your record." } },
+      { key: "name", intent: "Ask their full name.", base: { hinglish: "Aapka poora naam kya hai?", english: "What is your full name?" }, skip: () => isReturning },
+      { key: "age", intent: "Ask their age in years.", base: { hinglish: "Aapki umar kitni hai (saalon mein)?", english: "How old are you (in years)?" }, skip: () => isReturning },
+      { key: "sex", intent: "Ask their sex.", base: { hinglish: "Aapka ling kya hai?", english: "What is your sex?" }, options: ["Male", "Female", "Other"], skip: () => isReturning },
+      { key: "location", intent: "Ask their city or area.", base: { hinglish: "Aap kis sheher/ilaake se hain?", english: "Which city or area are you from?" }, skip: () => isReturning },
+      { key: "date", intent: "Ask which date they would like the appointment.", base: { hinglish: "Aap appointment kis din chahte hain? (jaise 2026-09-20)", english: "Which day would you like the appointment? (e.g. 2026-09-20)" } },
+      { key: "time", intent: "Ask what time of day they prefer for the appointment.", base: { hinglish: "Kis samay aana chahenge — subah, dopahar ya shaam? (jaise 11:00)", english: "What time works for you — morning, afternoon or evening? (e.g. 11:00)" } },
+      { key: "complaint", intent: "Ask the main problem or reason for the visit today.", base: { hinglish: "Aapko mukhya roop se kya takleef hai? Aaj kis wajah se aa rahe hain?", english: "What is the main problem troubling you? Why are you visiting today?" } },
+      { key: "duration", intent: "Ask since when they have had this problem.", base: { hinglish: "Yeh takleef aapko kab se hai?", english: "Since when have you had this problem?" } },
+      { key: "seen_doctor", intent: "Ask if they have already shown this to a doctor before; if yes, they can upload the old prescription with the attach button.", base: { hinglish: "Kya aapne is takleef ke liye pehle kisi doctor ko dikhaya hai? Agar haan, to purani parchi attach (📎) button se upload kar dijiye.", english: "Have you already seen a doctor for this? If yes, upload the old prescription using the attach (📎) button." }, options: ["Yes", "No"] },
+      { key: "upload_prompt", intent: "Ask if they have any test report or scan to upload now using the attach button, or type no.", base: { hinglish: "Koi test report ya scan hai (blood test, MRI, CT, ultrasound)? Attach (📎) button se upload kar dijiye, ya 'nahi' likhein.", english: "Do you have any test report or scan (blood test, MRI, CT, ultrasound)? Upload it with the attach (📎) button, or type 'no'." }, options: ["I'll upload", "No reports"] },
+      { key: "symptoms", intent: "Ask what specific difficulties or symptoms they face right now due to this problem.", base: { hinglish: "Is takleef ke kaaran abhi aapko kya-kya pareshani ho rahi hai? (jaise dard, saans, khana, chalna, kamzori)", english: "What difficulties are you facing right now because of this? (e.g. pain, breathing, eating, walking, weakness)" } },
     ];
   }
 
-  // AI phrases each fixed question in the patient's language (fallback = plain).
-  async function phrase(intent: string, last: string | null): Promise<string> {
+  function baseText(step: Step): string {
+    return lang === "english" ? step.base.english : step.base.hinglish;
+  }
+
+  // AI warms up the fixed question in the patient's language. NEVER returns empty:
+  // if the AI is unavailable or blank, the guaranteed base text is used.
+  async function phrase(step: Step, last: string | null): Promise<string> {
+    const fallback = baseText(step);
     const langTxt = lang === "english" ? "simple clear English" : "simple warm Hindi/Hinglish (Roman script)";
     try {
-      return await aiChat(
-        [
-          { role: "system", content: `You are a warm medical intake assistant talking to a patient, one question at a time in ${langTxt}. Reword the given question intent into ONE short friendly question (max ~25 words). Optionally start with a 2-3 word acknowledgement of their last answer. No lists, no diagnosis.` },
-          { role: "user", content: `${last ? `Patient's last answer: "${last}"\n` : ""}Question intent: ${intent}` },
-        ],
-        { model: MODELS.fast, temperature: 0.4, maxTokens: 80 }
-      );
+      // Race the AI against a timeout so a slow/absent AI never blocks the flow.
+      const out = await Promise.race([
+        aiChat(
+          [
+            { role: "system", content: `You are a warm medical appointment assistant talking to a patient, one question at a time in ${langTxt}. Reword the given question into ONE short friendly question (max ~25 words). You may start with a 2-3 word acknowledgement of their last answer. Output ONLY the question. No lists, no diagnosis, no preamble.` },
+            { role: "user", content: `${last ? `Patient's last answer: "${last}"\n` : ""}Question to ask: ${fallback}\nIntent: ${step.intent}` },
+          ],
+          { model: MODELS.fast, temperature: 0.4, maxTokens: 80 }
+        ),
+        new Promise<string>((resolve) => setTimeout(() => resolve(""), 12000)),
+      ]);
+      const clean = (out ?? "").trim();
+      return clean.length >= 3 ? clean : fallback; // never blank
     } catch {
-      return intent; // plain fallback keeps the flow moving
+      return fallback;
     }
   }
 
-  // Kick off the first question on mount.
+  // Store an asked question so it can be reused across patients (question bank).
+  function logQuestion(key: string, text: string) {
+    void logAiTraining({ workflow: "intake_question", model: MODELS.fast, inputContext: { stepKey: key, lang }, aiOutput: text, outputType: "text", source: "patient_appointment" });
+  }
+
+  // Warm, friendly greeting + the first question on mount.
   useEffect(() => {
     void (async () => {
       setBusy(true);
+      const greeting = lang === "english"
+        ? "Hello! 👋 I'm your AI Upchar assistant. I'll ask a few quick questions to book your appointment and prepare your details for the doctor. Let's begin."
+        : "Namaste! 👋 Main aapka AI Upchar assistant hoon. Appointment book karne aur doctor ke liye aapki jaankari taiyaar karne ke liye main kuch chhote sawaal poochunga. Chaliye shuru karte hain.";
       const first = script()[0];
-      const q = await phrase(first.intent, null);
-      setTurns([{ role: "assistant", content: q }]);
+      const q = await phrase(first, null);
+      logQuestion(first.key, q);
+      setTurns([{ role: "assistant", content: greeting }, { role: "assistant", content: q }]);
       setOptions(first.options ?? []);
       setBusy(false);
     })();
@@ -180,6 +205,41 @@ export default function AppointmentFlowPage() {
     setTurns((p) => [...p, { role: "user", content: answer }]);
     setInput(""); setOptions([]); setBusy(true); setError("");
 
+    // After the main complaint or symptoms, let the AI ask ONE intelligent
+    // follow-up of its own (adaptive), then continue the fixed script.
+    if ((cur.key === "complaint" || cur.key === "symptoms") && answer.trim().length > 2) {
+      const followUp = await aiFollowUp(next, answer);
+      if (followUp) {
+        setTurns((p) => [...p, { role: "assistant", content: followUp }]);
+        // Merge the follow-up answer into the same key's context on next turn.
+        // (We keep the script position; the patient's reply is stored under the
+        //  same clinical bucket so the report still gets it.)
+        setBusy(false);
+        pendingFollowUpRef.current = cur.key;
+        return;
+      }
+    }
+    // If the previous assistant message was an AI follow-up, fold this answer in
+    // and DO NOT advance the script index (we already advanced before the F/U).
+    if (pendingFollowUpRef.current) {
+      const k = pendingFollowUpRef.current;
+      pendingFollowUpRef.current = null;
+      const merged: Answers = { ...next, [k]: `${next[k] ?? ""} | ${answer}`.trim() };
+      setAnswers(merged);
+      // fall through to ask the next scripted question using `merged`
+      if (steps[idx]) {
+        const q = await phrase(steps[idx], answer);
+        logQuestion(steps[idx].key, q);
+        setTurns((p) => [...p, { role: "assistant", content: q }]);
+        setOptions(steps[idx].options ?? []);
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+      await finalize(merged);
+      return;
+    }
+
     // Advance to next non-skipped step.
     idx += 1;
     while (steps[idx] && steps[idx].skip?.(next)) idx += 1;
@@ -187,7 +247,8 @@ export default function AppointmentFlowPage() {
 
     // If more questions remain, phrase the next one.
     if (steps[idx]) {
-      const q = await phrase(steps[idx].intent, answer);
+      const q = await phrase(steps[idx], answer);
+      logQuestion(steps[idx].key, q);
       setTurns((p) => [...p, { role: "assistant", content: q }]);
       setOptions(steps[idx].options ?? []);
       setBusy(false);
@@ -197,6 +258,28 @@ export default function AppointmentFlowPage() {
     // ── Conversation finished → finalize ──
     setBusy(false);
     await finalize(next);
+  }
+
+  // AI generates ONE smart follow-up question based on the answer so far.
+  // Guaranteed non-empty-or-skip: returns "" if AI unavailable (flow continues).
+  async function aiFollowUp(a: Answers, lastAnswer: string): Promise<string> {
+    const langTxt = lang === "english" ? "simple clear English" : "simple warm Hindi/Hinglish (Roman script)";
+    const patientType = isReturning ? "returning" : "new";
+    try {
+      const out = await aiChat(
+        [
+          { role: "system", content: `You are a doctor's intake assistant talking to a ${patientType} patient in ${langTxt}. Based on what they just told you, ask ONE short, specific follow-up question that a good doctor would ask to understand the problem better (severity, triggers, associated symptoms, impact on daily life). Output ONLY the single question (max ~25 words). No diagnosis, no advice, no lists.` },
+          { role: "user", content: `Main complaint: ${a.complaint ?? ""}\nDuration: ${a.duration ?? ""}\nSymptoms so far: ${a.symptoms ?? ""}\nPatient's latest answer: "${lastAnswer}"` },
+        ],
+        { model: MODELS.fast, temperature: 0.5, maxTokens: 70 }
+      );
+      const clean = (out ?? "").trim();
+      if (clean.length < 3) return "";
+      logQuestion("ai_followup", clean);
+      return clean;
+    } catch {
+      return "";
+    }
   }
 
   async function finalize(a: Answers) {
