@@ -68,6 +68,7 @@ type Context = {
 };
 type Summary = {
   intake: { preVisitBrief: string; story: { question: string; answer: string }[] };
+  aiReport?: { summary: string; research: string; considerations: string[]; redFlags: string[] };
   reports: { id: string; title: string; findings: { overallImpression: string; abnormal: string[] } | null }[];
   abnormalHighlights: string[];
 };
@@ -122,14 +123,38 @@ function PatientDetail({ patientId, onBack }: { patientId: string; onBack: () =>
         </div>
       </div>
 
-      {/* AI summary */}
-      {summary?.intake.preVisitBrief && (
-        <Card icon={Sparkles} title="AI pre-visit summary" tone="purple">
-          <p className="whitespace-pre-wrap text-sm leading-6 text-[#5a4570]">{summary.intake.preVisitBrief}</p>
-          {summary.abnormalHighlights.length > 0 && (
-            <p className="mt-2 text-xs text-red-600">Flagged: {summary.abnormalHighlights.join("; ")}</p>
+      {/* AI pre-visit report (from the patient's conversational intake) */}
+      {(summary?.aiReport?.summary || summary?.intake.preVisitBrief) && (
+        <Card icon={Sparkles} title="AI pre-visit report" tone="purple">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-[#5a4570]">{summary?.aiReport?.summary || summary?.intake.preVisitBrief}</p>
+          {summary?.aiReport && summary.aiReport.redFlags.length > 0 && (
+            <div className="mt-3">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-red-500">Red flags</p>
+              <ul className="mt-1 space-y-0.5">
+                {summary.aiReport.redFlags.map((f, i) => <li key={i} className="text-xs text-red-600">· {f}</li>)}
+              </ul>
+            </div>
+          )}
+          {summary?.aiReport && summary.aiReport.considerations.length > 0 && (
+            <div className="mt-3">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-[#7a5a8a]">Considerations (review required)</p>
+              <ul className="mt-1 space-y-0.5">
+                {summary.aiReport.considerations.map((c, i) => <li key={i} className="text-xs text-[#5a4570]">· {c}</li>)}
+              </ul>
+            </div>
+          )}
+          {summary?.abnormalHighlights && summary.abnormalHighlights.length > 0 && (
+            <p className="mt-2 text-xs text-red-600">Report flags: {summary.abnormalHighlights.join("; ")}</p>
           )}
           <p className="mt-2 text-[10px] text-[#9773a4]">AI-generated · review required · not a diagnosis</p>
+        </Card>
+      )}
+
+      {/* Internet research (with citations) */}
+      {summary?.aiReport?.research && (
+        <Card icon={Sparkles} title="AI internet research">
+          <p className="whitespace-pre-wrap text-sm leading-6 text-[#41627a]">{summary.aiReport.research}</p>
+          <p className="mt-2 text-[10px] text-[#9db3aa]">Sourced from the web via AI · verify all sources · not a diagnosis</p>
         </Card>
       )}
 

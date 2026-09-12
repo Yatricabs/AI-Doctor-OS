@@ -57,6 +57,30 @@ export const GET = safeRoute(async (request: Request) => {
   const context = await getPatientContext(patientId);
   if (!context) return error("Patient not found", 404);
 
+  // ── The AI-generated pre-visit report (with internet research) from intake ──
+  const aiBrief = await queryOne<{ aiReport?: string; research?: string; aiConsiderations?: string; attentionSignals?: string; createdAt?: string }>(
+    "SELECT * FROM pre_visit_briefs WHERE patient_id = ? ORDER BY created_at DESC LIMIT 1",
+    [patientId]
+  );
+  const parseStrArr = (v?: string): string[] => {
+    if (!v) return [];
+    try { const p = JSON.parse(v); return Array.isArray(p) ? p.map((x) => String(x)).filter(Boolean) : []; } catch { return []; }
+  };
+  const parseSignals = (v?: string): string[] => {
+    if (!v) return [];
+    try {
+      const p = JSON.parse(v);
+      if (!Array.isArray(p)) return [];
+      return p.map((s) => (s && typeof s === "object" ? String((s as { detail?: string }).detail ?? "") : String(s))).filter(Boolean);
+    } catch { return []; }
+  };
+  const aiReport = {
+    summary: aiBrief?.aiReport ?? "",
+    research: aiBrief?.research ?? "",
+    considerations: parseStrArr(aiBrief?.aiConsiderations),
+    redFlags: parseSignals(aiBrief?.attentionSignals),
+  };
+
   // ── The intake conversation: chief complaint, history, meds, tests, etc. ──
   const session = await queryOne<{ id: string; visitType?: string; status?: string; createdAt?: string }>(
     "SELECT * FROM intake_sessions WHERE patient_id = ? ORDER BY created_at DESC LIMIT 1",
@@ -130,6 +154,7 @@ export const GET = safeRoute(async (request: Request) => {
       story,
       preVisitBrief,
     },
+    aiReport,
     reports,
     abnormalHighlights,
     disclaimer:

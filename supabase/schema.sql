@@ -288,6 +288,8 @@
     confidence TEXT DEFAULT 'moderate',
     source_ids TEXT DEFAULT '[]',
     review_status TEXT DEFAULT 'generated',
+    ai_report TEXT,
+    research TEXT,
     reviewed_by TEXT,
     reviewed_at TEXT,
     created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
@@ -586,4 +588,21 @@
     unit_price DOUBLE PRECISION NOT NULL DEFAULT 0,
     amount DOUBLE PRECISION NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+  );
+
+  -- ── AI TRAINING DATA (foundation for our own future model) ────────────────
+  CREATE TABLE IF NOT EXISTS ai_training_data (
+    id TEXT PRIMARY KEY,
+    workflow TEXT NOT NULL,
+    patient_id TEXT,
+    model TEXT,
+    input_context TEXT,
+    ai_output TEXT NOT NULL,
+    output_type TEXT DEFAULT 'text',
+    feedback TEXT,
+    corrected_output TEXT,
+    rating INTEGER,
+    source TEXT DEFAULT 'app',
+    created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')),
+    updated_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
   );

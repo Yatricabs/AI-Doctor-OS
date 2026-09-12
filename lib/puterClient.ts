@@ -11,6 +11,9 @@ export const MODELS = {
   reasoning: "claude-sonnet-4-6",
   visionGpt: "gpt-4o",
   visionGemini: "gemini-2.5-flash",
+  // Internet-based research (real-time web search + citations) via Perplexity.
+  research: "perplexity/sonar-pro",
+  deepResearch: "perplexity/sonar-deep-research",
 } as const;
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };

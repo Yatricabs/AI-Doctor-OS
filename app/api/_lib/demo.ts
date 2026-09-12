@@ -460,6 +460,24 @@ export type Bill = {
   updatedAt: string;
 };
 
+// Captured AI generation + (optional) clinician feedback — the raw material for
+// fine-tuning our own model later.
+export type AiTrainingRecord = {
+  id: string;
+  workflow: string;              // e.g. "pre_visit_report", "web_research", "report_vision", "intake_phrase"
+  patientId?: string;
+  model?: string;
+  inputContext?: string;         // prompt / context (JSON string)
+  aiOutput: string;
+  outputType?: string;           // "json" | "text" | "markdown"
+  feedback?: "accepted" | "edited" | "rejected" | null;
+  correctedOutput?: string;
+  rating?: number;
+  source?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 // ─── PATIENTS ────────────────────────────────────────────────────────────────
 export async function listPatients(): Promise<Patient[]> {
   return query<Patient>("SELECT * FROM patients ORDER BY created_at ASC, id ASC");

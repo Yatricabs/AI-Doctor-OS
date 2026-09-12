@@ -183,3 +183,131 @@ export function buildAdaptiveQuestionMessages(
     { role: "user", content: context },
   ];
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRE-VISIT AI REPORT + INTERNET DEEP RESEARCH
+// Runs at the end of the conversational appointment flow. Two steps:
+//   1) Internet deep research (Perplexity sonar) on the patient's condition.
+//   2) A structured, review-required report compiling everything for the doctor.
+// Both are review-required and NEVER a diagnosis.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type IntakeSnapshot = {
+  patientType: "new" | "returning";
+  name?: string;
+  age?: string;
+  sex?: string;
+  chiefComplaint: string;
+  duration?: string;
+  history?: string;         // prior care / chronic conditions the patient mentioned
+  medications?: string;     // current medicines mentioned
+  symptoms?: string;        // symptom deep-question answers, joined
+  reportFindings?: string;  // merged findings text from uploaded reports/prescriptions
+};
+
+/** Builds the transcript block shared by both prompts. */
+function snapshotBlock(s: IntakeSnapshot): string {
+  return [
+    `Patient type: ${s.patientType}`,
+    s.age ? `Age: ${s.age}` : "",
+    s.sex ? `Sex: ${s.sex}` : "",
+    `Chief complaint: ${s.chiefComplaint}`,
+    s.duration ? `Duration: ${s.duration}` : "",
+    s.history ? `History / prior care: ${s.history}` : "",
+    s.medications ? `Current medicines: ${s.medications}` : "",
+    s.symptoms ? `Reported symptoms: ${s.symptoms}` : "",
+    s.reportFindings ? `Uploaded report findings (AI-read, unverified): ${s.reportFindings}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+/**
+ * Internet deep-research prompt for Perplexity Sonar (real-time web + citations).
+ * Asks for an evidence-informed overview relevant to the patient's presentation,
+ * with sources, framed strictly as clinician decision-support (no diagnosis).
+ */
+export function buildResearchPrompt(s: IntakeSnapshot): string {
+  return [
+    "You are a medical research assistant supporting a doctor (NOT the patient). Using current, reputable",
+    "web sources (prefer guidelines, reviews, and established medical references), research the presentation below.",
+    "",
+    snapshotBlock(s),
+    "",
+    "Produce a concise, evidence-informed briefing for the DOCTOR covering:",
+    "- Common and important causes to consider for this presentation (possibilities, NOT a diagnosis).",
+    "- Recommended work-up / investigations typically indicated.",
+    "- Red-flag features that would warrant urgent attention.",
+    "- Relevant management considerations per current guidance.",
+    "Include inline source references/links. Keep it focused (a few short sections).",
+    "Do NOT address the patient, do NOT diagnose, do NOT prescribe. This is decision-support to be verified by the clinician.",
+  ].join("\n");
+}
+
+export type PreVisitReport = {
+  chiefComplaint: string;
+  history: string;
+  medications: string;
+  currentIssue: string;
+  considerations: string[];
+  redFlags: string[];
+  missingInfo: string[];
+  patientQuestions: string[];
+  summary: string;   // full narrative for the doctor
+  research: string;  // the web-research briefing (with citations)
+};
+
+/**
+ * Compiles the final structured pre-visit report for the doctor from the intake
+ * snapshot + the web-research briefing. Review-required, no diagnosis.
+ */
+export function buildPreVisitReportMessages(s: IntakeSnapshot, research: string): ChatMessage[] {
+  return [
+    {
+      role: "system",
+      content: [
+        "You compile a patient's pre-visit intake into a structured report for a DOCTOR to read before the visit.",
+        "You ASSIST; the clinician DECIDES. Never diagnose or prescribe. Frame everything as review-required.",
+        "Return STRICT JSON only (no markdown/fences) with exactly these keys:",
+        "chiefComplaint (string), history (string), medications (string), currentIssue (string),",
+        "considerations (string[] — possibilities to weigh, not diagnoses),",
+        "redFlags (string[] — safety concerns to check),",
+        "missingInfo (string[] — what the doctor should still confirm),",
+        "patientQuestions (string[] — questions/worries the patient raised),",
+        "summary (string — a clear 4-8 sentence narrative the doctor can read at a glance).",
+        "Base it ONLY on what the patient reported and the research provided; do not invent clinical data.",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: [
+        "PATIENT INTAKE:",
+        snapshotBlock(s),
+        "",
+        "WEB RESEARCH BRIEFING (for your considerations/red-flags; already sourced):",
+        research || "(no research available)",
+      ].join("\n"),
+    },
+  ];
+}
+
+export function parsePreVisitReport(raw: string, research: string): PreVisitReport {
+  const cleaned = raw.replace(/```(?:json)?/gi, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : []);
+  let o: Record<string, unknown> = {};
+  if (start >= 0 && end > start) {
+    try { o = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>; } catch { o = {}; }
+  }
+  return {
+    chiefComplaint: String(o.chiefComplaint ?? ""),
+    history: String(o.history ?? ""),
+    medications: String(o.medications ?? ""),
+    currentIssue: String(o.currentIssue ?? ""),
+    considerations: arr(o.considerations),
+    redFlags: arr(o.redFlags),
+    missingInfo: arr(o.missingInfo),
+    patientQuestions: arr(o.patientQuestions),
+    summary: String(o.summary ?? cleaned.slice(0, 2000)),
+    research,
+  };
+}

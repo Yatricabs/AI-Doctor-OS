@@ -163,6 +163,50 @@ export async function POST(request: Request) {
       return json({ brief });
     }
 
+    // ── Save the AI-generated pre-visit report from the patient conversation ──
+    // Called at the end of the conversational appointment flow. Stores a
+    // pre_visit_briefs row so the doctor dashboard shows it with the patient.
+    if (action === "save_ai_report") {
+      const patientId = requiredString(body.patientId, "patientId", 120);
+      if (!patientId) return error("patientId is required");
+      const report = (body.report ?? {}) as Record<string, unknown>;
+
+      const str = (v: unknown, max = 6000) => (typeof v === "string" ? v.slice(0, max) : "");
+      const arr = (v: unknown) => (Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : []);
+
+      // Attention signals from red flags (so they surface prominently for the doctor).
+      const attentionSignals = arr(report.redFlags).map((detail) => ({
+        type: "ai_flag", title: "AI-flagged concern", detail, severity: "medium", source: "patient_intake_ai",
+      }));
+
+      const briefId = generateId("brief");
+      const row = {
+        id: briefId,
+        visitId: typeof body.appointmentId === "string" ? body.appointmentId : generateId("visit"),
+        patientId,
+        visitReason: str(report.chiefComplaint, 300) || "Patient pre-visit intake",
+        patientType: typeof body.patientType === "string" ? body.patientType : "new",
+        historySummary: str(report.history, 3000),
+        medicationSummary: str(report.medications, 2000),
+        whatChanged: str(report.currentIssue, 2000),
+        missingInfo: JSON.stringify(arr(report.missingInfo)),
+        attentionSignals: JSON.stringify(attentionSignals),
+        patientQuestions: JSON.stringify(arr(report.patientQuestions)),
+        aiConsiderations: JSON.stringify(arr(report.considerations)),
+        queueStatus: "Pre-visit intake completed",
+        aiLabel: "AI_GENERATED",
+        confidence: "moderate",
+        sourceIds: JSON.stringify(["patient_intake", "uploaded_reports", "web_research"]),
+        reviewStatus: "generated",
+        aiReport: str(report.summary, 8000),
+        research: str(report.research, 8000),
+        createdAt: nowIso(),
+      };
+      await insert("pre_visit_briefs", row);
+
+      return json({ briefId, summary: str(report.summary, 8000) }, 201);
+    }
+
     return error("Unknown action");
   } catch (err) {
     console.error("Pre-visit POST error:", err);
