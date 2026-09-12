@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2, Send, Stethoscope } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Send, Stethoscope } from "lucide-react";
 import { aiChat, aiChatStream, PuterUnavailableError } from "@/lib/puterAI";
 import {
   buildIntakeMessages,
@@ -66,10 +66,15 @@ export default function IntakePage() {
       const messages = buildIntakeMessages(history, language, { name: patientId });
       let full = "";
       try {
-        full = await aiChatStream(messages, (_d, f) => {
-          // Show streaming text without the trailing control tag.
-          setStreaming(parseIntakeTurn(f).text);
-        });
+        // Low temperature keeps the assistant disciplined: one short question per turn.
+        full = await aiChatStream(
+          messages,
+          (_d, f) => {
+            // Show streaming text without the trailing control tag.
+            setStreaming(parseIntakeTurn(f).text);
+          },
+          { temperature: 0.3, maxTokens: 200 }
+        );
       } catch (e) {
         setStreaming("");
         if (e instanceof PuterUnavailableError) {
@@ -231,50 +236,85 @@ export default function IntakePage() {
 
         {/* Chat */}
         {phase === "chat" && (
-          <div className="rounded-2xl border border-[#e1e9e5] bg-white">
-            <div ref={scrollRef} className="max-h-[60vh] space-y-3 overflow-y-auto p-4">
-              {turns.map((t, i) => (
-                <div key={i} className={`flex ${t.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-6 ${t.role === "user"
-                      ? "rounded-br-sm bg-[#07947f] text-white"
-                      : "rounded-bl-sm bg-[#f1f7f2] text-[#2f4a43]"
-                      }`}
-                  >
-                    {t.content}
+          <div className="flex h-[70vh] flex-col overflow-hidden rounded-2xl border border-[#e1e9e5] bg-white shadow-sm">
+            {/* Chat header */}
+            <div className="flex items-center gap-3 border-b border-[#eef4f1] bg-[#f7fbf9] px-4 py-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#07947f] text-white">
+                <Stethoscope className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-bold text-[#1f3a37]">AI Upchar Assistant</p>
+                <p className="flex items-center gap-1.5 text-[11px] text-[#5a967e]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Pre-visit conversation
+                </p>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-[#fbfdfc] px-4 py-5">
+              {turns.map((t, i) =>
+                t.role === "assistant" ? (
+                  <div key={i} className="flex items-end gap-2">
+                    <span className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e2f1ea] text-[#07947f]">
+                      <Stethoscope className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-[#e4efe9] bg-white px-4 py-2.5 text-sm leading-6 text-[#2f4a43] shadow-sm">
+                      {t.content}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ) : (
+                  <div key={i} className="flex justify-end">
+                    <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#07947f] px-4 py-2.5 text-sm leading-6 text-white shadow-sm">
+                      {t.content}
+                    </div>
+                  </div>
+                )
+              )}
+
+              {/* Live streaming assistant message */}
               {streaming && (
-                <div className="flex justify-start">
-                  <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-[#f1f7f2] px-3.5 py-2.5 text-sm leading-6 text-[#2f4a43]">
+                <div className="flex items-end gap-2">
+                  <span className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e2f1ea] text-[#07947f]">
+                    <Stethoscope className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-[#e4efe9] bg-white px-4 py-2.5 text-sm leading-6 text-[#2f4a43] shadow-sm">
                     {streaming}
                     <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-[#7f9b90] align-middle" />
                   </div>
                 </div>
               )}
+
+              {/* Typing indicator (three dots) before the first token arrives */}
               {busy && !streaming && (
-                <div className="flex items-center gap-2 text-xs text-[#78908a]">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Assistant is typing…
+                <div className="flex items-end gap-2">
+                  <span className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e2f1ea] text-[#07947f]">
+                    <Stethoscope className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="flex items-center gap-1 rounded-2xl rounded-bl-md border border-[#e4efe9] bg-white px-4 py-3 shadow-sm">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#9db3aa] [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#9db3aa] [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#9db3aa]" />
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-2 border-t border-[#eef4f1] p-3">
+            {/* Input */}
+            <div className="flex items-center gap-2 border-t border-[#eef4f1] bg-white p-3">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && send()}
                 disabled={busy}
-                placeholder="Type your answer…"
+                placeholder="Type your reply…"
                 autoFocus
-                className="min-w-0 flex-1 rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none focus:border-[#07947f] disabled:bg-[#f7faf8]"
+                className="min-w-0 flex-1 rounded-full border border-[#dce9e3] px-4 py-2.5 text-sm outline-none focus:border-[#07947f] disabled:bg-[#f7faf8]"
               />
               <button
                 onClick={() => void send()}
                 disabled={busy || !input.trim()}
                 aria-label="Send"
-                className="rounded-lg bg-[#07947f] p-2.5 text-white disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#07947f] text-white transition hover:bg-[#066d66] disabled:opacity-50"
               >
                 <Send className="h-4 w-4" />
               </button>
