@@ -1,5 +1,6 @@
 import DoctorWorkspace from "@/components/DoctorWorkspace";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import PuterLoginGate from "@/components/PuterLoginGate";
 
 export const metadata = {
   title: "AI UPCHAR Live Demo — Doctor Workspace",
@@ -9,9 +10,9 @@ export const metadata = {
 export default function DemoPage() {
   return (
     <ErrorBoundary>
-      <DoctorWorkspace />
+      <PuterLoginGate title="Doctor Workspace">
+        <DoctorWorkspace />
+      </PuterLoginGate>
     </ErrorBoundary>
   );
 }
-
-

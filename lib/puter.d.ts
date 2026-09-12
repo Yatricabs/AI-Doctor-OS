@@ -1,5 +1,5 @@
 // Minimal ambient typings for the Puter.js browser SDK (https://js.puter.com/v2/).
-export {};
+export { };
 
 declare global {
   interface PuterChatMessageContentPart {
@@ -38,6 +38,20 @@ declare global {
     delete(path: string): Promise<void>;
   }
 
+  interface PuterUser {
+    uuid?: string;
+    username?: string;
+    email_confirmed?: boolean;
+    [key: string]: unknown;
+  }
+
+  interface PuterAuth {
+    signIn(): Promise<boolean>;
+    signOut(): void;
+    isSignedIn(): boolean;
+    getUser(): Promise<PuterUser>;
+  }
+
   interface PuterAI {
     chat(
       prompt: string | PuterChatMessage[],
@@ -54,6 +68,7 @@ declare global {
   interface Puter {
     ai: PuterAI;
     fs: PuterFS;
+    auth: PuterAuth;
   }
 
   interface Window {

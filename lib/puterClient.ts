@@ -40,6 +40,58 @@ export async function waitForPuter(timeoutMs = 8000): Promise<boolean> {
   });
 }
 
+// ─── Auth (User-Pays) ────────────────────────────────────────────────────────
+// Each end-user signs into their OWN Puter account (their free AI quota). Puter.js
+// persists the session in the browser, so once signed in, AI calls won't prompt
+// again for the life of that session.
+
+export type PuterUserInfo = { username?: string; uuid?: string };
+
+/** True if the current browser already has a signed-in Puter session. */
+export function isPuterSignedIn(): boolean {
+  return typeof window !== "undefined" && Boolean(window.puter?.auth?.isSignedIn?.());
+}
+
+/** Opens Puter's sign-in popup and resolves once the user has signed in. */
+export async function puterSignIn(): Promise<boolean> {
+  const ready = await waitForPuter();
+  if (!ready || !window.puter) throw new PuterUnavailableError();
+  if (window.puter.auth.isSignedIn()) return true;
+  return window.puter.auth.signIn();
+}
+
+/** Signs the current user out of their Puter session in this browser. */
+export function puterSignOut(): void {
+  if (typeof window !== "undefined" && window.puter?.auth?.signOut) {
+    window.puter.auth.signOut();
+  }
+}
+
+/** Basic profile of the signed-in Puter user (username, uuid). */
+export async function getPuterUser(): Promise<PuterUserInfo | null> {
+  const ready = await waitForPuter();
+  if (!ready || !window.puter) return null;
+  if (!window.puter.auth.isSignedIn()) return null;
+  try {
+    const u = await window.puter.auth.getUser();
+    return { username: u?.username, uuid: u?.uuid };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ensures a signed-in Puter session before an AI call. If already signed in
+ * (the normal case after the login gate), this is a no-op and never shows a popup.
+ * Only prompts if the session is somehow missing.
+ */
+export async function ensurePuterAuth(): Promise<boolean> {
+  const ready = await waitForPuter();
+  if (!ready || !window.puter) throw new PuterUnavailableError();
+  if (window.puter.auth.isSignedIn()) return true;
+  return window.puter.auth.signIn();
+}
+
 function extractText(res: PuterChatResponse): string {
   if (typeof res?.message?.content === "string") return res.message.content;
   if (typeof res?.text === "string") return res.text;
@@ -54,6 +106,7 @@ export async function aiChat(
 ): Promise<string> {
   const ready = await waitForPuter();
   if (!ready || !window.puter) throw new PuterUnavailableError();
+  await ensurePuterAuth();
   const res = await window.puter.ai.chat(messages as PuterChatMessage[], {
     model: opts.model ?? MODELS.fast,
     temperature: opts.temperature,
@@ -70,6 +123,7 @@ export async function aiChatStream(
 ): Promise<string> {
   const ready = await waitForPuter();
   if (!ready || !window.puter) throw new PuterUnavailableError();
+  await ensurePuterAuth();
   const res = await window.puter.ai.chat(messages as PuterChatMessage[], {
     model: opts.model ?? MODELS.fast,
     temperature: opts.temperature,
@@ -95,6 +149,7 @@ export async function aiAnalyzeFile(
 ): Promise<string> {
   const ready = await waitForPuter();
   if (!ready || !window.puter) throw new PuterUnavailableError();
+  await ensurePuterAuth();
   const messages: PuterChatMessage[] = [
     {
       role: "user",
@@ -112,6 +167,7 @@ export async function aiAnalyzeFile(
 export async function puterUpload(file: File): Promise<string> {
   const ready = await waitForPuter();
   if (!ready || !window.puter) throw new PuterUnavailableError();
+  await ensurePuterAuth();
   const safe = file.name.replace(/[^\w.-]/g, "_");
   const res = await window.puter.fs.write(`aiupchar_tmp_${Date.now()}_${safe}`, file);
   return res.path;
