@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ScrollReset from "@/components/ScrollReset";
 
@@ -13,16 +13,18 @@ export const metadata: Metadata = {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
   },
-  viewport: {
-    width: "device-width",
-    initialScale: 1.0,
-  },
   openGraph: {
     title: "AI UPCHAR — Intelligent Clinical Workspace",
     description: "Patient context, clinical AI, and doctor-controlled decision making in one workspace",
     type: "website",
     siteName: "AI UPCHAR",
   },
+};
+
+// Next.js 14 requires viewport as its own export, not inside metadata.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1.0,
 };
 
 export default function RootLayout({

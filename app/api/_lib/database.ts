@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
@@ -7,12 +8,25 @@ const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_K
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
 
-const dataDir = path.join(process.cwd(), "data");
+// On serverless platforms (Vercel/AWS Lambda) the working directory is read-only.
+// The only writable location is the OS temp dir (/tmp). Detect that and place the
+// SQLite file there; locally we keep it in the project's data/ folder.
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
+const isBuild = process.env.NEXT_PHASE === "phase-production-build";
+const dataDir = isServerless ? path.join(os.tmpdir(), "ai-upchar-data") : path.join(process.cwd(), "data");
 fs.mkdirSync(dataDir, { recursive: true });
 
-const database = new Database(path.join(dataDir, "ai-upchar.sqlite"));
-database.pragma("journal_mode = WAL");
+// During the production build, Next.js spawns several worker processes that all import
+// this module and seed the DB in parallel — sharing one file causes SQLITE_BUSY. Give
+// each build worker its own file (by PID) so they never contend. At runtime everyone
+// shares the single seeded database as before.
+const dbFileName = isBuild ? `ai-upchar-build-${process.pid}.sqlite` : "ai-upchar.sqlite";
+const database = new Database(path.join(dataDir, dbFileName));
+// WAL mode needs a stable filesystem; on serverless /tmp use the default rollback journal.
+database.pragma(isServerless ? "journal_mode = MEMORY" : "journal_mode = WAL");
 database.pragma("foreign_keys = ON");
+// Wait up to 5s for a lock instead of throwing SQLITE_BUSY when routes run in parallel.
+database.pragma("busy_timeout = 5000");
 
 // ─── SCHEMA ────────────────────────────────────────────────────────────────
 database.exec(`
@@ -781,7 +795,20 @@ const seed = database.transaction(() => {
 });
 
 function datetime() { return new Date().toISOString(); }
-seed();
+// During the Next.js production build, multiple worker processes load this module in
+// parallel and each tries to seed the same SQLite file, causing SQLITE_BUSY. Guard the
+// seed so a lost race with another worker never crashes module import (which would turn
+// every API route into a 500 HTML page at runtime).
+try {
+  seed();
+} catch (err) {
+  const code = (err as { code?: string })?.code;
+  if (code === "SQLITE_BUSY") {
+    console.warn("[db] seed skipped — database busy (another worker is seeding).");
+  } else {
+    console.error("[db] seed error:", err);
+  }
+}
 
 // ─── QUERY HELPERS ──────────────────────────────────────────────────────────
 export function all<T>(table: string): T[] {
@@ -918,8 +945,12 @@ async function syncAllToSupabase() {
   console.log(`[supabase] Full sync complete — ${synced} tables synced, ${failed} failed.`);
 }
 
-// Run full sync on startup (fire-and-forget, non-blocking)
-void syncAllToSupabase();
+// Run full sync on startup (fire-and-forget, non-blocking).
+// Skip during the Next.js production build ("collecting page data" phase) — running it
+// there causes parallel workers to fight over the same SQLite file (SQLITE_BUSY).
+if (process.env.NEXT_PHASE !== "phase-production-build") {
+  void syncAllToSupabase();
+}
 
 // ─── PROFILE HELPERS (preserved API compatibility) ──────────────────────────
 export function getProfileSettings() {
