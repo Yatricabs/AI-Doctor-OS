@@ -1,13 +1,13 @@
-import { error, json, optionalString, patientById, readObject, requiredString } from "../_lib/demo";
+import { error, json, optionalString, patientById, readObject, requiredString, safeRoute } from "../_lib/demo";
 
-export async function POST(request: Request) {
+export const POST = safeRoute(async (request: Request) => {
   const body = await readObject(request);
   if (!body) return error("Request body must be a JSON object.");
   const symptoms = requiredString(body.symptoms, "symptoms", 2000);
   if (!symptoms) return error("symptoms is required.");
   const patientId = body.patientId === undefined ? undefined : requiredString(body.patientId, "patientId", 30);
   if (body.patientId !== undefined && !patientId) return error("patientId must be a non-empty string.");
-  if (patientId && !patientById(patientId)) return error("Patient not found.", 404);
+  if (patientId && !(await patientById(patientId))) return error("Patient not found.", 404);
   const duration = optionalString(body.duration, 100);
   const severity = optionalString(body.severity, 40);
   const associatedSymptoms = optionalString(body.associatedSymptoms, 1000);
@@ -26,4 +26,4 @@ export async function POST(request: Request) {
       disclaimer: "This demo organises information and is not a diagnosis.",
     },
   });
-}
+});

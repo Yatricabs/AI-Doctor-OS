@@ -1,34 +1,36 @@
-import { error, generateId, insert, json, nowIso, query, queryOne, readObject, requiredString, update } from "../_lib/demo";
+import { error, generateId, insert, json, nowIso, query, queryOne, readObject, requiredString, safeRoute, update } from "../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = safeRoute(async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const patientId = searchParams.get("patientId");
   const prescriptionId = searchParams.get("id");
 
   if (prescriptionId) {
-    const rx = queryOne<Record<string, unknown>>("SELECT * FROM prescriptions WHERE id = ?", [prescriptionId]);
+    const rx = await queryOne<Record<string, unknown>>("SELECT * FROM prescriptions WHERE id = ?", [prescriptionId]);
     if (!rx) return error("Prescription not found", 404);
-    const items = query<Record<string, unknown>>("SELECT * FROM prescription_items WHERE prescription_id = ?", [prescriptionId]);
-    const checks = query<Record<string, unknown>>("SELECT * FROM safety_checks WHERE prescription_id = ?", [prescriptionId]);
+    const items = await query<Record<string, unknown>>("SELECT * FROM prescription_items WHERE prescription_id = ?", [prescriptionId]);
+    const checks = await query<Record<string, unknown>>("SELECT * FROM safety_checks WHERE prescription_id = ?", [prescriptionId]);
     return json({ prescription: { ...rx, items, safetyChecks: checks } });
   }
 
   if (patientId) {
-    const rxList = query<Record<string, unknown>>("SELECT * FROM prescriptions WHERE patient_id = ? ORDER BY created_at DESC", [patientId]);
-    const enriched = rxList.map((rx) => ({
-      ...rx,
-      items: query<Record<string, unknown>>("SELECT * FROM prescription_items WHERE prescription_id = ?", [rx.id]),
-      safetyChecks: query<Record<string, unknown>>("SELECT * FROM safety_checks WHERE prescription_id = ?", [rx.id]),
-    }));
+    const rxList = await query<Record<string, unknown>>("SELECT * FROM prescriptions WHERE patient_id = ? ORDER BY created_at DESC", [patientId]);
+    const enriched = await Promise.all(
+      rxList.map(async (rx) => ({
+        ...rx,
+        items: await query<Record<string, unknown>>("SELECT * FROM prescription_items WHERE prescription_id = ?", [rx.id]),
+        safetyChecks: await query<Record<string, unknown>>("SELECT * FROM safety_checks WHERE prescription_id = ?", [rx.id]),
+      }))
+    );
     return json({ prescriptions: enriched });
   }
 
   return error("patientId or id required");
-}
+});
 
-export async function POST(request: Request) {
+export const POST = safeRoute(async (request: Request) => {
   const body = await readObject(request);
   if (!body) return error("Invalid request body");
 
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
   if (action === "create" || !body.action) {
     const patientId = requiredString(body.patientId, "patientId");
     if (!patientId) return error("patientId is required");
-    const patient = queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
+    const patient = await queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
     if (!patient) return error("Patient not found", 404);
 
     const rxId = generateId("rx");
@@ -52,14 +54,14 @@ export async function POST(request: Request) {
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
-    insert("prescriptions", prescription);
+    await insert("prescriptions", prescription);
 
     // Add items
     const itemsRaw = Array.isArray(body.items) ? body.items : [];
-    const items = itemsRaw.map((item: Record<string, unknown>) => {
-      const itemId = generateId("rxi");
+    const items: Record<string, unknown>[] = [];
+    for (const item of itemsRaw as Record<string, unknown>[]) {
       const row = {
-        id: itemId,
+        id: generateId("rxi"),
         prescriptionId: rxId,
         medicationName: String(item.medicationName ?? ""),
         genericName: typeof item.genericName === "string" ? item.genericName : null,
@@ -72,9 +74,9 @@ export async function POST(request: Request) {
         isSubstitutable: item.isSubstitutable !== false ? 1 : 0,
         createdAt: nowIso(),
       };
-      insert("prescription_items", row);
-      return row;
-    });
+      await insert("prescription_items", row);
+      items.push(row);
+    }
 
     return json({ prescription: { ...prescription, items, safetyChecks: [] } }, 201);
   }
@@ -84,13 +86,13 @@ export async function POST(request: Request) {
     const prescriptionId = requiredString(body.prescriptionId, "prescriptionId");
     if (!prescriptionId) return error("prescriptionId is required");
 
-    const rx = queryOne<Record<string, unknown>>("SELECT * FROM prescriptions WHERE id = ?", [prescriptionId]);
+    const rx = await queryOne<Record<string, unknown>>("SELECT * FROM prescriptions WHERE id = ?", [prescriptionId]);
     if (!rx) return error("Prescription not found", 404);
 
-    const items = query<Record<string, unknown>>("SELECT * FROM prescription_items WHERE prescription_id = ?", [prescriptionId]);
-    const allergies = query<Record<string, unknown>>("SELECT * FROM allergies WHERE patient_id = ? AND is_active = 1", [rx.patientId]);
-    const currentMeds = query<Record<string, unknown>>("SELECT * FROM medications WHERE patient_id = ? AND status = 'active'", [rx.patientId]);
-    const interactionDb = query<Record<string, unknown>>("SELECT * FROM drug_interactions_db", []);
+    const items = await query<Record<string, unknown>>("SELECT * FROM prescription_items WHERE prescription_id = ?", [prescriptionId]);
+    const allergies = await query<Record<string, unknown>>("SELECT * FROM allergies WHERE patient_id = ? AND is_active = 1", [rx.patientId]);
+    const currentMeds = await query<Record<string, unknown>>("SELECT * FROM medications WHERE patient_id = ? AND status = 'active'", [rx.patientId]);
+    const interactionDb = await query<Record<string, unknown>>("SELECT * FROM drug_interactions_db");
 
     const checks: Record<string, unknown>[] = [];
 
@@ -100,9 +102,8 @@ export async function POST(request: Request) {
       for (const allergy of allergies) {
         const allergen = String(allergy.allergen ?? "").toLowerCase();
         if (medName.includes(allergen) || allergen.includes(medName.split(" ")[0])) {
-          const checkId = generateId("sc");
           const check = {
-            id: checkId,
+            id: generateId("sc"),
             prescriptionId,
             patientId: String(rx.patientId),
             checkType: "allergy",
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
             isOverridden: 0,
             createdAt: nowIso(),
           };
-          insert("safety_checks", check);
+          await insert("safety_checks", check);
           checks.push(check);
         }
       }
@@ -130,9 +131,8 @@ export async function POST(request: Request) {
           const iDrugB = String(interaction.drugB ?? "").toLowerCase();
           if ((drugA.includes(iDrugA) || iDrugA.includes(drugA.split(" ")[0])) &&
             (drugB.includes(iDrugB) || iDrugB.includes(drugB.split(" ")[0]))) {
-            const checkId = generateId("sc");
             const check = {
-              id: checkId,
+              id: generateId("sc"),
               prescriptionId,
               patientId: String(rx.patientId),
               checkType: "interaction",
@@ -144,7 +144,7 @@ export async function POST(request: Request) {
               isOverridden: 0,
               createdAt: nowIso(),
             };
-            insert("safety_checks", check);
+            await insert("safety_checks", check);
             checks.push(check);
           }
         }
@@ -157,9 +157,8 @@ export async function POST(request: Request) {
       for (const existing of currentMeds) {
         const existingMed = String(existing.name ?? "").toLowerCase();
         if (newMed.includes(existingMed) || existingMed.includes(newMed)) {
-          const checkId = generateId("sc");
           const check = {
-            id: checkId,
+            id: generateId("sc"),
             prescriptionId,
             patientId: String(rx.patientId),
             checkType: "duplication",
@@ -171,7 +170,7 @@ export async function POST(request: Request) {
             isOverridden: 0,
             createdAt: nowIso(),
           };
-          insert("safety_checks", check);
+          await insert("safety_checks", check);
           checks.push(check);
         }
       }
@@ -181,7 +180,7 @@ export async function POST(request: Request) {
     const hasSevere = checks.some((c) => c.severity === "severe");
     const newStatus = hasBlocked ? "needs_review" : "safety_check";
 
-    update("prescriptions", prescriptionId, { status: newStatus, updatedAt: nowIso() });
+    await update("prescriptions", prescriptionId, { status: newStatus, updatedAt: nowIso() });
     return json({
       prescriptionId,
       safetyChecks: checks,
@@ -202,12 +201,12 @@ export async function POST(request: Request) {
   if (action === "sign") {
     const prescriptionId = requiredString(body.prescriptionId, "prescriptionId");
     if (!prescriptionId) return error("prescriptionId is required");
-    const rx = queryOne<Record<string, unknown>>("SELECT * FROM prescriptions WHERE id = ?", [prescriptionId]);
+    const rx = await queryOne<Record<string, unknown>>("SELECT * FROM prescriptions WHERE id = ?", [prescriptionId]);
     if (!rx) return error("Prescription not found", 404);
     if (rx.status === "signed") return error("Prescription is already signed");
 
     // Block if unresolved blocked alerts
-    const blockedChecks = query<Record<string, unknown>>(
+    const blockedChecks = await query<Record<string, unknown>>(
       "SELECT * FROM safety_checks WHERE prescription_id = ? AND severity = 'blocked' AND is_overridden = 0",
       [prescriptionId]
     );
@@ -215,7 +214,7 @@ export async function POST(request: Request) {
       return error(`Cannot sign: ${blockedChecks.length} blocked safety alert(s) must be resolved first.`);
     }
 
-    update("prescriptions", prescriptionId, {
+    await update("prescriptions", prescriptionId, {
       status: "signed",
       signedAt: nowIso(),
       signedBy: "user-doc-001",
@@ -223,9 +222,9 @@ export async function POST(request: Request) {
     });
 
     // Add to patient active medications
-    const items = query<Record<string, unknown>>("SELECT * FROM prescription_items WHERE prescription_id = ?", [prescriptionId]);
+    const items = await query<Record<string, unknown>>("SELECT * FROM prescription_items WHERE prescription_id = ?", [prescriptionId]);
     for (const item of items) {
-      insert("medications", {
+      await insert("medications", {
         id: generateId("med"),
         patientId: rx.patientId,
         name: item.medicationName,
@@ -239,7 +238,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const signed = queryOne<Record<string, unknown>>("SELECT * FROM prescriptions WHERE id = ?", [prescriptionId]);
+    const signed = await queryOne<Record<string, unknown>>("SELECT * FROM prescriptions WHERE id = ?", [prescriptionId]);
     return json({
       prescription: { ...signed, items },
       message: "Prescription signed successfully. Now ready for dispatch.",
@@ -251,11 +250,11 @@ export async function POST(request: Request) {
     const prescriptionId = requiredString(body.prescriptionId, "prescriptionId");
     const channel = requiredString(body.channel, "channel") ?? "whatsapp";
     if (!prescriptionId) return error("prescriptionId is required");
-    const rx = queryOne<Record<string, unknown>>("SELECT * FROM prescriptions WHERE id = ?", [prescriptionId]);
+    const rx = await queryOne<Record<string, unknown>>("SELECT * FROM prescriptions WHERE id = ?", [prescriptionId]);
     if (!rx) return error("Prescription not found", 404);
     if (rx.status !== "signed") return error("Only signed prescriptions can be dispatched");
 
-    update("prescriptions", prescriptionId, {
+    await update("prescriptions", prescriptionId, {
       status: "dispatched",
       dispatchedAt: nowIso(),
       dispatchChannel: channel,
@@ -263,7 +262,7 @@ export async function POST(request: Request) {
     });
 
     // Log a message
-    insert("messages", {
+    await insert("messages", {
       id: generateId("msg"),
       patientId: rx.patientId,
       channel,
@@ -285,7 +284,7 @@ export async function POST(request: Request) {
     const checkId = requiredString(body.checkId, "checkId");
     const reason = requiredString(body.reason, "reason");
     if (!checkId || !reason) return error("checkId and reason are required");
-    update("safety_checks", checkId, {
+    await update("safety_checks", checkId, {
       isOverridden: 1,
       overriddenBy: "user-doc-001",
       overrideReason: reason,
@@ -295,4 +294,4 @@ export async function POST(request: Request) {
   }
 
   return error("Unknown action. Use: create, safety_check, sign, dispatch, override_alert");
-}
+});

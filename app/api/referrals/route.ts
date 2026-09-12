@@ -1,8 +1,8 @@
-import { error, generateId, insert, json, nowIso, query, queryOne, readObject, requiredString, update } from "../_lib/demo";
+import { error, generateId, insert, json, nowIso, query, queryOne, readObject, requiredString, safeRoute, update } from "../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = safeRoute(async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const patientId = searchParams.get("patientId");
   const status = searchParams.get("status");
@@ -14,11 +14,11 @@ export async function GET(request: Request) {
   if (status) { sql += " AND r.status = ?"; params.push(status); }
   sql += " ORDER BY CASE r.urgency WHEN 'emergency' THEN 1 WHEN 'urgent' THEN 2 ELSE 3 END, r.created_at DESC";
 
-  const referrals = query<Record<string, unknown>>(sql, params);
+  const referrals = await query<Record<string, unknown>>(sql, params);
   return json({ referrals, total: referrals.length });
-}
+});
 
-export async function POST(request: Request) {
+export const POST = safeRoute(async (request: Request) => {
   const body = await readObject(request);
   if (!body) return error("Invalid request body");
 
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const reason = requiredString(body.reason, "reason");
     if (!patientId || !specialty || !reason) return error("patientId, referredToSpecialty, and reason are required");
 
-    const patient = queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
+    const patient = await queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
     if (!patient) return error("Patient not found", 404);
 
     // Build referral package
@@ -55,10 +55,10 @@ export async function POST(request: Request) {
       referralPackage: JSON.stringify(context),
       createdAt: nowIso(),
     };
-    insert("referrals", referral);
+    await insert("referrals", referral);
 
     // Create inbox item
-    insert("inbox_items", {
+    await insert("inbox_items", {
       id: generateId("inbox"),
       patientId,
       category: "referral",
@@ -81,10 +81,10 @@ export async function POST(request: Request) {
     const updates: Record<string, unknown> = { status: newStatus };
     if (newStatus === "accepted") updates.acceptedAt = nowIso();
     if (newStatus === "completed") updates.completedAt = nowIso();
-    update("referrals", referralId, updates);
-    const updated = queryOne<Record<string, unknown>>("SELECT * FROM referrals WHERE id = ?", [referralId]);
+    await update("referrals", referralId, updates);
+    const updated = await queryOne<Record<string, unknown>>("SELECT * FROM referrals WHERE id = ?", [referralId]);
     return json({ referral: updated });
   }
 
   return error("Unknown action. Use: create, update_status");
-}
+});

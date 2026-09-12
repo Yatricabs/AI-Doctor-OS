@@ -1,12 +1,12 @@
-import { error, json, readObject, reports, requiredString } from "../../_lib/demo";
+import { error, json, readObject, reportById, requiredString, safeRoute } from "../../_lib/demo";
 
-export async function POST(request: Request) {
+export const POST = safeRoute(async (request: Request) => {
   const body = await readObject(request);
   if (!body) return error("Request body must be a JSON object.");
   const reportId = requiredString(body.reportId, "reportId", 80);
   const title = requiredString(body.title, "title", 160);
   if (!reportId || !title) return error("reportId and title are required.");
-  const report = reports.find((item) => item.id === reportId);
+  const report = await reportById(reportId);
   if (!report) return error("Report not found.", 404);
   return json({
     summary: {
@@ -17,4 +17,4 @@ export async function POST(request: Request) {
       disclaimer: "Demo summary only; confirm against the original document.",
     },
   });
-}
+});

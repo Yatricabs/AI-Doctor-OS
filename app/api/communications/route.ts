@@ -1,8 +1,8 @@
-import { error, generateId, insert, json, nowIso, query, queryOne, readObject, requiredString, update } from "../_lib/demo";
+import { error, generateId, insert, json, nowIso, query, queryOne, readObject, requiredString, safeRoute, update } from "../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = safeRoute(async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const patientId = searchParams.get("patientId");
   const channel = searchParams.get("channel");
@@ -15,11 +15,11 @@ export async function GET(request: Request) {
   if (direction) { sql += " AND direction = ?"; params.push(direction); }
   sql += " ORDER BY created_at DESC LIMIT 50";
 
-  const messages = query<Record<string, unknown>>(sql, params);
+  const messages = await query<Record<string, unknown>>(sql, params);
   return json({ messages, total: messages.length });
-}
+});
 
-export async function POST(request: Request) {
+export const POST = safeRoute(async (request: Request) => {
   const body = await readObject(request);
   if (!body) return error("Invalid request body");
 
@@ -32,12 +32,12 @@ export async function POST(request: Request) {
     const messageType = requiredString(body.messageType, "messageType") ?? "general";
     if (!patientId || !content) return error("patientId and content are required");
 
-    const patient = queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
+    const patient = await queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
     if (!patient) return error("Patient not found", 404);
 
     // Get preferred channel
-    const prefs = queryOne<Record<string, unknown>>("SELECT * FROM communication_preferences WHERE patient_id = ?", [patientId]);
-    const channel = prefs?.preferredChannel ?? body.channel ?? "sms";
+    const prefs = await queryOne<Record<string, unknown>>("SELECT * FROM communication_preferences WHERE patient_id = ?", [patientId]);
+    const channel = (prefs?.preferredChannel as string) ?? (typeof body.channel === "string" ? body.channel : "sms");
 
     const message = {
       id: generateId("msg"),
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       status: "pending_approval",
       createdAt: nowIso(),
     };
-    insert("messages", message);
+    await insert("messages", message);
     return json({ message, note: "Message drafted. Awaiting doctor approval before sending." }, 201);
   }
 
@@ -58,13 +58,13 @@ export async function POST(request: Request) {
   if (action === "approve_send") {
     const messageId = requiredString(body.messageId, "messageId");
     if (!messageId) return error("messageId is required");
-    const msg = queryOne<Record<string, unknown>>("SELECT * FROM messages WHERE id = ?", [messageId]);
+    const msg = await queryOne<Record<string, unknown>>("SELECT * FROM messages WHERE id = ?", [messageId]);
     if (!msg) return error("Message not found", 404);
     if (msg.status !== "pending_approval" && msg.status !== "draft") {
       return error("Only draft or pending messages can be approved");
     }
 
-    update("messages", messageId, {
+    await update("messages", messageId, {
       status: "sent",
       approvedBy: "user-doc-001",
       approvedAt: nowIso(),
@@ -80,8 +80,8 @@ export async function POST(request: Request) {
     const appointmentId = requiredString(body.appointmentId, "appointmentId");
     if (!patientId || !appointmentId) return error("patientId and appointmentId are required");
 
-    const patient = queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
-    const appt = queryOne<Record<string, unknown>>("SELECT * FROM appointments WHERE id = ?", [appointmentId]);
+    const patient = await queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
+    const appt = await queryOne<Record<string, unknown>>("SELECT * FROM appointments WHERE id = ?", [appointmentId]);
     if (!patient || !appt) return error("Patient or appointment not found", 404);
 
     const content = `Dear ${patient.name}, your appointment is scheduled for ${appt.appointmentDate} at ${appt.appointmentTime}. Please arrive 10 minutes early. For questions, call your clinic.`;
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
       deliveryStatus: "delivered",
       createdAt: nowIso(),
     };
-    insert("messages", msg);
+    await insert("messages", msg);
     return json({ message: msg, note: "Appointment reminder sent." }, 201);
   }
 
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     const prescriptionId = requiredString(body.prescriptionId, "prescriptionId");
     if (!patientId || !prescriptionId) return error("patientId and prescriptionId are required");
 
-    const items = query<Record<string, unknown>>("SELECT * FROM prescription_items WHERE prescription_id = ?", [prescriptionId]);
+    const items = await query<Record<string, unknown>>("SELECT * FROM prescription_items WHERE prescription_id = ?", [prescriptionId]);
     const instructions = items.map((i) => `${i.medicationName} ${i.dose} — ${i.frequency}. ${i.instructions ?? ""}`).join("\n");
     const content = `Your prescription from Dr. Ananya Arya:\n\n${instructions}\n\nPlease take as prescribed. Contact the clinic if you experience any side effects.`;
 
@@ -128,9 +128,9 @@ export async function POST(request: Request) {
       sentAt: nowIso(),
       createdAt: nowIso(),
     };
-    insert("messages", msg);
+    await insert("messages", msg);
     return json({ message: msg, note: "Prescription instructions sent to patient." }, 201);
   }
 
   return error("Unknown action. Use: draft, approve_send, appointment_reminder, prescription_instructions");
-}
+});

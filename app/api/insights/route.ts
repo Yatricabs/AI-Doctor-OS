@@ -1,20 +1,20 @@
-import { error, insights, json, persistInsight, requiredString, readObject } from "../_lib/demo";
+import { error, insightById, json, listInsights, nowIso, persistInsight, requiredString, readObject, safeRoute } from "../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
-export function GET() {
-  return json({ insights: insights.filter((insight) => insight.status === "open") });
-}
+export const GET = safeRoute(async () => {
+  const insights = await listInsights(true);
+  return json({ insights });
+});
 
-export async function POST(request: Request) {
+export const POST = safeRoute(async (request: Request) => {
   const body = await readObject(request);
   if (!body) return error("Request body must be a JSON object.");
   const insightId = requiredString(body.insightId, "insightId", 80);
   if (!insightId) return error("insightId is required.");
-  const insight = insights.find((item) => item.id === insightId);
+  const insight = await insightById(insightId);
   if (!insight) return error("Insight not found.", 404);
-  insight.status = "reviewed";
-  insight.reviewedAt = new Date().toISOString();
-  persistInsight(insightId, { status: insight.status, reviewedAt: insight.reviewedAt });
-  return json({ insight });
-}
+  const reviewedAt = nowIso();
+  await persistInsight(insightId, { status: "reviewed", reviewedAt });
+  return json({ insight: { ...insight, status: "reviewed", reviewedAt } });
+});

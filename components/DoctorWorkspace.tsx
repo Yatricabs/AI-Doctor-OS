@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import PreVisitBrief from "./workspace/PreVisitBrief";
 import PrescriptionBuilder from "./workspace/PrescriptionBuilder";
+import { aiChat, aiChatStream, PuterUnavailableError } from "@/lib/puterAI";
+import { buildCopilotMessages, buildSymptomMessages, buildScribeMessages, parseSoapDraft, type PatientBrief } from "@/lib/medicalPrompts";
 
 type Patient = { id: string; name: string; initials: string; appointment: string; status: string };
 type Report = { id: string; patientId: string; title: string; type: string; date: string; status: string };
@@ -160,17 +162,36 @@ export default function DoctorWorkspace() {
     }
     setSymptomLoading(true);
     setServiceError("");
+    setSymptomResult("");
     try {
-      const { analysis } = await apiRequest<{ analysis: { duration: string; severity: string; associatedSymptoms: string; medicines: string; questions: string[]; triage: string; redFlags: string } }>("/api/symptom-analysis", {
-        method: "POST",
-        body: JSON.stringify({ symptoms: input, patientId: selectedPatientId }),
-      });
-      setSymptomResult(`Duration: ${analysis.duration} · Severity: ${analysis.severity}\n${analysis.associatedSymptoms} · Medicines: ${analysis.medicines}\n\nFollow-up: ${analysis.questions.join(" ")}\n\nTriage: ${analysis.triage}. ${analysis.redFlags}`);
-    } catch (error: unknown) {
-      setServiceError(error instanceof Error ? error.message : "Symptom analysis failed.");
+      // Primary path: real AI triage support via Puter.js, streamed live.
+      await aiChatStream(
+        buildSymptomMessages({ symptoms: input }, currentPatientBrief()),
+        (_delta, full) => setSymptomResult(full)
+      );
+    } catch (aiError: unknown) {
+      if (aiError instanceof PuterUnavailableError) {
+        try {
+          const { analysis } = await apiRequest<{ analysis: { duration: string; severity: string; associatedSymptoms: string; medicines: string; questions: string[]; triage: string; redFlags: string } }>("/api/symptom-analysis", {
+            method: "POST",
+            body: JSON.stringify({ symptoms: input, patientId: selectedPatientId }),
+          });
+          setSymptomResult(`Duration: ${analysis.duration} · Severity: ${analysis.severity}\n${analysis.associatedSymptoms} · Medicines: ${analysis.medicines}\n\nFollow-up: ${analysis.questions.join(" ")}\n\nTriage: ${analysis.triage}. ${analysis.redFlags}`);
+        } catch (apiError: unknown) {
+          setServiceError(apiError instanceof Error ? apiError.message : "Symptom analysis failed.");
+        }
+      } else {
+        setServiceError(aiError instanceof Error ? aiError.message : "Symptom analysis failed.");
+      }
     } finally {
       setSymptomLoading(false);
     }
+  }
+
+  // Brief patient context for grounding AI prompts (client already has this data).
+  function currentPatientBrief(): PatientBrief {
+    const p = patients.find((item) => item.id === selectedPatientId);
+    return p ? { name: p.name, status: p.status, appointment: p.appointment } : {};
   }
 
   async function askCopilot() {
@@ -180,11 +201,29 @@ export default function DoctorWorkspace() {
     }
     setCopilotLoading(true);
     setServiceError("");
+    setCopilotResult("");
     try {
-      const { response } = await apiRequest<{ response: string }>("/api/copilot", { method: "POST", body: JSON.stringify({ question, patientId: selectedPatientId }) });
-      setCopilotResult(response);
-    } catch (error: unknown) {
-      setServiceError(error instanceof Error ? error.message : "Copilot request failed.");
+      // Primary path: real AI in the browser via Puter.js, streamed live.
+      await aiChatStream(
+        buildCopilotMessages(question, currentPatientBrief()),
+        (_delta, full) => setCopilotResult(full)
+      );
+    } catch (aiError: unknown) {
+      // Graceful fallback: if Puter.js isn't available, use the structured API stub
+      // so the workflow still works.
+      if (aiError instanceof PuterUnavailableError) {
+        try {
+          const { response } = await apiRequest<{ response: string }>("/api/copilot", {
+            method: "POST",
+            body: JSON.stringify({ question, patientId: selectedPatientId }),
+          });
+          setCopilotResult(response);
+        } catch (apiError: unknown) {
+          setServiceError(apiError instanceof Error ? apiError.message : "Copilot request failed.");
+        }
+      } else {
+        setServiceError(aiError instanceof Error ? aiError.message : "Copilot request failed.");
+      }
     } finally {
       setCopilotLoading(false);
     }
@@ -246,14 +285,14 @@ export default function DoctorWorkspace() {
       <div className="ml-[78px] md:ml-[292px]">
         <header className="border-b border-[#e4ebe7] bg-[#fbfdfc]"><div className="mx-auto flex h-[64px] max-w-[1440px] items-center gap-3 px-3 sm:gap-5 sm:px-5 md:px-10"><Link href="/" className="hidden shrink-0 text-[17px] font-bold tracking-[-0.04em] sm:flex">AI UPCHAR</Link><div className="relative flex max-w-[430px] flex-1"><Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8da09b]" /><input value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") navigate("Patients"); }} aria-label="Search patients or records" placeholder="Search patients or records" className="h-10 w-full bg-transparent pl-10 pr-4 text-sm outline-none placeholder:text-[#94a39f]" /></div><div className="ml-auto flex items-center gap-3"><button onClick={() => setLanguage(language === "हिन्दी" ? "English" : "हिन्दी")} aria-label="Change language" className="flex items-center gap-2 rounded-lg border border-[#e4ebe7] px-2.5 py-2 text-xs font-semibold text-[#54716d] hover:bg-[#f0f6f3]"><Languages className="h-4 w-4" /><span className="hidden sm:inline">{language}</span></button><span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#164642] text-xs font-bold text-white">DA</span></div></div></header>
         {serviceError && <div role="alert" className="mx-auto mt-4 flex max-w-[1280px] items-center justify-between gap-3 rounded-xl border border-[#efc7c0] bg-[#fff5f2] px-4 py-3 text-sm text-[#a45649] md:mx-10"><span>{serviceError}</span><button onClick={() => setServiceError("")} aria-label="Dismiss error"><X className="h-4 w-4" /></button></div>}
-        {activeNav === "Overview" ? <Overview summaryStats={summaryStats} sessionStarted={sessionStarted} toggleSession={toggleSession} recording={recording} navigate={navigate} symptoms={symptoms} setSymptoms={setSymptoms} checkSymptoms={checkSymptoms} symptomResult={symptomResult} symptomLoading={symptomLoading} question={question} setQuestion={setQuestion} askCopilot={askCopilot} copilotResult={copilotResult} copilotLoading={copilotLoading} fileInput={fileInput} handleFile={handleFile} uploadedFile={uploadedFile} uploadedReportId={uploadedReportId} summarizeDocument={summarizeDocument} documentSummary={documentSummary} /> : <WorkspaceScreen activeNav={activeNav} navigate={navigate} selectedPatientId={selectedPatientId} setSelectedPatientId={setSelectedPatientId} patients={patients} loadPatients={loadPatients} recording={recording} recordingMode={recordingMode} recordingSeconds={recordingSeconds} startRecording={startRecording} stopRecording={stopRecording} globalSearch={globalSearch} /> }
+        {activeNav === "Overview" ? <Overview summaryStats={summaryStats} sessionStarted={sessionStarted} toggleSession={toggleSession} recording={recording} navigate={navigate} symptoms={symptoms} setSymptoms={setSymptoms} checkSymptoms={checkSymptoms} symptomResult={symptomResult} symptomLoading={symptomLoading} question={question} setQuestion={setQuestion} askCopilot={askCopilot} copilotResult={copilotResult} copilotLoading={copilotLoading} fileInput={fileInput} handleFile={handleFile} uploadedFile={uploadedFile} uploadedReportId={uploadedReportId} summarizeDocument={summarizeDocument} documentSummary={documentSummary} /> : <WorkspaceScreen activeNav={activeNav} navigate={navigate} selectedPatientId={selectedPatientId} setSelectedPatientId={setSelectedPatientId} patients={patients} loadPatients={loadPatients} recording={recording} recordingMode={recordingMode} recordingSeconds={recordingSeconds} startRecording={startRecording} stopRecording={stopRecording} globalSearch={globalSearch} />}
       </div>
     </main>
   );
 }
 
 function Overview({ summaryStats, sessionStarted, toggleSession, recording, navigate, symptoms, setSymptoms, checkSymptoms, symptomResult, symptomLoading, question, setQuestion, askCopilot, copilotResult, copilotLoading, fileInput, handleFile, uploadedFile, uploadedReportId, summarizeDocument, documentSummary }: {
-  summaryStats: typeof stats; sessionStarted: boolean; toggleSession: () => void; recording: boolean; navigate: (nav: string) => void; symptoms: string; setSymptoms: (value: string) => void; checkSymptoms: () => void; symptomResult: string; symptomLoading: boolean; question: string; setQuestion: (value: string) => void; askCopilot: () => void; copilotResult: string; copilotLoading: boolean;   fileInput: RefObject<HTMLInputElement>; handleFile: (event: ChangeEvent<HTMLInputElement>) => void; uploadedFile: string; uploadedReportId: string; summarizeDocument: () => void; documentSummary: string;
+  summaryStats: typeof stats; sessionStarted: boolean; toggleSession: () => void; recording: boolean; navigate: (nav: string) => void; symptoms: string; setSymptoms: (value: string) => void; checkSymptoms: () => void; symptomResult: string; symptomLoading: boolean; question: string; setQuestion: (value: string) => void; askCopilot: () => void; copilotResult: string; copilotLoading: boolean; fileInput: RefObject<HTMLInputElement>; handleFile: (event: ChangeEvent<HTMLInputElement>) => void; uploadedFile: string; uploadedReportId: string; summarizeDocument: () => void; documentSummary: string;
 }) {
   return <div className="mx-auto max-w-[1280px] overflow-hidden px-4 pb-12 pt-6 sm:px-5 md:px-10 md:pt-8">
     <section className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end"><div><p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#78908a]">Live clinic <span className="mx-2 text-[#0b9c87]">•</span> Tuesday, 24 June 2025</p><h1 className="mt-3 text-[28px] font-bold tracking-[-0.05em] text-[#173f3c] sm:text-3xl md:text-[40px]">Good morning, Dr. Arya</h1><p className="mt-2 text-sm text-[#78908a]">Here&apos;s what&apos;s happening in your clinic today.</p></div><button onClick={toggleSession} className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#07947f] px-5 py-3 text-sm font-bold text-white lg:w-fit">{sessionStarted ? <Check className="h-4 w-4" /> : <Mic className="h-4 w-4" />}{sessionStarted ? "Session active · Stop" : "Start new session"}<ArrowUpRight className="h-4 w-4" /></button></section>
@@ -340,15 +379,41 @@ function WorkspaceScreen({ activeNav, navigate, selectedPatientId, setSelectedPa
     } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Patient could not be added."); }
   }
 
+  // Brief patient context for grounding AI prompts (WorkspaceScreen scope).
+  function currentPatientBrief(): PatientBrief {
+    const p = patients.find((item) => item.id === selectedPatientId);
+    return p ? { name: p.name, status: p.status, appointment: p.appointment } : {};
+  }
+
   async function generateNote() {
     const content = transcript.trim() || (recordingMode ? "Patient reports intermittent headache and fatigue for two days. No emergency warning signs reported." : "");
     if (!content) { setErrorText("Record a consultation or enter a transcript first."); return; }
     setLoading(true);
     try {
+      // Persist a note record first so it has an ID and can be saved/approved later.
       const { note: created } = await apiRequest<{ note: Note }>("/api/scribe", { method: "POST", body: JSON.stringify({ transcript: content, patientId: selectedPatientId }) });
-      setNote(created);
       setTranscript(content);
-      setNotice("SOAP draft generated. Review and edit every field before saving.");
+
+      // Draft the SOAP fields with real AI (Puter.js) when available.
+      try {
+        const raw = await aiChat(buildScribeMessages(content, currentPatientBrief()));
+        const soap = parseSoapDraft(raw);
+        if (soap) {
+          setNote({ ...created, ...soap });
+          setNotice("AI SOAP draft generated. Review and edit every field before saving.");
+        } else {
+          // Model returned unparseable output — keep the persisted stub draft.
+          setNote(created);
+          setNotice("SOAP draft generated. Review and edit every field before saving.");
+        }
+      } catch (aiError: unknown) {
+        // Puter unavailable — the persisted stub note still lets the workflow continue.
+        setNote(created);
+        if (!(aiError instanceof PuterUnavailableError)) {
+          setErrorText(aiError instanceof Error ? aiError.message : "AI drafting failed; using template draft.");
+        }
+        setNotice("SOAP draft generated. Review and edit every field before saving.");
+      }
     } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Scribe generation failed."); } finally { setLoading(false); }
   }
 
@@ -364,10 +429,23 @@ function WorkspaceScreen({ activeNav, navigate, selectedPatientId, setSelectedPa
 
   async function runSymptomCheck() {
     if (!symptoms.trim()) { setErrorText("Enter symptoms before checking."); return; }
+    setSymptomResult("");
     try {
-      const { analysis } = await apiRequest<{ analysis: { questions: string[]; triage: string; redFlags: string; duration: string; severity: string } }>("/api/symptom-analysis", { method: "POST", body: JSON.stringify({ symptoms, patientId: selectedPatientId, duration, severity, associatedSymptoms, medicines }) });
-      setSymptomResult(`Duration: ${analysis.duration} · Severity: ${analysis.severity}\nFollow-up: ${analysis.questions.join(" ")}\nTriage: ${analysis.triage}. ${analysis.redFlags}`);
-    } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Symptom analysis failed."); }
+      // Primary path: real AI triage support via Puter.js, streamed live.
+      await aiChatStream(
+        buildSymptomMessages({ symptoms, duration, severity, associatedSymptoms, medicines }, currentPatientBrief()),
+        (_delta, full) => setSymptomResult(full)
+      );
+    } catch (aiError: unknown) {
+      if (aiError instanceof PuterUnavailableError) {
+        try {
+          const { analysis } = await apiRequest<{ analysis: { questions: string[]; triage: string; redFlags: string; duration: string; severity: string } }>("/api/symptom-analysis", { method: "POST", body: JSON.stringify({ symptoms, patientId: selectedPatientId, duration, severity, associatedSymptoms, medicines }) });
+          setSymptomResult(`Duration: ${analysis.duration} · Severity: ${analysis.severity}\nFollow-up: ${analysis.questions.join(" ")}\nTriage: ${analysis.triage}. ${analysis.redFlags}`);
+        } catch (apiError: unknown) { setErrorText(apiError instanceof Error ? apiError.message : "Symptom analysis failed."); }
+      } else {
+        setErrorText(aiError instanceof Error ? aiError.message : "Symptom analysis failed.");
+      }
+    }
   }
 
   async function reviewInsight(id: string) {

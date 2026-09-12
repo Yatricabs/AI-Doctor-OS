@@ -1,7 +1,8 @@
-import { json, workspaceSummary } from "../../_lib/demo";
+import { getWorkspaceSummary, json, safeRoute } from "../../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
-export function GET() {
-  return json({ summary: workspaceSummary });
-}
+export const GET = safeRoute(async () => {
+  const summary = await getWorkspaceSummary();
+  return json({ summary });
+});

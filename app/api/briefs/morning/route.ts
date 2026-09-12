@@ -1,9 +1,9 @@
-import { getMorningBrief, json, query, queryOne } from "../../../api/_lib/demo";
+import { getMorningBrief, json, query, queryOne, safeRoute } from "../../../api/_lib/demo";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const brief = getMorningBrief();
+export const GET = safeRoute(async () => {
+  const brief = await getMorningBrief();
   const today = new Date().toISOString().slice(0, 10);
 
   // Enrich metrics into a dashboard-friendly format
@@ -24,8 +24,8 @@ export async function GET() {
     ...brief.overdueFollowUps.filter((f) => f.priority === "urgent"),
   ];
 
-  const queueSummary = query<Record<string, unknown>>(
-    "SELECT COUNT(*) as n, status FROM queue_entries WHERE clinic_id = 'clinic-001' AND DATE(created_at) = ? GROUP BY status",
+  const queueSummary = await query<Record<string, unknown>>(
+    "SELECT COUNT(*) as n, status FROM queue_entries WHERE clinic_id = 'clinic-001' AND created_at::date = ?::date GROUP BY status",
     [today]
   );
 
@@ -34,7 +34,7 @@ export async function GET() {
   );
 
   const nextPatient = nextAppointment
-    ? queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [nextAppointment.patientId])
+    ? await queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [nextAppointment.patientId])
     : null;
 
   const summary = brief.overdueFollowUps.length > 0
@@ -61,4 +61,4 @@ export async function GET() {
     clinicalBrief: `${summary}${urgentSummary}${notesSummary}`,
     metrics: metricMap,
   });
-}
+});

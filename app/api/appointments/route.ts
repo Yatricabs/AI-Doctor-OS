@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   if (status) { sql += " AND a.status = ?"; params.push(status); }
   sql += " ORDER BY a.appointment_date ASC, a.appointment_time ASC";
 
-  const appointments = query<Record<string, unknown>>(sql, params);
+  const appointments = await query<Record<string, unknown>>(sql, params);
   return json({ appointments, total: appointments.length });
 }
 
@@ -36,11 +36,11 @@ export async function POST(request: Request) {
   if (!appointmentTime) return error("appointmentTime is required");
 
   // Check patient exists
-  const patient = queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
+  const patient = await queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
   if (!patient) return error("Patient not found", 404);
 
   // Check slot availability (simple check — no overlap)
-  const clash = queryOne<Record<string, unknown>>(
+  const clash = await queryOne<Record<string, unknown>>(
     "SELECT * FROM appointments WHERE doctor_id = ? AND appointment_date = ? AND appointment_time = ? AND status NOT IN ('cancelled','no_show')",
     [body.doctorId ?? "user-doc-001", appointmentDate, appointmentTime]
   );
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     updatedAt: nowIso(),
   };
 
-  insert("appointments", appointment);
+  await insert("appointments", appointment);
   return json({ appointment, patient }, 201);
 }
 
@@ -75,7 +75,7 @@ export async function PATCH(request: Request) {
   const appointmentId = requiredString(body.appointmentId, "appointmentId");
   if (!appointmentId) return error("appointmentId is required");
 
-  const existing = queryOne<Record<string, unknown>>("SELECT * FROM appointments WHERE id = ?", [appointmentId]);
+  const existing = await queryOne<Record<string, unknown>>("SELECT * FROM appointments WHERE id = ?", [appointmentId]);
   if (!existing) return error("Appointment not found", 404);
 
   const updates: Record<string, unknown> = { updatedAt: nowIso() };
@@ -85,7 +85,7 @@ export async function PATCH(request: Request) {
   if (typeof body.reason === "string") updates.reason = body.reason;
   if (typeof body.notes === "string") updates.notes = body.notes;
 
-  update("appointments", appointmentId, updates);
-  const updated = queryOne<Record<string, unknown>>("SELECT * FROM appointments WHERE id = ?", [appointmentId]);
+  await update("appointments", appointmentId, updates);
+  const updated = await queryOne<Record<string, unknown>>("SELECT * FROM appointments WHERE id = ?", [appointmentId]);
   return json({ appointment: updated });
 }

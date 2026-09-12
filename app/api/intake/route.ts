@@ -1,4 +1,4 @@
-import { error, generateId, insert, json, nowIso, query, queryOne, readObject, requiredString, update } from "../_lib/demo";
+import { error, generateId, insert, json, nowIso, query, queryOne, readObject, requiredString, safeRoute, update } from "../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
@@ -42,15 +42,15 @@ function getQuestionsForVisitType(visitType: string) {
   return INTAKE_QUESTIONS[visitType] ?? INTAKE_QUESTIONS.new_complaint;
 }
 
-export async function GET(request: Request) {
+export const GET = safeRoute(async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const sessionId = searchParams.get("sessionId");
   const patientId = searchParams.get("patientId");
 
   if (sessionId) {
-    const session = queryOne<Record<string, unknown>>("SELECT * FROM intake_sessions WHERE id = ?", [sessionId]);
+    const session = await queryOne<Record<string, unknown>>("SELECT * FROM intake_sessions WHERE id = ?", [sessionId]);
     if (!session) return error("Intake session not found", 404);
-    const responses = query<Record<string, unknown>>("SELECT * FROM intake_responses WHERE intake_session_id = ? ORDER BY created_at ASC", [sessionId]);
+    const responses = await query<Record<string, unknown>>("SELECT * FROM intake_responses WHERE intake_session_id = ? ORDER BY created_at ASC", [sessionId]);
     const questions = getQuestionsForVisitType(String(session.visitType ?? "new_complaint"));
     const answeredKeys = responses.map((r) => r.questionKey);
     const nextQuestion = questions.find((q) => !answeredKeys.includes(q.key));
@@ -59,14 +59,14 @@ export async function GET(request: Request) {
   }
 
   if (patientId) {
-    const sessions = query<Record<string, unknown>>("SELECT * FROM intake_sessions WHERE patient_id = ? ORDER BY created_at DESC LIMIT 5", [patientId]);
+    const sessions = await query<Record<string, unknown>>("SELECT * FROM intake_sessions WHERE patient_id = ? ORDER BY created_at DESC LIMIT 5", [patientId]);
     return json({ sessions });
   }
 
   return error("sessionId or patientId required");
-}
+});
 
-export async function POST(request: Request) {
+export const POST = safeRoute(async (request: Request) => {
   const body = await readObject(request);
   if (!body) return error("Invalid request body");
 
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
-    insert("intake_sessions", session);
+    await insert("intake_sessions", session);
     return json({ session, firstQuestion: questions[0], totalQuestions: questions.length }, 201);
   }
 
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
     const responseValue = requiredString(body.responseValue, "responseValue");
     if (!sessionId || !questionKey || !responseValue) return error("sessionId, questionKey, and responseValue are required");
 
-    const session = queryOne<Record<string, unknown>>("SELECT * FROM intake_sessions WHERE id = ?", [sessionId]);
+    const session = await queryOne<Record<string, unknown>>("SELECT * FROM intake_sessions WHERE id = ?", [sessionId]);
     if (!session) return error("Intake session not found", 404);
 
     const questions = getQuestionsForVisitType(String(session.visitType ?? "new_complaint"));
@@ -110,14 +110,14 @@ export async function POST(request: Request) {
     if (!question) return error("Question not found for this intake session");
 
     // Check if already answered — update if so
-    const existing = queryOne<Record<string, unknown>>(
+    const existing = await queryOne<Record<string, unknown>>(
       "SELECT * FROM intake_responses WHERE intake_session_id = ? AND question_key = ?",
       [sessionId, questionKey]
     );
     if (existing) {
-      query("UPDATE intake_responses SET response_value = ? WHERE id = ?", [responseValue, existing.id]);
+      await query("UPDATE intake_responses SET response_value = ? WHERE id = ?", [responseValue, existing.id]);
     } else {
-      insert("intake_responses", {
+      await insert("intake_responses", {
         id: generateId("ir"),
         intakeSessionId: sessionId,
         questionKey,
@@ -129,13 +129,13 @@ export async function POST(request: Request) {
     }
 
     // Determine next question
-    const responses = query<Record<string, unknown>>("SELECT * FROM intake_responses WHERE intake_session_id = ?", [sessionId]);
+    const responses = await query<Record<string, unknown>>("SELECT * FROM intake_responses WHERE intake_session_id = ?", [sessionId]);
     const answeredKeys = responses.map((r) => r.questionKey);
     const nextQuestion = questions.find((q) => !answeredKeys.includes(q.key));
     const newStep = responses.length;
     const isComplete = !nextQuestion;
 
-    update("intake_sessions", sessionId, {
+    await update("intake_sessions", sessionId, {
       currentStep: newStep,
       status: isComplete ? "completed" : "in_progress",
       completedAt: isComplete ? nowIso() : null,
@@ -144,7 +144,7 @@ export async function POST(request: Request) {
 
     // If completed, update appointment status
     if (isComplete && session.appointmentId) {
-      update("appointments", String(session.appointmentId), { status: "intake_complete", updatedAt: nowIso() });
+      await update("appointments", String(session.appointmentId), { status: "intake_complete", updatedAt: nowIso() });
     }
 
     const progress = Math.round((newStep / questions.length) * 100);
@@ -157,7 +157,7 @@ export async function POST(request: Request) {
     const questionKey = requiredString(body.questionKey, "questionKey");
     if (!sessionId || !questionKey) return error("sessionId and questionKey are required");
 
-    insert("intake_responses", {
+    await insert("intake_responses", {
       id: generateId("ir"),
       intakeSessionId: sessionId,
       questionKey,
@@ -167,15 +167,15 @@ export async function POST(request: Request) {
       createdAt: nowIso(),
     });
 
-    const session = queryOne<Record<string, unknown>>("SELECT * FROM intake_sessions WHERE id = ?", [sessionId]);
+    const session = await queryOne<Record<string, unknown>>("SELECT * FROM intake_sessions WHERE id = ?", [sessionId]);
     const questions = getQuestionsForVisitType(String(session?.visitType ?? "new_complaint"));
-    const responses = query<Record<string, unknown>>("SELECT * FROM intake_responses WHERE intake_session_id = ?", [sessionId]);
+    const responses = await query<Record<string, unknown>>("SELECT * FROM intake_responses WHERE intake_session_id = ?", [sessionId]);
     const answeredKeys = responses.map((r) => r.questionKey);
     const nextQuestion = questions.find((q) => !answeredKeys.includes(q.key));
-    update("intake_sessions", sessionId, { currentStep: responses.length, updatedAt: nowIso() });
+    await update("intake_sessions", sessionId, { currentStep: responses.length, updatedAt: nowIso() });
 
     return json({ nextQuestion: nextQuestion ?? null, skipped: questionKey });
   }
 
   return error("Unknown action. Use: start, answer, skip");
-}
+});

@@ -15,7 +15,7 @@ export async function GET(request: Request) {
       ? "SELECT * FROM pre_visit_briefs WHERE patient_id = ? AND visit_id = ? ORDER BY created_at DESC LIMIT 1"
       : "SELECT * FROM pre_visit_briefs WHERE patient_id = ? ORDER BY created_at DESC LIMIT 1";
     const params = visitId ? [patientId, visitId] : [patientId];
-    const brief = queryOne<Record<string, unknown>>(sql, params);
+    const brief = await queryOne<Record<string, unknown>>(sql, params);
 
     if (brief) {
       // Parse JSON fields
@@ -28,12 +28,12 @@ export async function GET(request: Request) {
       };
 
       // Enrich with patient context
-      const context = getPatientContext(patientId);
+      const context = await getPatientContext(patientId);
       return json({ brief: parsed, context });
     }
 
     // Generate a fresh brief from patient data
-    const context = getPatientContext(patientId);
+    const context = await getPatientContext(patientId);
     if (!context) return error("Patient not found", 404);
 
     const { patient, medications, allergies, conditions, followUps } = context;
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
     const medicationSummary = `Active medications: ${medList}.`;
 
     // Get last visit for "what changed"
-    const lastVisit = queryOne<Record<string, unknown>>(
+    const lastVisit = await queryOne<Record<string, unknown>>(
       "SELECT * FROM visits WHERE patient_id = ? AND status = 'completed' ORDER BY created_at DESC LIMIT 1",
       [patientId]
     );
@@ -80,12 +80,12 @@ export async function GET(request: Request) {
       ? `Patient returning since last visit. Review any new reports and medication changes.`
       : `New patient — no prior visit history in system.`;
 
-    const appointment = queryOne<Record<string, unknown>>(
+    const appointment = await queryOne<Record<string, unknown>>(
       "SELECT * FROM appointments WHERE patient_id = ? AND status IN ('confirmed','checked_in') ORDER BY appointment_date ASC, appointment_time ASC LIMIT 1",
       [patientId]
     );
 
-    const queueEntry = queryOne<Record<string, unknown>>(
+    const queueEntry = await queryOne<Record<string, unknown>>(
       "SELECT * FROM queue_entries WHERE patient_id = ? AND status IN ('waiting','called','in_consultation') ORDER BY created_at DESC LIMIT 1",
       [patientId]
     );
@@ -94,13 +94,13 @@ export async function GET(request: Request) {
       : "Not yet in queue";
 
     const aiConsiderations = generateAiConsiderations(conditions, medications, allergies);
-    const intakeSession = queryOne<Record<string, unknown>>(
+    const intakeSession = await queryOne<Record<string, unknown>>(
       "SELECT * FROM intake_sessions WHERE patient_id = ? AND status = 'completed' ORDER BY created_at DESC LIMIT 1",
       [patientId]
     );
     const patientQuestions: string[] = [];
     if (intakeSession) {
-      const qs = query<Record<string, unknown>>(
+      const qs = await query<Record<string, unknown>>(
         "SELECT * FROM intake_responses WHERE intake_session_id = ? AND question_key IN ('questions','chief_complaint','how_are_you')",
         [String(intakeSession.id)]
       );
@@ -128,7 +128,7 @@ export async function GET(request: Request) {
       reviewStatus: "generated",
       createdAt: nowIso(),
     };
-    insert("pre_visit_briefs", newBrief);
+    await insert("pre_visit_briefs", newBrief);
 
     return json({
       brief: {
@@ -158,8 +158,8 @@ export async function POST(request: Request) {
       const briefId = requiredString(body.briefId, "briefId");
       const reviewStatus = requiredString(body.reviewStatus, "reviewStatus");
       if (!briefId || !reviewStatus) return error("briefId and reviewStatus required");
-      update("pre_visit_briefs", briefId, { reviewStatus, reviewedBy: "user-doc-001", reviewedAt: nowIso() });
-      const brief = queryOne<Record<string, unknown>>("SELECT * FROM pre_visit_briefs WHERE id = ?", [briefId]);
+      await update("pre_visit_briefs", briefId, { reviewStatus, reviewedBy: "user-doc-001", reviewedAt: nowIso() });
+      const brief = await queryOne<Record<string, unknown>>("SELECT * FROM pre_visit_briefs WHERE id = ?", [briefId]);
       return json({ brief });
     }
 

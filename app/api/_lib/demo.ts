@@ -1,5 +1,22 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared types, data accessors, and HTTP response helpers for the API layer.
+//
+// Previously this module exposed synchronous Proxy-backed "collections" (patients,
+// reports, ...) because better-sqlite3 was synchronous. Postgres access is async, so
+// those are now explicit async accessor functions. Types and response helpers are
+// unchanged so route contracts stay identical.
+// ─────────────────────────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
-import { all, getProfileSettings, insert, saveProfileSettings, update, query, queryOne, remove } from "./database";
+import {
+  all,
+  getProfileSettings as dbGetProfileSettings,
+  insert,
+  query,
+  queryOne,
+  remove,
+  saveProfileSettings as dbSaveProfileSettings,
+  update,
+} from "./database";
 
 // ─── ORIGINAL TYPES (preserved) ─────────────────────────────────────────────
 export type Patient = {
@@ -73,11 +90,11 @@ export type ProfileSettings = {
 
 export type WorkspaceSummary = {
   stats: { label: string; value: string; detail: string }[];
-  nextPatient: Patient;
+  nextPatient: Patient | null;
   clinicalBrief: string;
 };
 
-// ─── NEW TYPES (v2.0) ────────────────────────────────────────────────────────
+// ─── v2.0 TYPES ──────────────────────────────────────────────────────────────
 export type User = {
   id: string;
   email: string;
@@ -171,6 +188,14 @@ export type Vitals = {
   recordedAt: string;
 };
 
+export type AttentionSignal = {
+  type: string;
+  title: string;
+  detail: string;
+  severity: "high" | "medium" | "low";
+  source?: string;
+};
+
 export type PreVisitBrief = {
   id: string;
   visitId: string;
@@ -191,14 +216,6 @@ export type PreVisitBrief = {
   reviewedBy?: string;
   reviewedAt?: string;
   createdAt: string;
-};
-
-export type AttentionSignal = {
-  type: string;
-  title: string;
-  detail: string;
-  severity: "high" | "medium" | "low";
-  source?: string;
 };
 
 export type Medication = {
@@ -239,23 +256,6 @@ export type Condition = {
   createdAt: string;
 };
 
-export type Prescription = {
-  id: string;
-  patientId: string;
-  visitId?: string;
-  doctorId?: string;
-  status: "draft" | "safety_check" | "needs_review" | "approved" | "signed" | "dispatched" | "revoked";
-  signedAt?: string;
-  signedBy?: string;
-  dispatchedAt?: string;
-  dispatchChannel?: string;
-  notes?: string;
-  items?: PrescriptionItem[];
-  safetyChecks?: SafetyCheck[];
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type PrescriptionItem = {
   id: string;
   prescriptionId: string;
@@ -286,6 +286,23 @@ export type SafetyCheck = {
   overrideReason?: string;
   overriddenAt?: string;
   createdAt: string;
+};
+
+export type Prescription = {
+  id: string;
+  patientId: string;
+  visitId?: string;
+  doctorId?: string;
+  status: "draft" | "safety_check" | "needs_review" | "approved" | "signed" | "dispatched" | "revoked";
+  signedAt?: string;
+  signedBy?: string;
+  dispatchedAt?: string;
+  dispatchChannel?: string;
+  notes?: string;
+  items?: PrescriptionItem[];
+  safetyChecks?: SafetyCheck[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type FollowUp = {
@@ -394,79 +411,98 @@ export type WorkflowMetric = {
   createdAt: string;
 };
 
-// ─── PROXY COLLECTIONS (preserved pattern) ───────────────────────────────────
-export const patients = new Proxy([] as Patient[], {
-  get: (_, prop) => {
-    const values = all<Patient>("patients");
-    if (prop === "push") return (...items: Patient[]) => { items.forEach((item) => insert("patients", item as unknown as Record<string, unknown>)); return values.length + items.length; };
-    if (prop === "length") return values.length;
-    if (prop === "filter") return (fn: (item: Patient) => boolean) => values.filter(fn);
-    if (prop === "find") return (fn: (item: Patient) => boolean) => values.find(fn);
-    if (typeof prop === "string" && /^\d+$/.test(prop)) return values[Number(prop)];
-    return (values as unknown as Record<PropertyKey, unknown>)[prop];
-  },
-});
-
-export const reports = new Proxy([] as Report[], {
-  get: (_, prop) => {
-    const values = all<Report>("reports");
-    if (prop === "push") return (...items: Report[]) => { items.forEach((item) => insert("reports", item as unknown as Record<string, unknown>)); return values.length + items.length; };
-    if (prop === "length") return values.length;
-    if (prop === "filter") return (fn: (item: Report) => boolean) => values.filter(fn);
-    if (prop === "find") return (fn: (item: Report) => boolean) => values.find(fn);
-    return (values as unknown as Record<PropertyKey, unknown>)[prop];
-  },
-});
-
-export const scribeNotes = new Proxy([] as ScribeNote[], {
-  get: (_, prop) => {
-    const values = all<ScribeNote>("scribe_notes");
-    if (prop === "push") return (...items: ScribeNote[]) => { items.forEach((item) => insert("scribe_notes", item as unknown as Record<string, unknown>)); return values.length + items.length; };
-    if (prop === "filter") return (fn: (item: ScribeNote) => boolean) => values.filter(fn);
-    if (prop === "find") return (fn: (item: ScribeNote) => boolean) => values.find(fn);
-    if (prop === "length") return values.length;
-    return (values as unknown as Record<PropertyKey, unknown>)[prop];
-  },
-});
-
-export const insights = new Proxy([] as Insight[], {
-  get: (_, prop) => {
-    const values = all<Insight>("insights");
-    if (prop === "filter") return (fn: (item: Insight) => boolean) => values.filter(fn);
-    if (prop === "find") return (fn: (item: Insight) => boolean) => values.find(fn);
-    return (values as unknown as Record<PropertyKey, unknown>)[prop];
-  },
-});
-
-export const profileSettings = getProfileSettings();
-
-// ─── PERSIST HELPERS ────────────────────────────────────────────────────────
-export function persistInsight(id: string, values: Partial<Insight>) {
-  update("insights", id, values as unknown as Record<string, unknown>);
-}
-export function persistScribeNote(id: string, values: Partial<ScribeNote>) {
-  update("scribe_notes", id, values as unknown as Record<string, unknown>);
-}
-export function persistProfileSettings() { saveProfileSettings(profileSettings); }
-
-// ─── QUERY HELPERS ───────────────────────────────────────────────────────────
-export function patientById(id: string) {
-  return patients.find((p) => p.id === id);
+// ─── PATIENTS ────────────────────────────────────────────────────────────────
+export async function listPatients(): Promise<Patient[]> {
+  return query<Patient>("SELECT * FROM patients ORDER BY created_at ASC, id ASC");
 }
 
-export function getPatientContext(patientId: string) {
-  const patient = patientById(patientId);
+export async function patientById(id: string): Promise<Patient | null> {
+  return queryOne<Patient>("SELECT * FROM patients WHERE id = ?", [id]);
+}
+
+export async function addPatient(patient: Patient): Promise<void> {
+  await insert("patients", patient as unknown as Record<string, unknown>);
+}
+
+// ─── REPORTS ─────────────────────────────────────────────────────────────────
+export async function listReports(patientId?: string): Promise<Report[]> {
+  return patientId
+    ? query<Report>("SELECT * FROM reports WHERE patient_id = ? ORDER BY date DESC", [patientId])
+    : query<Report>("SELECT * FROM reports ORDER BY date DESC");
+}
+
+export async function reportById(id: string): Promise<Report | null> {
+  return queryOne<Report>("SELECT * FROM reports WHERE id = ?", [id]);
+}
+
+export async function addReport(report: Report): Promise<void> {
+  await insert("reports", report as unknown as Record<string, unknown>);
+}
+
+// ─── SCRIBE NOTES ────────────────────────────────────────────────────────────
+export async function listScribeNotes(patientId?: string): Promise<ScribeNote[]> {
+  return patientId
+    ? query<ScribeNote>("SELECT * FROM scribe_notes WHERE patient_id = ? ORDER BY updated_at DESC", [patientId])
+    : query<ScribeNote>("SELECT * FROM scribe_notes ORDER BY updated_at DESC");
+}
+
+export async function scribeNoteById(id: string): Promise<ScribeNote | null> {
+  return queryOne<ScribeNote>("SELECT * FROM scribe_notes WHERE id = ?", [id]);
+}
+
+export async function addScribeNote(note: ScribeNote): Promise<void> {
+  await insert("scribe_notes", note as unknown as Record<string, unknown>);
+}
+
+export async function persistScribeNote(id: string, values: Partial<ScribeNote>): Promise<void> {
+  await update("scribe_notes", id, values as unknown as Record<string, unknown>);
+}
+
+// ─── INSIGHTS ────────────────────────────────────────────────────────────────
+export async function listInsights(openOnly = false): Promise<Insight[]> {
+  return openOnly
+    ? query<Insight>("SELECT * FROM insights WHERE status = 'open' ORDER BY id ASC")
+    : query<Insight>("SELECT * FROM insights ORDER BY id ASC");
+}
+
+export async function insightById(id: string): Promise<Insight | null> {
+  return queryOne<Insight>("SELECT * FROM insights WHERE id = ?", [id]);
+}
+
+export async function persistInsight(id: string, values: Partial<Insight>): Promise<void> {
+  await update("insights", id, values as unknown as Record<string, unknown>);
+}
+
+// ─── PROFILE SETTINGS ────────────────────────────────────────────────────────
+export async function getProfileSettings(): Promise<ProfileSettings> {
+  return dbGetProfileSettings();
+}
+
+export async function saveProfile(settings: ProfileSettings): Promise<void> {
+  await dbSaveProfileSettings(settings);
+}
+
+// ─── AGGREGATE VIEWS ─────────────────────────────────────────────────────────
+export async function getPatientContext(patientId: string) {
+  const patient = await patientById(patientId);
   if (!patient) return null;
-  const meds = query<Medication>("SELECT * FROM medications WHERE patient_id = ? AND status = 'active'", [patientId]);
-  const allergies = query<Allergy>("SELECT * FROM allergies WHERE patient_id = ? AND is_active = 1", [patientId]);
-  const conditions = query<Condition>("SELECT * FROM conditions WHERE patient_id = ? AND status = 'active'", [patientId]);
-  const patientReports = query<Report>("SELECT * FROM reports WHERE patient_id = ? ORDER BY date DESC LIMIT 5", [patientId]);
-  const followUps = query<FollowUp>("SELECT * FROM follow_ups WHERE patient_id = ? AND status = 'pending' ORDER BY due_date ASC LIMIT 5", [patientId]);
-  return { patient, medications: meds, allergies, conditions, reports: patientReports, followUps };
+
+  const [medications, allergies, conditions, patientReports, followUps] = await Promise.all([
+    query<Medication>("SELECT * FROM medications WHERE patient_id = ? AND status = 'active'", [patientId]),
+    query<Allergy>("SELECT * FROM allergies WHERE patient_id = ? AND is_active = 1", [patientId]),
+    query<Condition>("SELECT * FROM conditions WHERE patient_id = ? AND status = 'active'", [patientId]),
+    query<Report>("SELECT * FROM reports WHERE patient_id = ? ORDER BY date DESC LIMIT 5", [patientId]),
+    query<FollowUp>(
+      "SELECT * FROM follow_ups WHERE patient_id = ? AND status = 'pending' ORDER BY due_date ASC LIMIT 5",
+      [patientId]
+    ),
+  ]);
+
+  return { patient, medications, allergies, conditions, reports: patientReports, followUps };
 }
 
-export function getQueueStatus(clinicId = "clinic-001") {
-  const entries = query<QueueEntry>(
+export async function getQueueStatus(clinicId = "clinic-001") {
+  const entries = await query<QueueEntry & { patientName?: string; patientInitials?: string }>(
     `SELECT q.*, p.name as patient_name, p.initials as patient_initials
      FROM queue_entries q JOIN patients p ON q.patient_id = p.id
      WHERE q.clinic_id = ? AND q.status IN ('waiting','called','in_consultation')
@@ -478,34 +514,71 @@ export function getQueueStatus(clinicId = "clinic-001") {
   return { entries, waiting, urgent, total: entries.length };
 }
 
-export function getMorningBrief() {
+export async function getMorningBrief() {
   const today = new Date().toISOString().slice(0, 10);
-  const appointments = query<Appointment>("SELECT * FROM appointments WHERE appointment_date = ? ORDER BY appointment_time ASC", [today]);
-  const pendingInbox = query<InboxItem>("SELECT * FROM inbox_items WHERE status = 'open' ORDER BY priority DESC, created_at DESC LIMIT 10", []);
-  const overdueFollowUps = query<FollowUp>("SELECT * FROM follow_ups WHERE status = 'pending' AND due_date <= ? ORDER BY priority DESC", [today]);
-  const metrics = query<WorkflowMetric>("SELECT * FROM workflow_metrics WHERE metric_date = ?", [today]);
-  const pendingNotes = query<ScribeNote>("SELECT * FROM scribe_notes WHERE status = 'draft'", []);
+  const [appointments, pendingInbox, overdueFollowUps, metrics, pendingNotes] = await Promise.all([
+    query<Appointment>("SELECT * FROM appointments WHERE appointment_date = ? ORDER BY appointment_time ASC", [today]),
+    query<InboxItem>("SELECT * FROM inbox_items WHERE status = 'open' ORDER BY priority DESC, created_at DESC LIMIT 10"),
+    query<FollowUp>("SELECT * FROM follow_ups WHERE status = 'pending' AND due_date <= ? ORDER BY priority DESC", [today]),
+    query<WorkflowMetric>("SELECT * FROM workflow_metrics WHERE metric_date = ?", [today]),
+    query<ScribeNote>("SELECT * FROM scribe_notes WHERE status = 'draft'"),
+  ]);
   return { appointments, pendingInbox, overdueFollowUps, metrics, pendingNotes, date: today };
 }
 
-export function getInboxItems() {
+export async function getInboxItems(): Promise<InboxItem[]> {
   return query<InboxItem>(
-    "SELECT * FROM inbox_items WHERE status = 'open' ORDER BY CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, created_at DESC",
-    []
+    `SELECT * FROM inbox_items WHERE status = 'open'
+     ORDER BY CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+              created_at DESC`
   );
 }
 
-// ─── WORKSPACE SUMMARY (preserved) ───────────────────────────────────────────
-export const workspaceSummary: WorkspaceSummary = {
-  stats: [
-    { label: "Patients today", value: "12", detail: "↗ 18% vs last Tuesday" },
-    { label: "Notes completed", value: "08", detail: "↗ 24% this week" },
-    { label: "Time saved", value: "2h 14m", detail: "AI-assisted documentation" },
-    { label: "Next appointment", value: "10:30 AM", detail: "Rohan Mehta · Follow-up" },
-  ],
-  nextPatient: patients[0],
-  clinicalBrief: "Three follow-ups need review. One report has a new source-linked insight.",
-};
+export async function getWorkspaceSummary(): Promise<WorkspaceSummary> {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [patientCount, notesApproved, nextAppt, openInsights, draftNotes] = await Promise.all([
+    queryOne<{ n: number }>("SELECT COUNT(*)::int AS n FROM appointments WHERE appointment_date = ?", [today]),
+    queryOne<{ n: number }>("SELECT COUNT(*)::int AS n FROM scribe_notes WHERE status = 'approved'"),
+    queryOne<Appointment & { patientName?: string }>(
+      `SELECT a.*, p.name as patient_name FROM appointments a JOIN patients p ON a.patient_id = p.id
+       WHERE a.status IN ('confirmed','checked_in','in_queue')
+       ORDER BY a.appointment_date ASC, a.appointment_time ASC LIMIT 1`
+    ),
+    queryOne<{ n: number }>("SELECT COUNT(*)::int AS n FROM insights WHERE status = 'open'"),
+    queryOne<{ n: number }>("SELECT COUNT(*)::int AS n FROM scribe_notes WHERE status = 'draft'"),
+  ]);
+
+  const nextPatient = nextAppt ? await patientById(nextAppt.patientId) : null;
+
+  const stats = [
+    {
+      label: "Patients today",
+      value: String(patientCount?.n ?? 0).padStart(2, "0"),
+      detail: "Scheduled for today's clinic",
+    },
+    {
+      label: "Notes completed",
+      value: String(notesApproved?.n ?? 0).padStart(2, "0"),
+      detail: `${draftNotes?.n ?? 0} still in draft`,
+    },
+    {
+      label: "Open insights",
+      value: String(openInsights?.n ?? 0).padStart(2, "0"),
+      detail: "Awaiting clinician review",
+    },
+    {
+      label: "Next appointment",
+      value: nextAppt?.appointmentTime ?? "—",
+      detail: nextPatient ? `${nextPatient.name} · ${String(nextAppt?.visitType ?? "").replace(/_/g, " ")}` : "Nothing scheduled",
+    },
+  ];
+
+  const clinicalBrief =
+    `${openInsights?.n ?? 0} insight(s) need review. ${draftNotes?.n ?? 0} note(s) awaiting approval.`;
+
+  return { stats, nextPatient, clinicalBrief };
+}
 
 // ─── RESPONSE HELPERS (preserved) ────────────────────────────────────────────
 export function json<T>(data: T, status = 200) {
@@ -520,7 +593,9 @@ export async function readObject(request: Request): Promise<Record<string, unkno
   try {
     const value: unknown = await request.json();
     return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export function requiredString(value: unknown, field: string, maxLength = 200): string | null {
@@ -540,5 +615,24 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
-// Re-export database primitives
-export { query, queryOne, insert, update, remove };
+/**
+ * Wraps a route handler so any thrown error becomes a JSON error response.
+ * Without this, an exception makes Next.js return an HTML error page, and the
+ * browser fails with "Unexpected token '<'" when parsing it as JSON.
+ */
+export function safeRoute<A extends unknown[]>(
+  handler: (...args: A) => Promise<Response>
+): (...args: A) => Promise<Response> {
+  return async (...args: A) => {
+    try {
+      return await handler(...args);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[api] unhandled route error:", err);
+      return error(`Server error: ${message}`, 500);
+    }
+  };
+}
+
+// Re-export database primitives so routes can keep importing them from here.
+export { all, query, queryOne, insert, update, remove };
