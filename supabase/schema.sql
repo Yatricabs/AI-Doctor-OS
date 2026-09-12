@@ -543,3 +543,47 @@
     metadata TEXT DEFAULT '{}',
     created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
   );
+
+  -- ── INVENTORY (medicine / test / scan) ───────────────────────────────────
+  CREATE TABLE IF NOT EXISTS inventory_items (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'medicine',
+    unit TEXT DEFAULT 'unit',
+    price DOUBLE PRECISION NOT NULL DEFAULT 0,
+    stock_qty INTEGER NOT NULL DEFAULT 0,
+    low_stock_threshold INTEGER NOT NULL DEFAULT 10,
+    tracks_stock INTEGER NOT NULL DEFAULT 1,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')),
+    updated_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+  );
+
+  -- ── BILLING ──────────────────────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS bills (
+    id TEXT PRIMARY KEY,
+    patient_id TEXT NOT NULL,
+    appointment_id TEXT,
+    visit_id TEXT,
+    doctor_id TEXT,
+    clinic_id TEXT,
+    status TEXT NOT NULL DEFAULT 'paid',
+    subtotal DOUBLE PRECISION NOT NULL DEFAULT 0,
+    total DOUBLE PRECISION NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'INR',
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')),
+    updated_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+  );
+
+  CREATE TABLE IF NOT EXISTS bill_items (
+    id TEXT PRIMARY KEY,
+    bill_id TEXT NOT NULL,
+    inventory_item_id TEXT,
+    item_type TEXT NOT NULL DEFAULT 'medicine',
+    description TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    unit_price DOUBLE PRECISION NOT NULL DEFAULT 0,
+    amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+  );

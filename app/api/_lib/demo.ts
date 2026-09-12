@@ -413,6 +413,53 @@ export type WorkflowMetric = {
   createdAt: string;
 };
 
+export type InventoryCategory = "medicine" | "test" | "scan";
+
+export type InventoryItem = {
+  id: string;
+  name: string;
+  category: InventoryCategory;
+  unit?: string;
+  price: number;
+  stockQty: number;
+  lowStockThreshold: number;
+  tracksStock: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BillItemType = "appointment" | "medicine" | "test" | "scan";
+
+export type BillItem = {
+  id: string;
+  billId: string;
+  inventoryItemId?: string;
+  itemType: BillItemType;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  createdAt: string;
+};
+
+export type Bill = {
+  id: string;
+  patientId: string;
+  appointmentId?: string;
+  visitId?: string;
+  doctorId?: string;
+  clinicId?: string;
+  status: "paid" | "unpaid" | "partial";
+  subtotal: number;
+  total: number;
+  currency: string;
+  notes?: string;
+  items?: BillItem[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 // ─── PATIENTS ────────────────────────────────────────────────────────────────
 export async function listPatients(): Promise<Patient[]> {
   return query<Patient>("SELECT * FROM patients ORDER BY created_at ASC, id ASC");
