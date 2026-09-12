@@ -78,7 +78,7 @@ export default function BookAppointmentPage() {
         {/* Step 1: Visit Type */}
         {step === "type" && (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-[#1f3a37]">What's the reason for your visit?</h2>
+            <h2 className="text-xl font-bold text-[#1f3a37]">What&apos;s the reason for your visit?</h2>
             <div className="grid gap-3">
               {visitTypes.map((type) => (
                 <button
@@ -200,7 +200,7 @@ export default function BookAppointmentPage() {
             </div>
 
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-              <p className="text-sm text-emerald-800">✓ Your appointment is confirmed. You'll receive a WhatsApp message with further instructions.</p>
+              <p className="text-sm text-emerald-800">✓ Your appointment is confirmed. You&apos;ll receive a WhatsApp message with further instructions.</p>
             </div>
 
             <div className="flex gap-3">

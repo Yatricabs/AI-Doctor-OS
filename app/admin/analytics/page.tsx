@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Activity, AlertTriangle, BarChart2, CheckCircle2, Clock, FileText, MessageSquare, RefreshCw, Stethoscope, TrendingUp, Users } from "lucide-react";
 
 type Analytics = {
@@ -29,7 +29,7 @@ export default function AnalyticsPage() {
   const [error, setError] = useState("");
   const [range, setRange] = useState("today");
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
       const res = await fetch(`/api/analytics?range=${range}`);
@@ -38,9 +38,9 @@ export default function AnalyticsPage() {
       else setError("Could not load analytics.");
     } catch { setError("Network error."); }
     finally { setLoading(false); }
-  }
+  }, [range]);
 
-  useEffect(() => { void load(); }, [range]);
+  useEffect(() => { void load(); }, [range, load]);
 
   const d = data;
 

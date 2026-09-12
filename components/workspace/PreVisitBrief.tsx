@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Brain, CheckCircle2, ChevronDown, ChevronUp, Info, Loader2, RefreshCw, Shield, Sparkles } from "lucide-react";
 
 type AttentionSignal = { type: string; title: string; detail: string; severity: string };
@@ -40,7 +40,7 @@ export default function PreVisitBrief({ patientId }: { patientId: string }) {
   const [expanded, setExpanded] = useState(true);
   const [reviewing, setReviewing] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
       const res = await fetch(`/api/pre-visit?patientId=${patientId}`);
@@ -49,7 +49,7 @@ export default function PreVisitBrief({ patientId }: { patientId: string }) {
       else setError(payload.error?.message ?? "Could not load brief.");
     } catch { setError("Network error loading pre-visit brief."); }
     finally { setLoading(false); }
-  }
+  }, [patientId]);
 
   async function markReviewed() {
     if (!brief) return;
@@ -67,7 +67,7 @@ export default function PreVisitBrief({ patientId }: { patientId: string }) {
 
   useEffect(() => { 
     if (patientId) void load(); 
-  }, [patientId]);
+  }, [patientId, load]);
 
   if (loading) return (
     <div className="flex items-center gap-2 rounded-xl bg-[#edf7f2] p-4 text-sm text-[#5a967e]">
