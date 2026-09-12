@@ -527,30 +527,44 @@ Approved Instructions Dispatch → Follow-up Scheduling → Task Tracking
 
 ## 📊 CURRENT STATUS
 
-**Implementation Progress: 15%**
+**Implementation Progress: ~65%** (UI + demo backend complete; real integrations pending)
 
-- ✅ Basic doctor workspace UI
-- ✅ Demo-level AI features
-- ✅ Marketing pages
-- ✅ SQLite foundation
-- ❌ Patient access system
-- ❌ Queue management
-- ❌ Pre-visit intelligence
-- ❌ Safety gates
-- ❌ Care continuity
-- ❌ Communication system
-- ❌ Authentication/authorization
-- ❌ Analytics
+### ✅ Done
+- ✅ Marketing pages (7 pages, fully responsive)
+- ✅ Doctor workspace UI + demo AI features
+- ✅ SQLite foundation (35+ tables) + Supabase sync
+- ✅ Patient access system (portal, booking, intake)
+- ✅ Queue management (engine + priority + UI)
+- ✅ Pre-visit intelligence (brief generation + attention signals)
+- ✅ Safety gates (prescription builder with allergy/interaction checks)
+- ✅ Care continuity (follow-ups, referrals, orders, AI inbox)
+- ✅ Communication system (dispatch simulation, message queue)
+- ✅ Analytics dashboard
+- ✅ 23 API endpoints with consistent response envelope
+- ✅ Error boundaries + SEO metadata + favicon
+
+### ❌ Pending (Production Blockers)
+- ❌ Authentication/authorization (no real auth yet)
+- ❌ Real AI integration (Copilot/scribe/symptom are mock)
+- ❌ Multi-tenant isolation
+- ❌ Active audit logging
+- ❌ Real WhatsApp/SMS/email dispatch (simulated)
+- ❌ Document upload + OCR
+- ❌ Test suite
 
 **Next Immediate Actions:**
-1. Set up proper authentication
-2. Implement patient identity system
-3. Build appointment booking
-4. Create queue engine
-5. Develop pre-visit intelligence
+1. Set up proper authentication (NextAuth / Supabase Auth with roles)
+2. Connect real AI (Gemini) to copilot/scribe/symptom routes
+3. Implement document upload (Supabase Storage + extraction)
+4. Wire real messaging (WhatsApp Business API / Twilio)
+5. Add audit logging for all clinical actions
+6. Set up testing (Vitest + Playwright)
+
+> **Detailed status:** See `PROJECT_STATUS.md` for the full breakdown of what's done,
+> what remains, and the reasoning behind each key decision.
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** 2026-09-11  
+**Document Version:** 2.0  
+**Last Updated:** 2026-09-12  
 **Maintainer:** AI UPCHAR Product Team
