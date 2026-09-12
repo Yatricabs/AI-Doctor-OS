@@ -32,6 +32,8 @@ import {
 import PreVisitBrief from "./workspace/PreVisitBrief";
 import PrescriptionBuilder from "./workspace/PrescriptionBuilder";
 import AIResponse from "./workspace/AIResponse";
+import { aiChat, aiChatStream, MODELS, PuterUnavailableError } from "@/lib/puterClient";
+import { buildCopilotMessages, buildSymptomMessages, buildScribeMessages, parseSoapDraft, type PatientBrief } from "@/lib/clientPrompts";
 
 type Patient = { id: string; name: string; initials: string; appointment: string; status: string };
 type Report = { id: string; patientId: string; title: string; type: string; date: string; status: string };
@@ -163,22 +165,39 @@ export default function DoctorWorkspace() {
     setServiceError("");
     setSymptomResult("");
     try {
-      // AI now runs server-side; the route returns { text } (real AI) or { analysis } (stub).
-      const data = await apiRequest<{ text?: string; analysis?: { duration: string; severity: string; associatedSymptoms: string; medicines: string; questions: string[]; triage: string; redFlags: string } }>("/api/symptom-analysis", {
-        method: "POST",
-        body: JSON.stringify({ symptoms: input, patientId: selectedPatientId }),
-      });
-      if (data.text) {
-        setSymptomResult(data.text);
-      } else if (data.analysis) {
-        const a = data.analysis;
-        setSymptomResult(`Duration: ${a.duration} · Severity: ${a.severity}\n${a.associatedSymptoms} · Medicines: ${a.medicines}\n\nFollow-up: ${a.questions.join(" ")}\n\nTriage: ${a.triage}. ${a.redFlags}`);
+      // Free AI in the browser via Puter.js (streamed). Server stub is the fallback.
+      await aiChatStream(
+        buildSymptomMessages({ symptoms: input }, currentPatientBrief()),
+        (full) => setSymptomResult(full),
+        { model: MODELS.fast, temperature: 0.4 }
+      );
+    } catch (aiErr: unknown) {
+      if (aiErr instanceof PuterUnavailableError) {
+        try {
+          const data = await apiRequest<{ text?: string; analysis?: { duration: string; severity: string; associatedSymptoms: string; medicines: string; questions: string[]; triage: string; redFlags: string } }>("/api/symptom-analysis", {
+            method: "POST",
+            body: JSON.stringify({ symptoms: input, patientId: selectedPatientId }),
+          });
+          if (data.text) setSymptomResult(data.text);
+          else if (data.analysis) {
+            const a = data.analysis;
+            setSymptomResult(`Duration: ${a.duration} · Severity: ${a.severity}\n${a.associatedSymptoms} · Medicines: ${a.medicines}\n\nFollow-up: ${a.questions.join(" ")}\n\nTriage: ${a.triage}. ${a.redFlags}`);
+          }
+        } catch (apiErr: unknown) {
+          setServiceError(apiErr instanceof Error ? apiErr.message : "Symptom analysis failed.");
+        }
+      } else {
+        setServiceError(aiErr instanceof Error ? aiErr.message : "Symptom analysis failed.");
       }
-    } catch (err: unknown) {
-      setServiceError(err instanceof Error ? err.message : "Symptom analysis failed.");
     } finally {
       setSymptomLoading(false);
     }
+  }
+
+  // Brief patient context for grounding AI prompts (DoctorWorkspace scope).
+  function currentPatientBrief(): PatientBrief {
+    const p = patients.find((item) => item.id === selectedPatientId);
+    return p ? { name: p.name, status: p.status, appointment: p.appointment } : {};
   }
 
   async function askCopilot() {
@@ -190,14 +209,26 @@ export default function DoctorWorkspace() {
     setServiceError("");
     setCopilotResult("");
     try {
-      // AI runs server-side now; the route returns the real (or stub) response text.
-      const { response } = await apiRequest<{ response: string }>("/api/copilot", {
-        method: "POST",
-        body: JSON.stringify({ question, patientId: selectedPatientId }),
-      });
-      setCopilotResult(response);
-    } catch (err: unknown) {
-      setServiceError(err instanceof Error ? err.message : "Copilot request failed.");
+      // Free AI in the browser via Puter.js (streamed). Server stub is the fallback.
+      await aiChatStream(
+        buildCopilotMessages(question, currentPatientBrief()),
+        (full) => setCopilotResult(full),
+        { model: MODELS.reasoning, temperature: 0.4 }
+      );
+    } catch (aiErr: unknown) {
+      if (aiErr instanceof PuterUnavailableError) {
+        try {
+          const { response } = await apiRequest<{ response: string }>("/api/copilot", {
+            method: "POST",
+            body: JSON.stringify({ question, patientId: selectedPatientId }),
+          });
+          setCopilotResult(response);
+        } catch (apiErr: unknown) {
+          setServiceError(apiErr instanceof Error ? apiErr.message : "Copilot request failed.");
+        }
+      } else {
+        setServiceError(aiErr instanceof Error ? aiErr.message : "Copilot request failed.");
+      }
     } finally {
       setCopilotLoading(false);
     }
@@ -353,15 +384,29 @@ function WorkspaceScreen({ activeNav, navigate, selectedPatientId, setSelectedPa
     } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Patient could not be added."); }
   }
 
+  // Brief patient context for grounding AI prompts (WorkspaceScreen scope).
+  function currentPatientBrief(): PatientBrief {
+    const p = patients.find((item) => item.id === selectedPatientId);
+    return p ? { name: p.name, status: p.status, appointment: p.appointment } : {};
+  }
+
   async function generateNote() {
     const content = transcript.trim() || (recordingMode ? "Patient reports intermittent headache and fatigue for two days. No emergency warning signs reported." : "");
     if (!content) { setErrorText("Record a consultation or enter a transcript first."); return; }
     setLoading(true);
     try {
-      // The scribe route drafts the SOAP note server-side (real AI when configured) and persists it.
+      // Persist a note first so it has an ID for save/approve later.
       const { note: created } = await apiRequest<{ note: Note }>("/api/scribe", { method: "POST", body: JSON.stringify({ transcript: content, patientId: selectedPatientId }) });
       setTranscript(content);
-      setNote(created);
+      // Draft the SOAP fields with free browser AI when available.
+      try {
+        const raw = await aiChat(buildScribeMessages(content, currentPatientBrief()), { model: MODELS.reasoning, temperature: 0.3, maxTokens: 900 });
+        const soap = parseSoapDraft(raw);
+        setNote(soap ? { ...created, ...soap } : created);
+      } catch (aiErr: unknown) {
+        setNote(created); // Puter unavailable — keep the persisted template draft.
+        if (!(aiErr instanceof PuterUnavailableError)) setErrorText(aiErr instanceof Error ? aiErr.message : "AI drafting failed; using template.");
+      }
       setNotice("SOAP draft generated. Review and edit every field before saving.");
     } catch (error: unknown) { setErrorText(error instanceof Error ? error.message : "Scribe generation failed."); } finally { setLoading(false); }
   }
@@ -380,16 +425,25 @@ function WorkspaceScreen({ activeNav, navigate, selectedPatientId, setSelectedPa
     if (!symptoms.trim()) { setErrorText("Enter symptoms before checking."); return; }
     setSymptomResult("");
     try {
-      // AI runs server-side; route returns { text } (real AI) or { analysis } (stub).
-      const data = await apiRequest<{ text?: string; analysis?: { questions: string[]; triage: string; redFlags: string; duration: string; severity: string } }>("/api/symptom-analysis", { method: "POST", body: JSON.stringify({ symptoms, patientId: selectedPatientId, duration, severity, associatedSymptoms, medicines }) });
-      if (data.text) {
-        setSymptomResult(data.text);
-      } else if (data.analysis) {
-        const a = data.analysis;
-        setSymptomResult(`Duration: ${a.duration} · Severity: ${a.severity}\nFollow-up: ${a.questions.join(" ")}\nTriage: ${a.triage}. ${a.redFlags}`);
+      // Free browser AI (streamed). Server stub is the fallback.
+      await aiChatStream(
+        buildSymptomMessages({ symptoms, duration, severity, associatedSymptoms, medicines }, currentPatientBrief()),
+        (full) => setSymptomResult(full),
+        { model: MODELS.fast, temperature: 0.4 }
+      );
+    } catch (aiErr: unknown) {
+      if (aiErr instanceof PuterUnavailableError) {
+        try {
+          const data = await apiRequest<{ text?: string; analysis?: { questions: string[]; triage: string; redFlags: string; duration: string; severity: string } }>("/api/symptom-analysis", { method: "POST", body: JSON.stringify({ symptoms, patientId: selectedPatientId, duration, severity, associatedSymptoms, medicines }) });
+          if (data.text) setSymptomResult(data.text);
+          else if (data.analysis) {
+            const a = data.analysis;
+            setSymptomResult(`Duration: ${a.duration} · Severity: ${a.severity}\nFollow-up: ${a.questions.join(" ")}\nTriage: ${a.triage}. ${a.redFlags}`);
+          }
+        } catch (apiErr: unknown) { setErrorText(apiErr instanceof Error ? apiErr.message : "Symptom analysis failed."); }
+      } else {
+        setErrorText(aiErr instanceof Error ? aiErr.message : "Symptom analysis failed.");
       }
-    } catch (err: unknown) {
-      setErrorText(err instanceof Error ? err.message : "Symptom analysis failed.");
     }
   }
 

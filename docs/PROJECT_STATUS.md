@@ -95,19 +95,52 @@ All routes use the `{ ok: boolean, data: T }` response envelope.
 5. `3499796` — Added error handling to pre-visit API
 6. `6e22133` — Implemented patient portal, booking flow, error boundary
 
+### 2.8 🆕 Real AI + Report Intelligence (This Session — Complete)
+
+Yeh session mein AI ab **real** hai (mock nahi), aur patient reports ka poora upload → AI analysis → doctor summary pipeline ban gaya. Sab kuch **"AI assists, clinician decides"** principle follow karta hai — AI kabhi diagnose ya prescribe nahi karta, sirf transcribe/organize karke doctor ko review ke liye deta hai.
+
+#### Kya naya banaya (What was newly built)
+
+| Feature | Kahan (Where) | Status |
+|---------|---------------|--------|
+| **Browser-side AI (free, User-Pays)** | `lib/puterClient.ts`, `lib/clientPrompts.ts`, `lib/puter.d.ts`, Puter `<script>` in `app/layout.tsx` | ✅ Done |
+| Copilot + Symptom Checker stream real AI | `components/DoctorWorkspace.tsx` (browser `aiChatStream`, server `/api` fallback) | ✅ Done |
+| Scribe drafts SOAP via real AI | `components/DoctorWorkspace.tsx` (`generateNote`) | ✅ Done |
+| **Hybrid intake** (fixed decision-tree order + AI phrasing) | `app/api/intake/next/route.ts` + `app/api/_lib/prompts.ts` | ✅ Done |
+| **Supabase Storage** — private `patient-reports` bucket (20MB, mime allowlist) | `app/api/_lib/storage.ts` | ✅ Done + verified live |
+| Report upload + signed-URL + findings API | `app/api/reports/upload/route.ts` (POST/GET/PATCH) | ✅ Done |
+| **Report upload UI** in intake chat (attach button + status chips) | `app/patient/intake/page.tsx` | ✅ Done |
+| **AI vision analysis** of reports — GPT-4o **+** Gemini 2.5 Flash | `lib/clientPrompts.ts` (`buildReportVisionPrompt`, `mergeFindings`) | ✅ Done |
+| **Report-driven adaptive questions** (abnormal → symptom-specific; normal → progress) | `app/patient/intake/page.tsx` + `buildAdaptiveQuestionMessages` | ✅ Done |
+| **Detailed pre-visit summary** for doctor (intake story + report findings + signed file link) | `app/api/pre-visit/summary/route.ts` + `components/workspace/PreVisitBrief.tsx` | ✅ Done |
+| DB: `storage_path` + `ai_findings` columns on `reports` | `supabase/schema.sql` (+ live DB migrated) | ✅ Done |
+
+#### How the report pipeline works (end-to-end)
+1. Patient intake chat mein report upload karta hai (PDF/JPG/PNG/WEBP, max 20MB).
+2. File **Supabase private Storage** mein jaati hai (durable copy) + `reports` row banti hai.
+3. Browser mein **GPT-4o aur Gemini** dono file ko padhte hain (Puter.js vision), findings merge hote hain — values, abnormal/normal, medicines, impression. **No diagnosis.**
+4. Findings `reports.ai_findings` mein save hote hain; ek adaptive follow-up question chat mein aata hai.
+5. Doctor ke **Pre-visit Brief** tab par: patient ki poori intake story + har report ka AI-read summary + **"View file"** (1-hour signed private link to the actual document).
+
+#### Kyu (Why these decisions)
+- **Browser-side Puter.js (not server-side):** Puter ka server-side REST har model ke liye `402 "A subscription is required"` deta hai (paid). Browser-side "User-Pays" model **free** hai. Isliye AI browser mein chalti hai; server routes optional fallback hain.
+- **Supabase Storage + service_role + private bucket + signed URLs:** Medical files ke liye anon-key + manual RLS fragile hai. service_role se server safely upload karta hai; doctor ko short-lived signed link milta hai (bucket kabhi public nahi hota).
+- **Actual file store + doctor ko dikhana:** User ne findings-text-only ke bajaye asli file bhi store karke doctor ko dikhane ka explicit choice kiya.
+- **GPT + Gemini dono:** Do independent readings merge karne se transcription zyada reliable hoti hai (ek fail ho to doosra chalta hai).
+
 ---
 
 ## 3. ⏳ KYA KARNA BAAKI HAI (What Remains)
 
 ### 3.1 P0 — Critical (Production Blockers)
 - [ ] **Authentication & Authorization** — MFA, role-based access control (Doctor/Reception/Staff/Admin/Patient), session management. Abhi koi real auth nahi hai.
-- [ ] **Real AI Integration** — Copilot, scribe, symptom analysis abhi demo/mock hai. Gemini/OpenAI integrate karna baaki.
+- [x] **Real AI Integration** — ✅ Copilot, scribe, symptom checker, aur report vision ab **real** hain (browser-side Puter.js: GPT/Claude/Gemini). Intake hybrid hai (fixed order + AI phrasing). *(Server-side Puter paid tha — 402; isliye browser-side free path liya.)*
 - [ ] **Multi-tenant Isolation** — Clinic-level data separation abhi nahi hai.
 - [ ] **Audit Logging** — Table defined hai par active logging implement nahi hui.
 
 ### 3.2 P1 — Important
 - [ ] **Real Communication Dispatch** — WhatsApp/SMS/email abhi simulate hota hai. Twilio/WhatsApp Business API integrate karna hai.
-- [ ] **Document Upload & OCR** — File upload UI hai par actual storage + text extraction baaki.
+- [x] **Document Upload & AI Reading** — ✅ Patient reports Supabase private Storage mein upload hote hain; GPT-4o + Gemini vision se AI padhta hai (findings extract). Doctor ko signed link + findings dikhte hain. *(Traditional OCR ki jagah vision-model reading li — handwritten prescriptions bhi handle ho jaati hain.)*
 - [ ] **Voice Call Intake** — UI mockup hai, real telephony (voice IVR) baaki.
 - [ ] **Vitals Device Integration** — Manual entry possible, device integration nahi.
 - [ ] **Consent Management** — Table hai, workflow UI baaki.
@@ -188,11 +221,13 @@ Database
 ## 6. 🎯 Next Immediate Steps (Priority Order)
 
 1. **Authentication** — NextAuth.js ya Supabase Auth setup karo (roles ke saath)
-2. **Real AI** — Gemini API ko copilot/scribe/symptom routes mein connect karo
-3. **Document upload** — Supabase Storage + text extraction
-4. **Real messaging** — WhatsApp Business API / Twilio integrate karo
-5. **Testing** — Vitest + Playwright setup karo
-6. **Audit logging** — Har clinical action log karo
+2. **Real messaging** — WhatsApp Business API / Twilio integrate karo
+3. **Testing** — Vitest + Playwright setup karo
+4. **Audit logging** — Har clinical action log karo
+5. **Deploy env** — Vercel par `SUPABASE_SERVICE_ROLE_KEY` (+ baaki Supabase env) set karo taaki report Storage production mein bhi chale
+6. **PDF vision reliability** — multi-page PDF reports par vision reading ko aur test/tune karo
+
+> ✅ **Ab complete:** Real AI (browser-side), document upload + AI report reading. *(pichle steps 2-3 done)*
 
 ---
 

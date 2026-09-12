@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Brain, CheckCircle2, ChevronDown, ChevronUp, Info, Loader2, RefreshCw, Shield, Sparkles } from "lucide-react";
+import { AlertTriangle, Brain, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, FileText, Info, Loader2, MessageSquare, RefreshCw, Sparkles } from "lucide-react";
 
 type AttentionSignal = { type: string; title: string; detail: string; severity: string };
 
@@ -32,21 +32,57 @@ type Context = {
   followUps: { title: string; dueDate: string; priority: string }[];
 };
 
+// ── Detailed intake + report summary (from /api/pre-visit/summary) ──
+type ReportFindings = {
+  documentType: string;
+  overallImpression: string;
+  abnormal: string[];
+  normal: string[];
+  medications: string[];
+  followUpFocus: string;
+  reviewNote: string;
+};
+type ReportView = {
+  id: string;
+  title: string;
+  type: string;
+  date: string;
+  status: string;
+  fileName?: string;
+  findings: ReportFindings | null;
+  fileUrl: string | null;
+};
+type Summary = {
+  intake: { hasSession: boolean; completed: boolean; story: { question: string; answer: string; kind: string }[]; preVisitBrief: string };
+  reports: ReportView[];
+  abnormalHighlights: string[];
+  disclaimer?: string;
+};
+
 export default function PreVisitBrief({ patientId }: { patientId: string }) {
   const [brief, setBrief] = useState<Brief | null>(null);
   const [context, setContext] = useState<Context | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(true);
   const [reviewing, setReviewing] = useState(false);
+  const [storyOpen, setStoryOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      const res = await fetch(`/api/pre-visit?patientId=${patientId}`);
-      const payload = await res.json() as { ok: boolean; data: { brief: Brief; context: Context }; error?: { message: string } };
+      // Fetch the AI brief and the detailed intake + report summary in parallel.
+      const [briefRes, summaryRes] = await Promise.all([
+        fetch(`/api/pre-visit?patientId=${patientId}`),
+        fetch(`/api/pre-visit/summary?patientId=${patientId}`),
+      ]);
+      const payload = await briefRes.json() as { ok: boolean; data: { brief: Brief; context: Context }; error?: { message: string } };
       if (payload.ok) { setBrief(payload.data.brief); setContext(payload.data.context); }
       else setError(payload.error?.message ?? "Could not load brief.");
+
+      const sp = await summaryRes.json().catch(() => null) as { ok: boolean; data: Summary } | null;
+      setSummary(sp?.ok ? sp.data : null);
     } catch { setError("Network error loading pre-visit brief."); }
     finally { setLoading(false); }
   }, [patientId]);
@@ -65,8 +101,8 @@ export default function PreVisitBrief({ patientId }: { patientId: string }) {
     finally { setReviewing(false); }
   }
 
-  useEffect(() => { 
-    if (patientId) void load(); 
+  useEffect(() => {
+    if (patientId) void load();
   }, [patientId, load]);
 
   if (loading) return (
@@ -182,6 +218,86 @@ export default function PreVisitBrief({ patientId }: { patientId: string }) {
               {brief.patientQuestions.map((q, i) => (
                 <p key={i} className="text-xs text-[#5f7c70] mt-0.5">· &ldquo;{q}&rdquo;</p>
               ))}
+            </div>
+          )}
+
+          {/* Uploaded reports — AI-read findings + signed link to the actual file */}
+          {summary && summary.reports.length > 0 && (
+            <div className="rounded-lg border border-[#c9dbe8] bg-[#f2f7fb] p-3">
+              <p className="mb-2 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#4a6f8a]">
+                <FileText className="h-3 w-3" /> Patient-uploaded reports ({summary.reports.length})
+              </p>
+              <div className="space-y-2.5">
+                {summary.reports.map((r) => {
+                  const abnormal = (r.findings?.abnormal.length ?? 0) > 0;
+                  return (
+                    <div key={r.id} className={`rounded-lg border p-2.5 ${abnormal ? "border-red-200 bg-red-50/60" : "border-[#dbe6ee] bg-white"}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-bold text-[#2b4a5e]">{r.title || r.fileName || "Report"}</p>
+                          <p className="text-[10px] text-[#7a94a5]">{r.type} · {r.date}</p>
+                        </div>
+                        {r.fileUrl ? (
+                          <a href={r.fileUrl} target="_blank" rel="noopener noreferrer" className="flex shrink-0 items-center gap-1 rounded-md border border-[#c9dbe8] bg-white px-2 py-1 text-[10px] font-semibold text-[#3a6f8f] hover:bg-[#eef5fb]">
+                            <ExternalLink className="h-3 w-3" /> View file
+                          </a>
+                        ) : (
+                          <span className="shrink-0 text-[10px] text-[#9db3c0]">file link unavailable</span>
+                        )}
+                      </div>
+
+                      {r.findings ? (
+                        <div className="mt-2 space-y-1.5">
+                          {r.findings.overallImpression && (
+                            <p className="text-xs leading-5 text-[#41627a]">{r.findings.overallImpression}</p>
+                          )}
+                          {r.findings.abnormal.length > 0 && (
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wide text-red-500">Flagged / out of range</p>
+                              <ul className="mt-0.5 space-y-0.5">
+                                {r.findings.abnormal.map((a, i) => (
+                                  <li key={i} className="flex items-start gap-1.5 text-xs text-red-600 leading-5">
+                                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />{a}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {r.findings.medications.length > 0 && (
+                            <p className="text-xs text-[#41627a]"><span className="font-semibold">Medicines noted:</span> {r.findings.medications.join(", ")}</p>
+                          )}
+                          <p className="text-[10px] italic text-[#9db3c0]">{r.findings.reviewNote || "AI-transcribed — verify against the original."}</p>
+                        </div>
+                      ) : (
+                        <p className="mt-1.5 text-[10px] text-[#9db3c0]">Not yet AI-read — open the file to review the original.</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Patient's intake conversation (full story) */}
+          {summary && summary.intake.story.length > 0 && (
+            <div className="rounded-lg border border-[#c2ddd5] bg-white">
+              <button onClick={() => setStoryOpen((v) => !v)} className="flex w-full items-center justify-between px-3 py-2.5 hover:bg-[#f7faf8]">
+                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#5a967e]">
+                  <MessageSquare className="h-3 w-3" /> Patient&apos;s intake story ({summary.intake.story.length})
+                  {summary.intake.completed && <span className="rounded-full bg-[#edf7f2] px-1.5 py-0.5 text-[9px] text-[#4e927d]">completed</span>}
+                </span>
+                {storyOpen ? <ChevronUp className="h-3.5 w-3.5 text-[#78908a]" /> : <ChevronDown className="h-3.5 w-3.5 text-[#78908a]" />}
+              </button>
+              {storyOpen && (
+                <div className="space-y-2 border-t border-[#f0f4f2] px-3 py-2.5">
+                  {summary.intake.story.map((t, i) => (
+                    <div key={i}>
+                      {t.question && <p className="text-[10px] font-semibold text-[#8a9e98]">{t.question}</p>}
+                      <p className="text-xs text-[#41627a] leading-5">&ldquo;{t.answer}&rdquo;</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

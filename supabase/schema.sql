@@ -36,6 +36,8 @@
     file_name TEXT,
     file_size INTEGER,
     extracted_text TEXT,
+    storage_path TEXT,
+    ai_findings TEXT,
     created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
   );
 

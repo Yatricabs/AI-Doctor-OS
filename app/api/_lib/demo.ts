@@ -47,6 +47,8 @@ export type Report = {
   fileName?: string;
   fileSize?: number;
   extractedText?: string;
+  storagePath?: string;
+  aiFindings?: string;
   createdAt?: string;
 };
 

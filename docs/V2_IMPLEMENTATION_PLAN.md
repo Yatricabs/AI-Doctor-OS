@@ -38,8 +38,8 @@ New architecture defines a **complete patient-to-provider orchestration platform
 - [ ] Patient identity & consent management
 - [ ] Appointment booking and orchestration
 - [ ] Visit type classification (new complaint, follow-up, routine, etc.)
-- [ ] Smart intake question engine (adaptive based on visit type)
-- [ ] Document intake with classification
+- [x] Smart intake question engine (adaptive based on visit type) — ✅ hybrid: fixed decision-tree order + AI phrasing; report findings branch the follow-up questions
+- [x] Document intake with classification — ✅ upload in intake chat, kind auto-detected (Lab/Prescription/Imaging/Referral), stored in Supabase Storage
 - [ ] Patient/caregiver proxy model
 
 ##### 2. **Pre-Visit Intelligence** (Section 8)
@@ -137,13 +137,13 @@ New architecture defines a **complete patient-to-provider orchestration platform
 - [ ] Structured findings entry
 - [ ] Versioned clinical events (no destructive overwrites)
 - [ ] Clinical decision support with provenance
-- [ ] Report intelligence with extraction and comparison
+- [x] Report intelligence with extraction — ✅ GPT-4o + Gemini vision read reports/prescriptions; findings surfaced to doctor (comparison across visits still pending)
 - [ ] Orders/diagnostic workflow
 - [ ] Referral package creation
 
 ##### 11. **Patient Portal**
-- [ ] Patient appointment booking
-- [ ] Document upload
+- [x] Patient appointment booking — ✅ multi-step booking flow
+- [x] Document upload — ✅ report/prescription upload during intake (Supabase Storage)
 - [ ] Prescription viewing
 - [ ] Report access
 - [ ] Follow-up reminders
@@ -527,11 +527,11 @@ Approved Instructions Dispatch → Follow-up Scheduling → Task Tracking
 
 ## 📊 CURRENT STATUS
 
-**Implementation Progress: ~65%** (UI + demo backend complete; real integrations pending)
+**Implementation Progress: ~72%** (UI + demo backend complete; real AI + report intelligence live; auth/messaging/tests pending)
 
 ### ✅ Done
 - ✅ Marketing pages (7 pages, fully responsive)
-- ✅ Doctor workspace UI + demo AI features
+- ✅ Doctor workspace UI + **real** AI features (browser-side Puter.js)
 - ✅ SQLite foundation (35+ tables) + Supabase sync
 - ✅ Patient access system (portal, booking, intake)
 - ✅ Queue management (engine + priority + UI)
@@ -540,25 +540,27 @@ Approved Instructions Dispatch → Follow-up Scheduling → Task Tracking
 - ✅ Care continuity (follow-ups, referrals, orders, AI inbox)
 - ✅ Communication system (dispatch simulation, message queue)
 - ✅ Analytics dashboard
-- ✅ 23 API endpoints with consistent response envelope
+- ✅ 24+ API endpoints with consistent response envelope
 - ✅ Error boundaries + SEO metadata + favicon
+- ✅ **Real AI** — Copilot, Symptom Checker, Scribe stream real AI; intake is hybrid (fixed order + AI phrasing)
+- ✅ **Report intelligence** — patient uploads reports/prescriptions → Supabase private Storage → GPT-4o + Gemini vision reading → findings → adaptive intake questions → doctor pre-visit summary with signed file link
 
 ### ❌ Pending (Production Blockers)
 - ❌ Authentication/authorization (no real auth yet)
-- ❌ Real AI integration (Copilot/scribe/symptom are mock)
 - ❌ Multi-tenant isolation
 - ❌ Active audit logging
 - ❌ Real WhatsApp/SMS/email dispatch (simulated)
-- ❌ Document upload + OCR
 - ❌ Test suite
+- ⚠️ Vercel env: set `SUPABASE_SERVICE_ROLE_KEY` in production for report Storage to work
 
 **Next Immediate Actions:**
 1. Set up proper authentication (NextAuth / Supabase Auth with roles)
-2. Connect real AI (Gemini) to copilot/scribe/symptom routes
-3. Implement document upload (Supabase Storage + extraction)
-4. Wire real messaging (WhatsApp Business API / Twilio)
-5. Add audit logging for all clinical actions
-6. Set up testing (Vitest + Playwright)
+2. Wire real messaging (WhatsApp Business API / Twilio)
+3. Add audit logging for all clinical actions
+4. Set up testing (Vitest + Playwright)
+5. Set `SUPABASE_SERVICE_ROLE_KEY` + Supabase env in Vercel project settings
+
+> ✅ **Newly complete this session:** Real AI integration (browser-side) + full document upload & AI report reading pipeline. See `PROJECT_STATUS.md` §2.8 for details.
 
 > **Detailed status:** See `PROJECT_STATUS.md` for the full breakdown of what's done,
 > what remains, and the reasoning behind each key decision.
