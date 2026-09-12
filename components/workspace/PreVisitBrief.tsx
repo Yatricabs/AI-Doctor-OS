@@ -65,7 +65,9 @@ export default function PreVisitBrief({ patientId }: { patientId: string }) {
     finally { setReviewing(false); }
   }
 
-  useEffect(() => { if (patientId) void load(); }, [patientId]);
+  useEffect(() => { 
+    if (patientId) void load(); 
+  }, [patientId]);
 
   if (loading) return (
     <div className="flex items-center gap-2 rounded-xl bg-[#edf7f2] p-4 text-sm text-[#5a967e]">
