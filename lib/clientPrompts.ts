@@ -204,6 +204,8 @@ export type IntakeSnapshot = {
   symptoms?: string;        // symptom deep-question answers, joined
   reportFindings?: string;  // merged findings text from uploaded reports/prescriptions
   pastVisits?: string;      // compact summary of previous visits (returning patients)
+  pathway?: string;         // matched Phase-1 clinical pathway name (Clinical Library)
+  redFlags?: string;        // explainable safety signals detected from patient's words
 };
 
 /** Builds the transcript block shared by both prompts. */
@@ -218,6 +220,8 @@ function snapshotBlock(s: IntakeSnapshot): string {
     s.medications ? `Current medicines: ${s.medications}` : "",
     s.symptoms ? `Reported symptoms: ${s.symptoms}` : "",
     s.reportFindings ? `Uploaded report findings (AI-read, unverified): ${s.reportFindings}` : "",
+    s.pathway ? `Matched clinical pathway (Phase-1 library): ${s.pathway}` : "",
+    s.redFlags ? `SAFETY SIGNALS detected from patient's own words: ${s.redFlags}` : "",
     s.pastVisits ? `PREVIOUS VISITS (history for context):\n${s.pastVisits}` : "",
   ].filter(Boolean).join("\n");
 }

@@ -26,6 +26,12 @@ import {
   type ReportKind,
 } from "@/lib/clientPrompts";
 import { logAiTraining } from "@/lib/aiTraining";
+import {
+  matchPathway,
+  detectRedFlags,
+  pathwayGuidance,
+  type ClinicalPathway,
+} from "@/lib/clinicalPathways";
 import PuterLoginGate from "@/components/PuterLoginGate";
 
 type Turn = { role: "assistant" | "user"; content: string };
@@ -102,6 +108,9 @@ function AppointmentFlow() {
   const processingRef = useRef(false);     // hard lock to prevent double-submits
   const turnsRef = useRef<Turn[]>([]);     // mirror of `turns` for async save
   const pastVisitsRef = useRef("");        // AI context: summary of previous visits
+  // Clinical Question & Reasoning Library (spec): the matched Phase-1 pathway
+  // frames the deep questions and its red flags are checked against answers.
+  const pathwayRef = useRef<ClinicalPathway | null>(null);
 
   useEffect(() => { turnsRef.current = turns; scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns, busy, analyzing]);
 
@@ -253,9 +262,11 @@ function AppointmentFlow() {
       answersRef.current = next;
       setAnswers(next);
 
-      // As soon as we know the complaint, research (in the background) WHAT a
-      // doctor should ask for this condition, so the deep questions are guided.
+      // As soon as we know the complaint: (1) match a curated clinical pathway
+      // to frame safe, consistent questioning, and (2) research (in background)
+      // WHAT a doctor should ask for this condition, guiding the deep questions.
       if (cur.key === "complaint" && answer.trim().length > 2) {
+        pathwayRef.current = matchPathway(answer, next.duration);
         void buildResearchPlan(next);
       }
 
@@ -345,6 +356,8 @@ function AppointmentFlow() {
     const langTxt = lang === "english" ? "simple clear English" : "simple warm Hindi/Hinglish (Roman script)";
     const asked = deepQARef.current.map((x, i) => `Q${i + 1}: ${x.q}\nA${i + 1}: ${x.a || "(not answered yet)"}`).join("\n");
     const plan = questionPlanRef.current;
+    const pathway = pathwayRef.current;
+    const guidance = pathway ? pathwayGuidance(pathway, lang) : "";
     try {
       const out = await aiChat(
         [
@@ -352,7 +365,9 @@ function AppointmentFlow() {
             role: "system",
             content: [
               `You are an experienced doctor doing intake with a patient in ${langTxt}.`,
-              "You have a research-based PLAN of the questions a doctor should ask for this condition.",
+              pathway
+                ? "You have a curated CLINICAL PATHWAY (reviewed question set + danger signs) for this complaint, plus a research-based plan. Use the pathway as your primary guide and cover its key questions and danger signs first."
+                : "You have a research-based PLAN of the questions a doctor should ask for this condition.",
               "Ask the SINGLE most useful NEXT question on a NEW topic not yet covered",
               "(relevant associated symptoms, character/severity, timing/triggers, relevant history, and DANGER/red-flag signs).",
               "The question MUST be specific to their complaint — never generic or irrelevant.",
@@ -370,7 +385,8 @@ function AppointmentFlow() {
               `Duration: ${a.duration ?? ""}`,
               `Seen a doctor before: ${a.seen_doctor ?? ""}`,
               `Age: ${a.age ?? ""}, Sex: ${a.sex ?? ""}`,
-              plan ? `RESEARCH-BASED QUESTION PLAN (follow this):\n${plan}` : "",
+              guidance ? guidance : "",
+              plan ? `RESEARCH-BASED QUESTION PLAN:\n${plan}` : "",
               asked ? `Deep questions asked so far:\n${asked}` : "No deep questions asked yet — ask the first, most relevant one.",
             ].filter(Boolean).join("\n"),
           },
@@ -383,7 +399,17 @@ function AppointmentFlow() {
       if (isDuplicateQuestion(clean)) return "";
       return clean;
     } catch {
-      // AI unavailable → ask ONE complaint-aware fallback the first time only.
+      // AI unavailable → walk the matched pathway's curated questions, skipping
+      // any topic already covered. This keeps questioning complaint-specific and
+      // safe even fully offline.
+      if (pathway) {
+        for (const q of pathway.coreQuestions) {
+          const text = lang === "english" ? q.english : q.hinglish;
+          if (!isDuplicateQuestion(text)) return text;
+        }
+        return "";
+      }
+      // No pathway matched → one generic complaint-aware fallback (first time).
       if (deepCountRef.current === 0) {
         return lang === "english"
           ? `About your "${a.complaint ?? "problem"}" — please describe your symptoms in detail: how often, how severe, and anything that makes it better or worse.`
@@ -422,6 +448,13 @@ function AppointmentFlow() {
 
   // Build the clinical snapshot from collected answers + uploaded report findings.
   function snapshotFrom(a: Answers): IntakeSnapshot {
+    // Scan everything the patient said (complaint + answers + deep Q/A) for
+    // explainable red flags, using the matched pathway + general safety checks.
+    const patientText = [
+      a.complaint, a.duration, a.symptoms, a.seen_doctor, a.self_medicine,
+      ...deepQARef.current.map((x) => x.a),
+    ].filter(Boolean).join(" . ");
+    const flags = detectRedFlags(pathwayRef.current, patientText);
     return {
       patientType: isReturning ? "returning" : "new",
       name: a.name, age: a.age, sex: a.sex,
@@ -430,6 +463,8 @@ function AppointmentFlow() {
       history: [a.seen_doctor ? `Seen a doctor before: ${a.seen_doctor}` : "", a.self_medicine ?? ""].filter(Boolean).join("; "),
       symptoms: a.symptoms,
       reportFindings: findings.map((f) => `${f.documentType || "report"}: ${f.overallImpression}${f.abnormal.length ? ` | abnormal: ${f.abnormal.join("; ")}` : ""}`).join(" || "),
+      pathway: pathwayRef.current?.displayName,
+      redFlags: flags.length ? flags.map((f) => `${f.signal} [${f.urgency}]`).join("; ") : undefined,
       pastVisits: pastVisitsRef.current || undefined,
     };
   }
@@ -470,6 +505,29 @@ function AppointmentFlow() {
       report = parsePreVisitReport("", research);
       report.chiefComplaint = snapshot.chiefComplaint;
       report.summary = `${snapshot.chiefComplaint || "Patient"} — ${snapshot.duration ?? ""}. ${snapshot.symptoms ?? ""}`.trim();
+    }
+
+    // 3b) Deterministic safety overlay (Clinical Library §7): fold the red flags
+    //     detected from the patient's own words into the report so the doctor
+    //     always sees them, and escalate urgency to match the worst signal. This
+    //     is explainable (each flag is a human-readable signal) and never lowers
+    //     the AI's urgency — safety takes priority (spec §26).
+    const detected = detectRedFlags(pathwayRef.current, [
+      a.complaint, a.duration, a.symptoms, a.seen_doctor, a.self_medicine,
+      ...deepQARef.current.map((x) => x.a),
+    ].filter(Boolean).join(" . "));
+    if (detected.length) {
+      const existing = new Set(report.redFlags.map((r) => r.toLowerCase()));
+      for (const f of detected) {
+        const line = `${f.signal} (${f.urgency})`;
+        if (!existing.has(line.toLowerCase())) report.redFlags.push(line);
+      }
+      const rank: Record<string, number> = { routine: 0, opd: 1, urgent: 2, admit: 3, emergency: 4 };
+      const worst = detected.some((f) => f.urgency === "emergency") ? "emergency" : "urgent";
+      if ((rank[worst] ?? 0) > (rank[report.urgency] ?? 0)) {
+        report.urgency = worst as typeof report.urgency;
+        if (!report.urgencyReason) report.urgencyReason = `Auto-flagged: ${detected[0].signal}`;
+      }
     }
 
     // 4) Save the AI report for the doctor (structured JSON + legacy fields).
