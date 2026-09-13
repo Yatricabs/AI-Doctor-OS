@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useDispatch, useSelector } from "react-redux";
+import { navigate, workspaceSelectors, type AppDispatch, type WorkspaceNav } from "@/lib/workspaceStore";
 import Link from "next/link";
 import { CalendarDays, LayoutDashboard, Package, Receipt, Stethoscope, Users } from "lucide-react";
 import DashboardScreen from "./workspace/DashboardScreen";
@@ -25,13 +28,31 @@ const NAV: { label: Nav; icon: React.ComponentType<{ className?: string }> }[] =
   { label: "Billing", icon: Receipt },
 ];
 
+function navFromQuery(value: string | null): WorkspaceNav {
+  return NAV.some((item) => item.label === value) ? value as WorkspaceNav : "Dashboard";
+}
+
 export default function DoctorWorkspace() {
-  const [activeNav, setActiveNav] = useState<Nav>("Dashboard");
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const dispatch = useDispatch<AppDispatch>();
+  const activeNav = useSelector(workspaceSelectors.activeNav);
+  const selectedPatientId = useSelector(workspaceSelectors.selectedPatientId);
+
+  useEffect(() => {
+    const screen = searchParams.get("screen");
+    dispatch(navigate({ nav: navFromQuery(screen), patientId: searchParams.get("patientId") }));
+    if (!screen) router.replace(`${pathname}?screen=Dashboard`);
+  }, [dispatch, pathname, router, searchParams]);
 
   function goto(nav: string, patientId?: string) {
-    setActiveNav(nav as Nav);
-    if (nav === "Patients") setSelectedPatientId(patientId ?? null);
+    const nextNav = navFromQuery(nav);
+    dispatch(navigate({ nav: nextNav, patientId }));
+    const params = new URLSearchParams();
+    params.set("screen", nextNav);
+    if (nextNav === "Patients" && patientId) params.set("patientId", patientId);
+    router.push(`${pathname}?${params.toString()}`);
   }
 
   return (
@@ -69,7 +90,7 @@ export default function DoctorWorkspace() {
       <div className="ml-[76px] md:ml-[264px]">
         {activeNav === "Dashboard" && <DashboardScreen onGoto={goto} />}
         {activeNav === "Appointments" && <AppointmentsScreen onOpenPatient={(id) => goto("Patients", id)} />}
-        {activeNav === "Patients" && <PatientsScreen selectedId={selectedPatientId} onSelect={setSelectedPatientId} />}
+        {activeNav === "Patients" && <PatientsScreen selectedId={selectedPatientId} onSelect={(id) => goto("Patients", id ?? undefined)} />}
         {activeNav === "Inventory" && <InventoryScreen />}
         {activeNav === "Billing" && <BillingScreen />}
       </div>

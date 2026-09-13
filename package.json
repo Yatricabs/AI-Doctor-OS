@@ -10,13 +10,15 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "2.2.7",
     "@supabase/supabase-js": "^2.49.1",
     "better-sqlite3": "^11.7.0",
     "lucide-react": "^0.400.0",
     "next": "14.2.5",
     "pg": "^8.23.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-redux": "9.1.2"
   },
   "comment_allowScripts": "npm v12+ blocks dependency install scripts by default. better-sqlite3 is a native module whose install script fetches/compiles its .node binary; without this it fails to load at runtime and every API route returns a 500. Name-only entries allow any version so lockfile updates do not re-break the build.",
   "allowScripts": {
