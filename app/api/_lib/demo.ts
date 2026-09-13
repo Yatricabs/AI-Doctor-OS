@@ -420,13 +420,29 @@ export type InventoryItem = {
   name: string;
   category: InventoryCategory;
   unit?: string;
-  price: number;
+  price: number;          // sale price (INR)
+  purchasePrice: number;  // purchase/cost price (INR) — spec §19
   stockQty: number;
-  lowStockThreshold: number;
+  lowStockThreshold: number; // = minimum stock level (spec §19)
   tracksStock: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+// Stock movement ledger row (spec §22).
+export type StockTxnType = "in" | "sale" | "return" | "adjustment";
+
+export type StockTransaction = {
+  id: string;
+  inventoryItemId: string;
+  txnType: StockTxnType;
+  quantity: number;      // absolute quantity moved (sign implied by txnType)
+  stockAfter: number;    // resulting stock level after this movement
+  unitPrice: number;
+  reference?: string;    // e.g. bill id / patient id
+  note?: string;
+  createdAt: string;
 };
 
 export type BillItemType = "appointment" | "medicine" | "test" | "scan";

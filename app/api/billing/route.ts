@@ -141,6 +141,7 @@ export const POST = safeRoute(async (request: Request) => {
         [`${billId}-i${n}`, billId, l.inventoryItemId, l.itemType, l.description, l.quantity, l.unitPrice, l.amount, now]
       );
       // Decrement stock only for medicines that track it (guarded to avoid overselling).
+      // Actual dispensing/sale reduces stock AND records a ledger entry (spec §22/§23).
       if (l.inventoryItemId && l.itemType === "medicine") {
         const res = await client.query(
           "UPDATE inventory_items SET stock_qty = stock_qty - $1, updated_at = $2 WHERE id = $3 AND tracks_stock = 1 AND stock_qty >= $1 RETURNING stock_qty",
@@ -150,6 +151,12 @@ export const POST = safeRoute(async (request: Request) => {
           // Roll back the whole bill: not enough stock.
           throw new Error(`Insufficient stock for "${l.description}".`);
         }
+        const stockAfter = (res.rows[0] as { stock_qty: number }).stock_qty;
+        await client.query(
+          `INSERT INTO stock_transactions (id,inventory_item_id,txn_type,quantity,stock_after,unit_price,reference,note,created_at)
+           VALUES ($1,$2,'sale',$3,$4,$5,$6,$7,$8)`,
+          [`${billId}-s${n}`, l.inventoryItemId, l.quantity, stockAfter, l.unitPrice, billId, `Dispensed on bill ${billId}`, now]
+        );
       }
     }
   });

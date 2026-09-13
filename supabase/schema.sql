@@ -554,12 +554,26 @@
     category TEXT NOT NULL DEFAULT 'medicine',
     unit TEXT DEFAULT 'unit',
     price DOUBLE PRECISION NOT NULL DEFAULT 0,
+    purchase_price DOUBLE PRECISION NOT NULL DEFAULT 0,
     stock_qty INTEGER NOT NULL DEFAULT 0,
     low_stock_threshold INTEGER NOT NULL DEFAULT 10,
     tracks_stock INTEGER NOT NULL DEFAULT 1,
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')),
     updated_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+  );
+
+  -- Stock movement ledger (spec §22): In (+), Sale (-), Return (+), Adjustment.
+  CREATE TABLE IF NOT EXISTS stock_transactions (
+    id TEXT PRIMARY KEY,
+    inventory_item_id TEXT NOT NULL,
+    txn_type TEXT NOT NULL DEFAULT 'in',
+    quantity INTEGER NOT NULL DEFAULT 0,
+    stock_after INTEGER NOT NULL DEFAULT 0,
+    unit_price DOUBLE PRECISION NOT NULL DEFAULT 0,
+    reference TEXT,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
   );
 
   -- ── BILLING ──────────────────────────────────────────────────────────────
