@@ -89,9 +89,13 @@ function AppointmentFlow() {
   const [finalizeMsg, setFinalizeMsg] = useState("Preparing your details for the doctor…");
 
   const stepRef = useRef(0);
-  const pendingFollowUpRef = useRef<StepKey | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Dynamic AI deep-questioning phase (after the fixed script):
+  const inDeepPhaseRef = useRef(false);   // are we asking complaint-specific Qs?
+  const deepCountRef = useRef(0);          // how many deep Qs asked so far
+  const deepQARef = useRef<{ q: string; a: string }[]>([]); // collected Q/A
+  const answersRef = useRef<Answers>({});  // latest answers (for finalize)
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns, busy, analyzing]);
 
@@ -113,9 +117,13 @@ function AppointmentFlow() {
       { key: "duration", intent: "Ask since when they have had this problem.", base: { hinglish: "Yeh takleef aapko kab se hai?", english: "Since when have you had this problem?" } },
       { key: "seen_doctor", intent: "Ask if they have already shown this to a doctor before; if yes, they can upload the old prescription with the attach button.", base: { hinglish: "Kya aapne is takleef ke liye pehle kisi doctor ko dikhaya hai? Agar haan, to purani parchi attach (📎) button se upload kar dijiye.", english: "Have you already seen a doctor for this? If yes, upload the old prescription using the attach (📎) button." }, options: ["Yes", "No"] },
       { key: "upload_prompt", intent: "Ask if they have any test report or scan to upload now using the attach button, or type no.", base: { hinglish: "Koi test report ya scan hai (blood test, MRI, CT, ultrasound)? Attach (📎) button se upload kar dijiye, ya 'nahi' likhein.", english: "Do you have any test report or scan (blood test, MRI, CT, ultrasound)? Upload it with the attach (📎) button, or type 'no'." }, options: ["I'll upload", "No reports"] },
-      { key: "symptoms", intent: "Ask what specific difficulties or symptoms they face right now due to this problem.", base: { hinglish: "Is takleef ke kaaran abhi aapko kya-kya pareshani ho rahi hai? (jaise dard, saans, khana, chalna, kamzori)", english: "What difficulties are you facing right now because of this? (e.g. pain, breathing, eating, walking, weakness)" } },
+      // NOTE: after this the flow enters a DYNAMIC AI deep-questioning phase that
+      // asks complaint-specific questions (see askDeepQuestion) — not a fixed step.
     ];
   }
+
+  // How many complaint-specific deep questions the AI may ask before finalizing.
+  const MAX_DEEP = 4;
 
   function baseText(step: Step): string {
     return lang === "english" ? step.base.english : step.base.hinglish;
@@ -210,59 +218,35 @@ function AppointmentFlow() {
   }
 
   async function advance(answer: string) {
-    const steps = script();
-    let idx = stepRef.current;
-    const cur = steps[idx];
-    if (!cur) return;
-
-    // Record answer + side effects.
-    const next: Answers = { ...answers, [cur.key]: answer };
-    if (cur.key === "identity") setIsReturning(/before|visited|purana|pehle/i.test(answer));
-    setAnswers(next);
     setTurns((p) => [...p, { role: "user", content: answer }]);
     setInput(""); setOptions([]); setBusy(true); setError("");
 
-    // After the main complaint or symptoms, let the AI ask ONE intelligent
-    // follow-up of its own (adaptive), then continue the fixed script.
-    if ((cur.key === "complaint" || cur.key === "symptoms") && answer.trim().length > 2) {
-      const followUp = await aiFollowUp(next, answer);
-      if (followUp) {
-        setTurns((p) => [...p, { role: "assistant", content: followUp }]);
-        // Merge the follow-up answer into the same key's context on next turn.
-        // (We keep the script position; the patient's reply is stored under the
-        //  same clinical bucket so the report still gets it.)
-        setBusy(false);
-        pendingFollowUpRef.current = cur.key;
-        return;
-      }
-    }
-    // If the previous assistant message was an AI follow-up, fold this answer in
-    // and DO NOT advance the script index (we already advanced before the F/U).
-    if (pendingFollowUpRef.current) {
-      const k = pendingFollowUpRef.current;
-      pendingFollowUpRef.current = null;
-      const merged: Answers = { ...next, [k]: `${next[k] ?? ""} | ${answer}`.trim() };
-      setAnswers(merged);
-      // fall through to ask the next scripted question using `merged`
-      if (steps[idx]) {
-        const q = await phrase(steps[idx], answer);
-        logQuestion(steps[idx].key, q);
-        setTurns((p) => [...p, { role: "assistant", content: q }]);
-        setOptions(steps[idx].options ?? []);
-        setBusy(false);
-        return;
-      }
-      setBusy(false);
-      await finalize(merged);
+    // ── If we're in the dynamic AI deep-questioning phase, route the answer
+    //    there instead of the fixed script. ──
+    if (inDeepPhaseRef.current) {
+      const lastQ = deepQARef.current[deepQARef.current.length - 1]?.q ?? "";
+      deepQARef.current[deepQARef.current.length - 1] = { q: lastQ, a: answer };
+      await continueDeepPhase();
       return;
     }
+
+    const steps = script();
+    let idx = stepRef.current;
+    const cur = steps[idx];
+    if (!cur) { setBusy(false); await beginDeepPhase(answersRef.current); return; }
+
+    // Record answer + side effects.
+    const next: Answers = { ...answersRef.current, [cur.key]: answer };
+    if (cur.key === "identity") setIsReturning(/before|visited|purana|pehle/i.test(answer));
+    answersRef.current = next;
+    setAnswers(next);
 
     // Advance to next non-skipped step.
     idx += 1;
     while (steps[idx] && steps[idx].skip?.(next)) idx += 1;
     stepRef.current = idx;
 
-    // If more questions remain, phrase the next one.
+    // More fixed questions remain → ask the next.
     if (steps[idx]) {
       const q = await phrase(steps[idx], answer);
       logQuestion(steps[idx].key, q);
@@ -272,29 +256,92 @@ function AppointmentFlow() {
       return;
     }
 
-    // ── Conversation finished → finalize ──
-    setBusy(false);
-    await finalize(next);
+    // Fixed script finished → start the AI deep-questioning phase.
+    await beginDeepPhase(next);
   }
 
-  // AI generates ONE smart follow-up question based on the answer so far.
-  // Guaranteed non-empty-or-skip: returns "" if AI unavailable (flow continues).
-  async function aiFollowUp(a: Answers, lastAnswer: string): Promise<string> {
+  // Start the dynamic phase: AI asks the FIRST complaint-specific deep question.
+  async function beginDeepPhase(a: Answers) {
+    inDeepPhaseRef.current = true;
+    deepCountRef.current = 0;
+    deepQARef.current = [];
+    setBusy(true);
+    const q = await nextDeepQuestion(a);
+    if (!q) { await finishFromDeep(a); return; }
+    deepCountRef.current = 1;
+    deepQARef.current.push({ q, a: "" });
+    logQuestion("deep_symptom", q);
+    setTurns((p) => [...p, { role: "assistant", content: q }]);
+    setBusy(false);
+  }
+
+  // After a deep answer: decide whether to ask another or finalize.
+  async function continueDeepPhase() {
+    setBusy(true);
+    if (deepCountRef.current >= MAX_DEEP) { await finishFromDeep(answersRef.current); return; }
+    const q = await nextDeepQuestion(answersRef.current);
+    if (!q) { await finishFromDeep(answersRef.current); return; }
+    deepCountRef.current += 1;
+    deepQARef.current.push({ q, a: "" });
+    logQuestion("deep_symptom", q);
+    setTurns((p) => [...p, { role: "assistant", content: q }]);
+    setBusy(false);
+  }
+
+  // Fold the deep Q/A into the symptoms bucket and finalize.
+  async function finishFromDeep(a: Answers) {
+    inDeepPhaseRef.current = false;
+    const transcript = deepQARef.current.filter((x) => x.a).map((x) => `${x.q} -> ${x.a}`).join(" | ");
+    const merged: Answers = { ...a, symptoms: transcript || a.symptoms };
+    answersRef.current = merged;
+    setAnswers(merged);
+    setBusy(false);
+    await finalize(merged);
+  }
+
+  // The core intelligence: AI generates ONE complaint-specific deep question,
+  // aware of everything asked so far. Returns "STOP"->"" when it has enough, or
+  // "" if AI is unavailable (a complaint-aware fallback is used the first time).
+  async function nextDeepQuestion(a: Answers): Promise<string> {
     const langTxt = lang === "english" ? "simple clear English" : "simple warm Hindi/Hinglish (Roman script)";
-    const patientType = isReturning ? "returning" : "new";
+    const asked = deepQARef.current.map((x, i) => `Q${i + 1}: ${x.q}\nA${i + 1}: ${x.a || "(not answered yet)"}`).join("\n");
     try {
       const out = await aiChat(
         [
-          { role: "system", content: `You are a doctor's intake assistant talking to a ${patientType} patient in ${langTxt}. Based on what they just told you, ask ONE short, specific follow-up question that a good doctor would ask to understand the problem better (severity, triggers, associated symptoms, impact on daily life). Output ONLY the single question (max ~25 words). No diagnosis, no advice, no lists.` },
-          { role: "user", content: `Main complaint: ${a.complaint ?? ""}\nDuration: ${a.duration ?? ""}\nSymptoms so far: ${a.symptoms ?? ""}\nPatient's latest answer: "${lastAnswer}"` },
+          {
+            role: "system",
+            content: [
+              `You are an experienced doctor doing intake with a patient in ${langTxt}.`,
+              "Think about the patient's ACTUAL complaint and ask the SINGLE most useful next question a good doctor would ask to understand THIS specific problem (relevant associated symptoms, severity, frequency, triggers, danger signs, and impact).",
+              "The question MUST be specific to their complaint — do not ask generic or irrelevant things.",
+              "Do NOT repeat anything already asked. Do NOT diagnose or advise.",
+              "If you already have enough information to brief the doctor, reply with exactly: STOP",
+              "Otherwise output ONLY the single question (max ~25 words).",
+            ].join("\n"),
+          },
+          {
+            role: "user",
+            content: [
+              `Main complaint: ${a.complaint ?? ""}`,
+              `Duration: ${a.duration ?? ""}`,
+              `Seen a doctor before: ${a.seen_doctor ?? ""}`,
+              `Age: ${a.age ?? ""}, Sex: ${a.sex ?? ""}`,
+              asked ? `Deep questions asked so far:\n${asked}` : "No deep questions asked yet — ask the first, most relevant one.",
+            ].join("\n"),
+          },
         ],
-        { model: MODELS.fast, temperature: 0.5, maxTokens: 70 }
+        { model: MODELS.reasoning, temperature: 0.5, maxTokens: 80 }
       );
       const clean = (out ?? "").trim();
-      if (clean.length < 3) return "";
-      logQuestion("ai_followup", clean);
+      if (/^stop\b/i.test(clean) || clean.length < 3) return "";
       return clean;
     } catch {
+      // AI unavailable → ask ONE complaint-aware fallback the first time only.
+      if (deepCountRef.current === 0) {
+        return lang === "english"
+          ? `About your "${a.complaint ?? "problem"}" — please describe your symptoms in detail: how often, how severe, and anything that makes it better or worse.`
+          : `Aapki "${a.complaint ?? "takleef"}" ke baare mein — kripya vistaar se batayein: kitni baar hota hai, kitna tez hai, aur kis cheez se badhta ya kam hota hai.`;
+      }
       return "";
     }
   }
