@@ -100,8 +100,10 @@ function AppointmentFlow() {
   const questionPlanRef = useRef("");      // research-informed plan of what to ask
   const researchRef = useRef("");          // cached web research (reused at finalize)
   const processingRef = useRef(false);     // hard lock to prevent double-submits
+  const turnsRef = useRef<Turn[]>([]);     // mirror of `turns` for async save
+  const pastVisitsRef = useRef("");        // AI context: summary of previous visits
 
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns, busy, analyzing]);
+  useEffect(() => { turnsRef.current = turns; scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns, busy, analyzing]);
 
   // The ordered script. Each step has a GUARANTEED base question (Hinglish +
   // English) so a bubble is NEVER empty — the AI only warms up the wording.
@@ -190,6 +192,7 @@ function AppointmentFlow() {
         if (jr.ok && jr.data?.found && jr.data.patient) {
           setPatientId(jr.data.patient.id);
           setPatientName(jr.data.patient.name);
+          void loadPastVisits(jr.data.patient.id); // fetch history for AI context
           return jr.data.patient.id;
         }
       } catch { /* fall through to create */ }
@@ -407,6 +410,16 @@ function AppointmentFlow() {
     return false;
   }
 
+  // Fetch a compact summary of the patient's previous visits for AI context.
+  async function loadPastVisits(pid: string) {
+    if (pastVisitsRef.current) return;
+    try {
+      const res = await fetch(`/api/appointments/chat?patientId=${encodeURIComponent(pid)}&context=1`);
+      const jr = await res.json() as { ok: boolean; data?: { pastSummary?: string } };
+      if (jr.ok && jr.data?.pastSummary) pastVisitsRef.current = jr.data.pastSummary;
+    } catch { /* best effort */ }
+  }
+
   // Build the clinical snapshot from collected answers + uploaded report findings.
   function snapshotFrom(a: Answers): IntakeSnapshot {
     return {
@@ -417,6 +430,7 @@ function AppointmentFlow() {
       history: [a.seen_doctor ? `Seen a doctor before: ${a.seen_doctor}` : "", a.self_medicine ?? ""].filter(Boolean).join("; "),
       symptoms: a.symptoms,
       reportFindings: findings.map((f) => `${f.documentType || "report"}: ${f.overallImpression}${f.abnormal.length ? ` | abnormal: ${f.abnormal.join("; ")}` : ""}`).join(" || "),
+      pastVisits: pastVisitsRef.current || undefined,
     };
   }
 
@@ -459,11 +473,14 @@ function AppointmentFlow() {
     }
 
     // 4) Save the AI report for the doctor (structured JSON + legacy fields).
+    let briefId = "";
     try {
-      await fetch("/api/pre-visit", {
+      const res = await fetch("/api/pre-visit", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "save_ai_report", patientId: pid, patientType: snapshot.patientType, report, reportJson: JSON.stringify(report) }),
       });
+      const jr = await res.json() as { ok: boolean; data?: { briefId?: string } };
+      briefId = jr.data?.briefId ?? "";
     } catch { /* best effort */ }
 
     // 5) Create the appointment.
@@ -486,9 +503,16 @@ function AppointmentFlow() {
       return;
     }
 
+    // 6) Save the full chat transcript for this appointment (visit history).
+    try {
+      await fetch("/api/appointments/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patientId: pid, appointmentId, briefId, transcript: turnsRef.current }),
+      });
+    } catch { /* best effort */ }
+
     const token = `#${Math.floor(5 + Math.random() * 20)}`;
     setCreated({ date, time, token, patientId: pid });
-    void appointmentId;
     setPhase("done");
   }
 

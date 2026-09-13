@@ -607,3 +607,13 @@
     created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')),
     updated_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
   );
+
+  -- ── PER-APPOINTMENT CHAT TRANSCRIPT ───────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS appointment_chats (
+    id TEXT PRIMARY KEY,
+    appointment_id TEXT,
+    patient_id TEXT NOT NULL,
+    brief_id TEXT,
+    transcript TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+  );

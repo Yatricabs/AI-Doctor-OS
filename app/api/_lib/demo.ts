@@ -478,6 +478,17 @@ export type AiTrainingRecord = {
   updatedAt: string;
 };
 
+export type ChatTurn = { role: "assistant" | "user"; content: string };
+
+export type AppointmentChat = {
+  id: string;
+  appointmentId?: string;
+  patientId: string;
+  briefId?: string;
+  transcript: string;   // JSON string of ChatTurn[]
+  createdAt: string;
+};
+
 // ─── PATIENTS ────────────────────────────────────────────────────────────────
 export async function listPatients(): Promise<Patient[]> {
   return query<Patient>("SELECT * FROM patients ORDER BY created_at ASC, id ASC");

@@ -203,6 +203,7 @@ export type IntakeSnapshot = {
   medications?: string;     // current medicines mentioned
   symptoms?: string;        // symptom deep-question answers, joined
   reportFindings?: string;  // merged findings text from uploaded reports/prescriptions
+  pastVisits?: string;      // compact summary of previous visits (returning patients)
 };
 
 /** Builds the transcript block shared by both prompts. */
@@ -217,6 +218,7 @@ function snapshotBlock(s: IntakeSnapshot): string {
     s.medications ? `Current medicines: ${s.medications}` : "",
     s.symptoms ? `Reported symptoms: ${s.symptoms}` : "",
     s.reportFindings ? `Uploaded report findings (AI-read, unverified): ${s.reportFindings}` : "",
+    s.pastVisits ? `PREVIOUS VISITS (history for context):\n${s.pastVisits}` : "",
   ].filter(Boolean).join("\n");
 }
 

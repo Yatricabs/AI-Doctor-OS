@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, AlertTriangle, ArrowLeft, FileText, FlaskConical, HeartPulse, Loader2, Pill, Receipt, Scissors, Search, Sparkles, Stethoscope, User } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, FileText, FlaskConical, HeartPulse, Loader2, MessageSquare, Pill, Receipt, Scissors, Search, Sparkles, Stethoscope, User } from "lucide-react";
 import { apiGet } from "./api";
+import PrescriptionLetter from "./PrescriptionLetter";
 import { formatINR, humanize } from "@/lib/format";
 
 type Patient = { id: string; name: string; initials?: string; status?: string; phone?: string; gender?: string; dateOfBirth?: string; patientType?: string; appointment?: string };
@@ -103,12 +104,21 @@ const URGENCY_STYLE: Record<string, { label: string; cls: string }> = {
   emergency: { label: "Emergency", cls: "bg-red-100 text-red-700" },
 };
 type Bill = { id: string; total: number; createdAt: string; items: { description: string; amount: number; itemType: string }[] };
+type ChatTurn = { role: "assistant" | "user"; content: string };
+type Visit = {
+  appointment: { id: string; appointmentDate?: string; appointmentTime?: string; visitType?: string; reason?: string; status?: string } | null;
+  chat: { id: string; transcript: ChatTurn[]; createdAt: string } | null;
+  prescription: { id: string; status?: string; notes?: string; items: { medicationName?: string; dose?: string; frequency?: string; duration?: string }[] } | null;
+};
 
 function PatientDetail({ patientId, onBack }: { patientId: string; onBack: () => void }) {
   const [ctx, setCtx] = useState<Context | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [bills, setBills] = useState<Bill[]>([]);
   const [billTotal, setBillTotal] = useState(0);
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [openVisit, setOpenVisit] = useState<string | null>(null);
+  const [showRx, setShowRx] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -117,13 +127,14 @@ function PatientDetail({ patientId, onBack }: { patientId: string; onBack: () =>
     (async () => {
       setLoading(true); setError("");
       try {
-        const [c, s, b] = await Promise.all([
+        const [c, s, b, v] = await Promise.all([
           apiGet<Context>(`/api/patients/context?patientId=${patientId}`),
           apiGet<Summary>(`/api/pre-visit/summary?patientId=${patientId}`).catch(() => null),
           apiGet<{ bills: Bill[]; total: number }>(`/api/billing?patientId=${patientId}`).catch(() => ({ bills: [], total: 0 })),
+          apiGet<{ visits: Visit[] }>(`/api/appointments/chat?patientId=${patientId}`).catch(() => ({ visits: [] as Visit[] })),
         ]);
         if (cancelled) return;
-        setCtx(c); setSummary(s); setBills(b.bills); setBillTotal(b.total);
+        setCtx(c); setSummary(s); setBills(b.bills); setBillTotal(b.total); setVisits(v.visits);
       } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : "Could not load patient."); }
       finally { if (!cancelled) setLoading(false); }
     })();
@@ -147,11 +158,32 @@ function PatientDetail({ patientId, onBack }: { patientId: string; onBack: () =>
           <h1 className="text-xl font-bold text-[#173f3c]">{p.name}</h1>
           <p className="text-sm text-[#78908a]">{p.id}{p.gender ? ` · ${p.gender}` : ""}{p.phone ? ` · ${p.phone}` : ""}{p.patientType ? ` · ${humanize(p.patientType)}` : ""}</p>
         </div>
-        <div className="ml-auto text-right">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[#5a967e]">Total billed</p>
-          <p className="text-lg font-bold text-[#173f3c]">{formatINR(billTotal)}</p>
+        <div className="ml-auto flex items-center gap-4">
+          <div className="text-right">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-[#5a967e]">Total billed</p>
+            <p className="text-lg font-bold text-[#173f3c]">{formatINR(billTotal)}</p>
+          </div>
+          <button onClick={() => setShowRx(true)} className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#066d66]">
+            <Pill className="h-4 w-4" /> Write prescription
+          </button>
         </div>
       </div>
+
+      {showRx && (
+        <PrescriptionLetter
+          patientId={p.id}
+          patientName={p.name}
+          patientMeta={[p.gender, p.id].filter(Boolean).join(" · ")}
+          appointmentId={visits.find((v) => v.appointment)?.appointment?.id}
+          prefill={{
+            medicines: summary?.aiReport?.structured?.treatmentMedicines,
+            tests: summary?.aiReport?.structured?.testsInitial,
+            advice: summary?.aiReport?.structured?.treatmentMeasures,
+          }}
+          onClose={() => setShowRx(false)}
+          onSaved={() => { /* keep open so doctor can print */ }}
+        />
+      )}
 
       {/* AI pre-visit report (from the patient's conversational intake) */}
       {summary?.aiReport && (summary.aiReport.structured || summary.aiReport.summary || summary.intake.preVisitBrief) && (
@@ -226,6 +258,53 @@ function PatientDetail({ patientId, onBack }: { patientId: string; onBack: () =>
             <p className="mt-0.5 text-[11px] text-[#5f7c70]">{b.items.map((i) => i.description).join(", ")}</p>
           </div>
         )) : <Empty>No bills yet.</Empty>}
+      </Card>
+
+      {/* Visit history — each appointment with its chat transcript + prescription */}
+      <Card icon={MessageSquare} title="Visit history">
+        {visits.length ? visits.map((v, i) => {
+          const key = v.appointment?.id ?? v.chat?.id ?? String(i);
+          const date = v.appointment?.appointmentDate ?? v.chat?.createdAt?.slice(0, 10) ?? "—";
+          const reason = v.appointment?.reason ?? humanize(v.appointment?.visitType) ?? "Pre-visit intake";
+          const open = openVisit === key;
+          return (
+            <div key={key} className="border-b border-[#f2f6f4] py-1.5 last:border-0">
+              <button onClick={() => setOpenVisit(open ? null : key)} className="flex w-full items-center justify-between text-left">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-[#24443f]">{reason}</span>
+                  <span className="text-[11px] text-[#8a9e98]">{date}{v.appointment?.appointmentTime ? ` · ${v.appointment.appointmentTime}` : ""}{v.prescription ? " · Rx" : ""}{v.chat ? " · chat" : ""}</span>
+                </span>
+                <span className="text-[11px] text-[#5a967e]">{open ? "Hide" : "View"}</span>
+              </button>
+              {open && (
+                <div className="mt-2 space-y-2">
+                  {v.chat && v.chat.transcript.length > 0 && (
+                    <div className="rounded-lg border border-[#eef4f1] bg-[#fbfdfc] p-2.5">
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#5a967e]">AI conversation</p>
+                      <div className="max-h-56 space-y-1.5 overflow-y-auto">
+                        {v.chat.transcript.map((t, j) => (
+                          <p key={j} className={`text-xs leading-5 ${t.role === "user" ? "text-[#24443f]" : "text-[#5f7c70]"}`}>
+                            <span className="font-semibold">{t.role === "user" ? "Patient: " : "AI: "}</span>{t.content}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {v.prescription && (
+                    <div className="rounded-lg border border-[#c8e5d8] bg-[#f0faf5] p-2.5">
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#317b67]">Prescription {v.prescription.status ? `(${v.prescription.status})` : ""}</p>
+                      {v.prescription.items.length ? v.prescription.items.map((it, j) => (
+                        <p key={j} className="text-xs text-[#2f5a4a]">· {it.medicationName} {it.dose} {it.frequency}{it.duration ? ` · ${it.duration}` : ""}</p>
+                      )) : <p className="text-xs text-[#7aa693]">No items.</p>}
+                      {v.prescription.notes && <p className="mt-1 text-[11px] text-[#3f6b5c]">Advice: {v.prescription.notes}</p>}
+                    </div>
+                  )}
+                  {!v.chat && !v.prescription && <p className="text-xs text-[#9db3aa]">No chat or prescription recorded for this visit.</p>}
+                </div>
+              )}
+            </div>
+          );
+        }) : <Empty>No past visits recorded.</Empty>}
       </Card>
     </div>
   );

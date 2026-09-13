@@ -2,6 +2,9 @@
 
 import { Calendar, FileText, Pill, Clock, LogOut } from "lucide-react";
 import Link from "next/link";
+import PortalVisitHistory from "@/components/PortalVisitHistory";
+
+const PORTAL_PATIENT_ID = "RM-102";
 
 export default function PatientPortalPage() {
   const appointments = [
@@ -124,6 +127,9 @@ export default function PatientPortalPage() {
             </div>
           </div>
         </div>
+
+        {/* Per-appointment chat history + prescriptions */}
+        <PortalVisitHistory patientId={PORTAL_PATIENT_ID} />
       </div>
     </main>
   );
