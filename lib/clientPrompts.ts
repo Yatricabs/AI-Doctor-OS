@@ -242,38 +242,94 @@ export function buildResearchPrompt(s: IntakeSnapshot): string {
   ].join("\n");
 }
 
+/**
+ * Research-informed QUESTION PLAN (Perplexity Sonar, real-time web + citations).
+ * Given the complaint so far, researches what a doctor should ASK to assess THIS
+ * condition, plus red-flag questions. Returns a short, plain list of question
+ * topics the deep-questioning phase can follow. Not a diagnosis.
+ */
+export function buildQuestionPlanPrompt(s: IntakeSnapshot): string {
+  return [
+    "You are a clinical intake planner supporting a doctor. Using reputable medical sources, determine the",
+    "specific ASSESSMENT QUESTIONS a doctor would ask a patient to evaluate the presentation below —",
+    "the way a clinician takes a focused history for THIS complaint.",
+    "",
+    snapshotBlock(s),
+    "",
+    "Output a SHORT numbered list (6-10 items) of the most useful, condition-specific questions to ask this",
+    "patient (associated symptoms, character/severity, timing/triggers, relevant history, and DANGER/red-flag",
+    "questions). Keep each item to one line. No diagnosis, no advice — only the questions to ask.",
+  ].join("\n");
+}
+
+export type UrgencyLevel = "routine" | "opd" | "urgent" | "admit" | "emergency";
+export type SurgeryLikelihood = "none" | "possible" | "likely";
+
 export type PreVisitReport = {
+  // Backward-compatible fields (kept so existing save route/UI keep working).
   chiefComplaint: string;
   history: string;
   medications: string;
   currentIssue: string;
-  considerations: string[];
+  considerations: string[];   // = likely diagnoses / possibilities (review-required)
   redFlags: string[];
   missingInfo: string[];
   patientQuestions: string[];
-  summary: string;   // full narrative for the doctor
-  research: string;  // the web-research briefing (with citations)
+  summary: string;            // full narrative for the doctor
+  research: string;           // the web-research briefing (with citations)
+  // New diagnostic sections for the doctor report.
+  assessment: string;                 // AI's clinical assessment narrative (review-required)
+  diagnosisConfidence: "low" | "moderate" | "high";
+  testsInitial: string[];             // first-line tests (blood/urine/stool etc.)
+  testsIfSevere: string[];            // escalation tests/scans if severe/persistent
+  infoSufficient: boolean;            // is the collected info enough to start treatment?
+  infoSufficientNote: string;
+  treatmentMedicines: string[];       // suggested medicine considerations (review-required)
+  treatmentMeasures: string[];        // supportive/lifestyle measures
+  urgency: UrgencyLevel;
+  urgencyReason: string;
+  surgery: SurgeryLikelihood;
+  surgeryNote: string;
+  nextSteps: string[];                // clear next-step guidance for the doctor
 };
 
+const URGENCY_VALUES: UrgencyLevel[] = ["routine", "opd", "urgent", "admit", "emergency"];
+const SURGERY_VALUES: SurgeryLikelihood[] = ["none", "possible", "likely"];
+
 /**
- * Compiles the final structured pre-visit report for the doctor from the intake
- * snapshot + the web-research briefing. Review-required, no diagnosis.
+ * Compiles the final SECTION-WISE pre-visit report for the doctor from the intake
+ * snapshot + web-research briefing. Review-required; the doctor decides everything.
  */
 export function buildPreVisitReportMessages(s: IntakeSnapshot, research: string): ChatMessage[] {
   return [
     {
       role: "system",
       content: [
-        "You compile a patient's pre-visit intake into a structured report for a DOCTOR to read before the visit.",
-        "You ASSIST; the clinician DECIDES. Never diagnose or prescribe. Frame everything as review-required.",
-        "Return STRICT JSON only (no markdown/fences) with exactly these keys:",
-        "chiefComplaint (string), history (string), medications (string), currentIssue (string),",
-        "considerations (string[] — possibilities to weigh, not diagnoses),",
-        "redFlags (string[] — safety concerns to check),",
-        "missingInfo (string[] — what the doctor should still confirm),",
-        "patientQuestions (string[] — questions/worries the patient raised),",
-        "summary (string — a clear 4-8 sentence narrative the doctor can read at a glance).",
-        "Base it ONLY on what the patient reported and the research provided; do not invent clinical data.",
+        "You compile a patient's pre-visit intake into a DETAILED, SECTION-WISE report for a DOCTOR to read before the visit.",
+        "You ASSIST; the clinician DECIDES. Everything is review-required. Do NOT give a final diagnosis and do NOT prescribe —",
+        "instead give considerations, suggestions, and clear options for the doctor to confirm.",
+        "Use the patient's reported information and the web-research briefing. Do not invent clinical data.",
+        "",
+        "Return STRICT JSON only (no markdown/fences) with EXACTLY these keys:",
+        "  chiefComplaint (string),",
+        "  history (string — full history: background, prior care, medicines, uploaded report findings),",
+        "  medications (string), currentIssue (string),",
+        "  assessment (string — your clinical assessment narrative, review-required),",
+        "  considerations (string[] — likely conditions/possibilities to weigh, NOT a final diagnosis),",
+        "  diagnosisConfidence ('low'|'moderate'|'high'),",
+        "  redFlags (string[] — safety concerns to check),",
+        "  testsInitial (string[] — first-line tests to consider e.g. CBC, urine, stool),",
+        "  testsIfSevere (string[] — escalation tests/scans if severe/persistent e.g. USG, CT, endoscopy),",
+        "  infoSufficient (boolean — is the info gathered enough to START treatment, or is more needed?),",
+        "  infoSufficientNote (string — one line explaining),",
+        "  treatmentMedicines (string[] — medicine considerations, review-required, generic where possible),",
+        "  treatmentMeasures (string[] — supportive/lifestyle/diet measures),",
+        "  urgency ('routine'|'opd'|'urgent'|'admit'|'emergency'),",
+        "  urgencyReason (string),",
+        "  surgery ('none'|'possible'|'likely'), surgeryNote (string),",
+        "  nextSteps (string[] — clear next-step guidance for the doctor),",
+        "  missingInfo (string[]), patientQuestions (string[]),",
+        "  summary (string — a clear 4-8 sentence overview the doctor can read at a glance).",
       ].join("\n"),
     },
     {
@@ -282,7 +338,7 @@ export function buildPreVisitReportMessages(s: IntakeSnapshot, research: string)
         "PATIENT INTAKE:",
         snapshotBlock(s),
         "",
-        "WEB RESEARCH BRIEFING (for your considerations/red-flags; already sourced):",
+        "WEB RESEARCH BRIEFING (already sourced; use for assessment/tests/red-flags):",
         research || "(no research available)",
       ].join("\n"),
     },
@@ -298,6 +354,9 @@ export function parsePreVisitReport(raw: string, research: string): PreVisitRepo
   if (start >= 0 && end > start) {
     try { o = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>; } catch { o = {}; }
   }
+  const urgency = (URGENCY_VALUES.includes(o.urgency as UrgencyLevel) ? o.urgency : "opd") as UrgencyLevel;
+  const surgery = (SURGERY_VALUES.includes(o.surgery as SurgeryLikelihood) ? o.surgery : "none") as SurgeryLikelihood;
+  const conf = (["low", "moderate", "high"].includes(String(o.diagnosisConfidence)) ? o.diagnosisConfidence : "moderate") as "low" | "moderate" | "high";
   return {
     chiefComplaint: String(o.chiefComplaint ?? ""),
     history: String(o.history ?? ""),
@@ -309,5 +368,18 @@ export function parsePreVisitReport(raw: string, research: string): PreVisitRepo
     patientQuestions: arr(o.patientQuestions),
     summary: String(o.summary ?? cleaned.slice(0, 2000)),
     research,
+    assessment: String(o.assessment ?? ""),
+    diagnosisConfidence: conf,
+    testsInitial: arr(o.testsInitial),
+    testsIfSevere: arr(o.testsIfSevere),
+    infoSufficient: Boolean(o.infoSufficient),
+    infoSufficientNote: String(o.infoSufficientNote ?? ""),
+    treatmentMedicines: arr(o.treatmentMedicines),
+    treatmentMeasures: arr(o.treatmentMeasures),
+    urgency,
+    urgencyReason: String(o.urgencyReason ?? ""),
+    surgery,
+    surgeryNote: String(o.surgeryNote ?? ""),
+    nextSteps: arr(o.nextSteps),
   };
 }

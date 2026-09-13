@@ -14,6 +14,7 @@ import { aiChat, aiAnalyzeFile, aiChatStream, MODELS, puterUpload, PuterUnavaila
 import {
   buildAdaptiveQuestionMessages,
   buildPreVisitReportMessages,
+  buildQuestionPlanPrompt,
   buildReportVisionPrompt,
   buildResearchPrompt,
   hasAbnormalFindings,
@@ -96,6 +97,8 @@ function AppointmentFlow() {
   const deepCountRef = useRef(0);          // how many deep Qs asked so far
   const deepQARef = useRef<{ q: string; a: string }[]>([]); // collected Q/A
   const answersRef = useRef<Answers>({});  // latest answers (for finalize)
+  const questionPlanRef = useRef("");      // research-informed plan of what to ask
+  const researchRef = useRef("");          // cached web research (reused at finalize)
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns, busy, analyzing]);
 
@@ -241,6 +244,12 @@ function AppointmentFlow() {
     answersRef.current = next;
     setAnswers(next);
 
+    // As soon as we know the complaint, research (in the background) WHAT a
+    // doctor should ask for this condition, so the deep questions are guided.
+    if (cur.key === "complaint" && answer.trim().length > 2) {
+      void buildResearchPlan(next);
+    }
+
     // Advance to next non-skipped step.
     idx += 1;
     while (steps[idx] && steps[idx].skip?.(next)) idx += 1;
@@ -299,12 +308,31 @@ function AppointmentFlow() {
     await finalize(merged);
   }
 
+  // Background: research (Perplexity) what a doctor should ask for this complaint.
+  // Cached in questionPlanRef and reused to guide the deep questions. Best-effort.
+  async function buildResearchPlan(a: Answers) {
+    if (questionPlanRef.current) return;
+    try {
+      const plan = await aiChat(
+        [{ role: "user", content: buildQuestionPlanPrompt(snapshotFrom(a)) }],
+        { model: MODELS.research, maxTokens: 500 }
+      );
+      const clean = (plan ?? "").trim();
+      if (clean.length > 10) {
+        questionPlanRef.current = clean;
+        logQuestion("question_plan", clean);
+      }
+    } catch { /* deep questions still work without the plan */ }
+  }
+
   // The core intelligence: AI generates ONE complaint-specific deep question,
-  // aware of everything asked so far. Returns "STOP"->"" when it has enough, or
-  // "" if AI is unavailable (a complaint-aware fallback is used the first time).
+  // guided by the research question-plan, aware of everything asked so far.
+  // Returns "STOP"->"" when it has enough, or "" if AI is unavailable (a
+  // complaint-aware fallback is used the first time).
   async function nextDeepQuestion(a: Answers): Promise<string> {
     const langTxt = lang === "english" ? "simple clear English" : "simple warm Hindi/Hinglish (Roman script)";
     const asked = deepQARef.current.map((x, i) => `Q${i + 1}: ${x.q}\nA${i + 1}: ${x.a || "(not answered yet)"}`).join("\n");
+    const plan = questionPlanRef.current;
     try {
       const out = await aiChat(
         [
@@ -312,10 +340,12 @@ function AppointmentFlow() {
             role: "system",
             content: [
               `You are an experienced doctor doing intake with a patient in ${langTxt}.`,
-              "Think about the patient's ACTUAL complaint and ask the SINGLE most useful next question a good doctor would ask to understand THIS specific problem (relevant associated symptoms, severity, frequency, triggers, danger signs, and impact).",
-              "The question MUST be specific to their complaint — do not ask generic or irrelevant things.",
+              "You have a research-based PLAN of the questions a doctor should ask for this condition.",
+              "Ask the SINGLE most useful NEXT question from/inspired by that plan that has not been covered yet",
+              "(relevant associated symptoms, character/severity, timing/triggers, relevant history, and DANGER/red-flag signs).",
+              "The question MUST be specific to their complaint — never generic or irrelevant.",
               "Do NOT repeat anything already asked. Do NOT diagnose or advise.",
-              "If you already have enough information to brief the doctor, reply with exactly: STOP",
+              "If the plan is sufficiently covered and you have enough to brief the doctor, reply with exactly: STOP",
               "Otherwise output ONLY the single question (max ~25 words).",
             ].join("\n"),
           },
@@ -326,8 +356,9 @@ function AppointmentFlow() {
               `Duration: ${a.duration ?? ""}`,
               `Seen a doctor before: ${a.seen_doctor ?? ""}`,
               `Age: ${a.age ?? ""}, Sex: ${a.sex ?? ""}`,
+              plan ? `RESEARCH-BASED QUESTION PLAN (follow this):\n${plan}` : "",
               asked ? `Deep questions asked so far:\n${asked}` : "No deep questions asked yet — ask the first, most relevant one.",
-            ].join("\n"),
+            ].filter(Boolean).join("\n"),
           },
         ],
         { model: MODELS.reasoning, temperature: 0.5, maxTokens: 80 }
@@ -346,15 +377,9 @@ function AppointmentFlow() {
     }
   }
 
-  async function finalize(a: Answers) {
-    setPhase("finalizing");
-    setError("");
-    // 1) Ensure the patient record exists.
-    setFinalizeMsg("Saving your details…");
-    const pid = await ensurePatient();
-    if (!pid) { setError("Could not create your patient record. Please check your details."); setPhase("chat"); return; }
-
-    const snapshot: IntakeSnapshot = {
+  // Build the clinical snapshot from collected answers + uploaded report findings.
+  function snapshotFrom(a: Answers): IntakeSnapshot {
+    return {
       patientType: isReturning ? "returning" : "new",
       name: a.name, age: a.age, sex: a.sex,
       chiefComplaint: a.complaint ?? "",
@@ -363,8 +388,20 @@ function AppointmentFlow() {
       symptoms: a.symptoms,
       reportFindings: findings.map((f) => `${f.documentType || "report"}: ${f.overallImpression}${f.abnormal.length ? ` | abnormal: ${f.abnormal.join("; ")}` : ""}`).join(" || "),
     };
+  }
 
-    // 2) Internet deep research (Perplexity sonar) — best effort.
+  async function finalize(a: Answers) {
+    setPhase("finalizing");
+    setError("");
+    // 1) Ensure the patient record exists.
+    setFinalizeMsg("Saving your details…");
+    const pid = await ensurePatient();
+    if (!pid) { setError("Could not create your patient record. Please check your details."); setPhase("chat"); return; }
+
+    const snapshot = snapshotFrom(a);
+
+    // 2) Internet deep research (Perplexity sonar). Now the snapshot includes all
+    //    symptom answers, so run a full briefing (best effort).
     let research = "";
     try {
       setFinalizeMsg("Researching your condition on the web…");
@@ -376,6 +413,7 @@ function AppointmentFlow() {
       );
       void logAiTraining({ workflow: "web_research", patientId: pid, model: MODELS.research, inputContext: researchPrompt, aiOutput: research, outputType: "markdown", source: "patient_appointment" });
     } catch { research = ""; }
+    if (!research) research = researchRef.current; // reuse the plan-time research if the full one failed
 
     // 3) Compile the structured report.
     let report;
@@ -390,11 +428,11 @@ function AppointmentFlow() {
       report.summary = `${snapshot.chiefComplaint || "Patient"} — ${snapshot.duration ?? ""}. ${snapshot.symptoms ?? ""}`.trim();
     }
 
-    // 4) Save the AI report for the doctor.
+    // 4) Save the AI report for the doctor (structured JSON + legacy fields).
     try {
       await fetch("/api/pre-visit", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "save_ai_report", patientId: pid, patientType: snapshot.patientType, report }),
+        body: JSON.stringify({ action: "save_ai_report", patientId: pid, patientType: snapshot.patientType, report, reportJson: JSON.stringify(report) }),
       });
     } catch { /* best effort */ }
 

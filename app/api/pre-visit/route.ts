@@ -200,6 +200,7 @@ export async function POST(request: Request) {
         reviewStatus: "generated",
         aiReport: str(report.summary, 8000),
         research: str(report.research, 8000),
+        reportJson: typeof body.reportJson === "string" ? body.reportJson.slice(0, 20000) : JSON.stringify(report).slice(0, 20000),
         createdAt: nowIso(),
       };
       await insert("pre_visit_briefs", row);

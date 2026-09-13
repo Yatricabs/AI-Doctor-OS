@@ -290,6 +290,7 @@
     review_status TEXT DEFAULT 'generated',
     ai_report TEXT,
     research TEXT,
+    report_json TEXT,
     reviewed_by TEXT,
     reviewed_at TEXT,
     created_at TEXT NOT NULL DEFAULT (to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))

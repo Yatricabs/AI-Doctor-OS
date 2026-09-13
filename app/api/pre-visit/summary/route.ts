@@ -58,7 +58,7 @@ export const GET = safeRoute(async (request: Request) => {
   if (!context) return error("Patient not found", 404);
 
   // ── The AI-generated pre-visit report (with internet research) from intake ──
-  const aiBrief = await queryOne<{ aiReport?: string; research?: string; aiConsiderations?: string; attentionSignals?: string; createdAt?: string }>(
+  const aiBrief = await queryOne<{ aiReport?: string; research?: string; reportJson?: string; aiConsiderations?: string; attentionSignals?: string; createdAt?: string }>(
     "SELECT * FROM pre_visit_briefs WHERE patient_id = ? ORDER BY created_at DESC LIMIT 1",
     [patientId]
   );
@@ -74,11 +74,17 @@ export const GET = safeRoute(async (request: Request) => {
       return p.map((s) => (s && typeof s === "object" ? String((s as { detail?: string }).detail ?? "") : String(s))).filter(Boolean);
     } catch { return []; }
   };
+  // Full structured report (new diagnostic sections) if present.
+  let structured: Record<string, unknown> | null = null;
+  if (aiBrief?.reportJson) {
+    try { structured = JSON.parse(aiBrief.reportJson) as Record<string, unknown>; } catch { structured = null; }
+  }
   const aiReport = {
     summary: aiBrief?.aiReport ?? "",
     research: aiBrief?.research ?? "",
     considerations: parseStrArr(aiBrief?.aiConsiderations),
     redFlags: parseSignals(aiBrief?.attentionSignals),
+    structured, // the full PreVisitReport object (or null for older briefs)
   };
 
   // ── The intake conversation: chief complaint, history, meds, tests, etc. ──

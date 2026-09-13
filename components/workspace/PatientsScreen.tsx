@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, ArrowLeft, FileText, HeartPulse, Loader2, Pill, Receipt, Search, Sparkles, User } from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, FileText, FlaskConical, HeartPulse, Loader2, Pill, Receipt, Scissors, Search, Sparkles, Stethoscope, User } from "lucide-react";
 import { apiGet } from "./api";
 import { formatINR, humanize } from "@/lib/format";
 
@@ -66,11 +66,41 @@ type Context = {
   reports: { id: string; title: string; type: string; date: string; aiFindings?: string }[];
   followUps: { id: string; title: string; dueDate: string; priority: string }[];
 };
+type StructuredReport = {
+  chiefComplaint?: string;
+  history?: string;
+  currentIssue?: string;
+  assessment?: string;
+  diagnosisConfidence?: string;
+  considerations?: string[];
+  redFlags?: string[];
+  testsInitial?: string[];
+  testsIfSevere?: string[];
+  infoSufficient?: boolean;
+  infoSufficientNote?: string;
+  treatmentMedicines?: string[];
+  treatmentMeasures?: string[];
+  urgency?: string;
+  urgencyReason?: string;
+  surgery?: string;
+  surgeryNote?: string;
+  nextSteps?: string[];
+  summary?: string;
+  research?: string;
+};
 type Summary = {
   intake: { preVisitBrief: string; story: { question: string; answer: string }[] };
-  aiReport?: { summary: string; research: string; considerations: string[]; redFlags: string[] };
+  aiReport?: { summary: string; research: string; considerations: string[]; redFlags: string[]; structured?: StructuredReport | null };
   reports: { id: string; title: string; findings: { overallImpression: string; abnormal: string[] } | null }[];
   abnormalHighlights: string[];
+};
+
+const URGENCY_STYLE: Record<string, { label: string; cls: string }> = {
+  routine: { label: "Routine", cls: "bg-[#eef7f2] text-[#4f9d78]" },
+  opd: { label: "OPD", cls: "bg-[#edf2f8] text-[#6682a5]" },
+  urgent: { label: "Urgent", cls: "bg-amber-100 text-amber-700" },
+  admit: { label: "Admit / observe", cls: "bg-orange-100 text-orange-700" },
+  emergency: { label: "Emergency", cls: "bg-red-100 text-red-700" },
 };
 type Bill = { id: string; total: number; createdAt: string; items: { description: string; amount: number; itemType: string }[] };
 
@@ -124,38 +154,15 @@ function PatientDetail({ patientId, onBack }: { patientId: string; onBack: () =>
       </div>
 
       {/* AI pre-visit report (from the patient's conversational intake) */}
-      {(summary?.aiReport?.summary || summary?.intake.preVisitBrief) && (
-        <Card icon={Sparkles} title="AI pre-visit report" tone="purple">
-          <p className="whitespace-pre-wrap text-sm leading-6 text-[#5a4570]">{summary?.aiReport?.summary || summary?.intake.preVisitBrief}</p>
-          {summary?.aiReport && summary.aiReport.redFlags.length > 0 && (
-            <div className="mt-3">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-red-500">Red flags</p>
-              <ul className="mt-1 space-y-0.5">
-                {summary.aiReport.redFlags.map((f, i) => <li key={i} className="text-xs text-red-600">· {f}</li>)}
-              </ul>
-            </div>
-          )}
-          {summary?.aiReport && summary.aiReport.considerations.length > 0 && (
-            <div className="mt-3">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-[#7a5a8a]">Considerations (review required)</p>
-              <ul className="mt-1 space-y-0.5">
-                {summary.aiReport.considerations.map((c, i) => <li key={i} className="text-xs text-[#5a4570]">· {c}</li>)}
-              </ul>
-            </div>
-          )}
-          {summary?.abnormalHighlights && summary.abnormalHighlights.length > 0 && (
-            <p className="mt-2 text-xs text-red-600">Report flags: {summary.abnormalHighlights.join("; ")}</p>
-          )}
-          <p className="mt-2 text-[10px] text-[#9773a4]">AI-generated · review required · not a diagnosis</p>
-        </Card>
-      )}
-
-      {/* Internet research (with citations) */}
-      {summary?.aiReport?.research && (
-        <Card icon={Sparkles} title="AI internet research">
-          <p className="whitespace-pre-wrap text-sm leading-6 text-[#41627a]">{summary.aiReport.research}</p>
-          <p className="mt-2 text-[10px] text-[#9db3aa]">Sourced from the web via AI · verify all sources · not a diagnosis</p>
-        </Card>
+      {summary?.aiReport && (summary.aiReport.structured || summary.aiReport.summary || summary.intake.preVisitBrief) && (
+        <AiDoctorReport
+          report={summary.aiReport.structured ?? null}
+          fallbackSummary={summary.aiReport.summary || summary.intake.preVisitBrief}
+          fallbackConsiderations={summary.aiReport.considerations}
+          fallbackRedFlags={summary.aiReport.redFlags}
+          research={summary.aiReport.research}
+          reportFlags={summary.abnormalHighlights}
+        />
       )}
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -242,4 +249,121 @@ function Row({ main, sub, danger }: { main: string; sub?: string; danger?: boole
 }
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="py-1 text-xs text-[#9db3aa]">{children}</p>;
+}
+
+// The AI's section-wise pre-visit report for the doctor (review-required).
+function AiDoctorReport({
+  report, fallbackSummary, fallbackConsiderations, fallbackRedFlags, research, reportFlags,
+}: {
+  report: StructuredReport | null;
+  fallbackSummary: string;
+  fallbackConsiderations: string[];
+  fallbackRedFlags: string[];
+  research?: string;
+  reportFlags: string[];
+}) {
+  const r = report;
+  const considerations = r?.considerations?.length ? r.considerations : fallbackConsiderations;
+  const redFlags = r?.redFlags?.length ? r.redFlags : fallbackRedFlags;
+  const urgency = r?.urgency ? (URGENCY_STYLE[r.urgency] ?? URGENCY_STYLE.opd) : null;
+
+  return (
+    <div className="mt-3 rounded-2xl border border-[#d8d0e8] bg-[#faf7fd] p-4">
+      <div className="flex items-center justify-between">
+        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#7a5a8a]">
+          <Sparkles className="h-3.5 w-3.5" /> AI pre-visit report
+        </p>
+        {urgency && <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${urgency.cls}`}>{urgency.label}</span>}
+      </div>
+
+      {/* Overview */}
+      {(r?.summary || fallbackSummary) && (
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#4a3d57]">{r?.summary || fallbackSummary}</p>
+      )}
+
+      <div className="mt-3 space-y-3">
+        <Sec icon={Stethoscope} label="Problem">{r?.chiefComplaint || r?.currentIssue || "—"}</Sec>
+        {r?.history && <Sec icon={Activity} label="History">{r.history}</Sec>}
+
+        {(r?.assessment || considerations.length > 0) && (
+          <div className="rounded-lg border border-[#e6def0] bg-white p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[#7a5a8a]">AI assessment · likely considerations {r?.diagnosisConfidence ? `(${r.diagnosisConfidence} confidence)` : ""}</p>
+            {r?.assessment && <p className="mt-1 text-xs leading-5 text-[#4a3d57]">{r.assessment}</p>}
+            {considerations.length > 0 && (
+              <ul className="mt-1.5 space-y-0.5">
+                {considerations.map((c, i) => <li key={i} className="text-xs text-[#5a4570]">· {c}</li>)}
+              </ul>
+            )}
+            <p className="mt-1 text-[10px] italic text-[#9773a4]">Possibilities to weigh — not a final diagnosis.</p>
+          </div>
+        )}
+
+        {redFlags.length > 0 && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+            <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-red-500"><AlertTriangle className="h-3 w-3" /> Red flags</p>
+            <ul className="mt-1 space-y-0.5">{redFlags.map((f, i) => <li key={i} className="text-xs text-red-600">· {f}</li>)}</ul>
+          </div>
+        )}
+
+        {(r?.testsInitial?.length || r?.testsIfSevere?.length) ? (
+          <div className="rounded-lg border border-[#c9dbe8] bg-[#f2f7fb] p-3">
+            <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#4a6f8a]"><FlaskConical className="h-3 w-3" /> Recommended tests</p>
+            {r?.testsInitial?.length ? <p className="mt-1 text-xs text-[#41627a]"><span className="font-semibold">Initial:</span> {r.testsInitial.join(", ")}</p> : null}
+            {r?.testsIfSevere?.length ? <p className="mt-0.5 text-xs text-[#41627a]"><span className="font-semibold">If severe / persistent:</span> {r.testsIfSevere.join(", ")}</p> : null}
+          </div>
+        ) : null}
+
+        {r && (
+          <div className="rounded-lg border border-[#dbe6ee] bg-white p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[#5a7a6e]">Enough info to start treatment?</p>
+            <p className={`mt-1 text-xs font-semibold ${r.infoSufficient ? "text-[#4f9d78]" : "text-amber-600"}`}>{r.infoSufficient ? "Likely sufficient" : "More info / tests needed"}{r.infoSufficientNote ? ` — ${r.infoSufficientNote}` : ""}</p>
+          </div>
+        )}
+
+        {(r?.treatmentMedicines?.length || r?.treatmentMeasures?.length) ? (
+          <div className="rounded-lg border border-[#c8e5d8] bg-[#f0faf5] p-3">
+            <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#317b67]"><Pill className="h-3 w-3" /> Treatment considerations</p>
+            {r?.treatmentMedicines?.length ? <ul className="mt-1 space-y-0.5">{r.treatmentMedicines.map((m, i) => <li key={i} className="text-xs text-[#2f5a4a]">· {m}</li>)}</ul> : null}
+            {r?.treatmentMeasures?.length ? <p className="mt-1 text-xs text-[#3f6b5c]"><span className="font-semibold">Measures:</span> {r.treatmentMeasures.join(", ")}</p> : null}
+            <p className="mt-1 text-[10px] italic text-[#7aa693]">Suggestions for the doctor to confirm — not a prescription.</p>
+          </div>
+        ) : null}
+
+        {urgency && (
+          <Sec icon={Activity} label="Urgency">{urgency.label}{r?.urgencyReason ? ` — ${r.urgencyReason}` : ""}</Sec>
+        )}
+
+        {r?.surgery && r.surgery !== "none" && (
+          <Sec icon={Scissors} label="Surgery">{r.surgery === "likely" ? "Likely may be needed" : "Possibly may be needed"}{r.surgeryNote ? ` — ${r.surgeryNote}` : ""}</Sec>
+        )}
+
+        {r?.nextSteps?.length ? (
+          <div className="rounded-lg border border-[#e6def0] bg-white p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[#7a5a8a]">Suggested next steps for the doctor</p>
+            <ul className="mt-1 space-y-0.5">{r.nextSteps.map((s, i) => <li key={i} className="text-xs text-[#5a4570]">· {s}</li>)}</ul>
+          </div>
+        ) : null}
+
+        {reportFlags.length > 0 && <p className="text-xs text-red-600">Uploaded report flags: {reportFlags.join("; ")}</p>}
+
+        {research && (
+          <details className="rounded-lg border border-[#dbe6ee] bg-white p-3">
+            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wide text-[#4a6f8a]">AI internet research (with sources)</summary>
+            <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[#41627a]">{research}</p>
+          </details>
+        )}
+      </div>
+
+      <p className="mt-3 text-[10px] text-[#9773a4]">AI-generated · web-researched · REVIEW REQUIRED · the clinician decides all diagnosis and treatment.</p>
+    </div>
+  );
+}
+
+function Sec({ icon: Icon, label, children }: { icon: React.ComponentType<{ className?: string }>; label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#7a5a8a]"><Icon className="h-3 w-3" /> {label}</p>
+      <p className="mt-0.5 text-xs leading-5 text-[#4a3d57]">{children}</p>
+    </div>
+  );
 }
