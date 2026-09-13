@@ -99,6 +99,7 @@ function AppointmentFlow() {
   const answersRef = useRef<Answers>({});  // latest answers (for finalize)
   const questionPlanRef = useRef("");      // research-informed plan of what to ask
   const researchRef = useRef("");          // cached web research (reused at finalize)
+  const processingRef = useRef(false);     // hard lock to prevent double-submits
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns, busy, analyzing]);
 
@@ -221,52 +222,60 @@ function AppointmentFlow() {
   }
 
   async function advance(answer: string) {
-    setTurns((p) => [...p, { role: "user", content: answer }]);
-    setInput(""); setOptions([]); setBusy(true); setError("");
+    // Hard lock: ignore a second submit while one is being processed (prevents
+    // the double-message / double-question race seen when Enter+click overlap).
+    if (processingRef.current) return;
+    processingRef.current = true;
+    try {
+      setTurns((p) => [...p, { role: "user", content: answer }]);
+      setInput(""); setOptions([]); setBusy(true); setError("");
 
-    // ── If we're in the dynamic AI deep-questioning phase, route the answer
-    //    there instead of the fixed script. ──
-    if (inDeepPhaseRef.current) {
-      const lastQ = deepQARef.current[deepQARef.current.length - 1]?.q ?? "";
-      deepQARef.current[deepQARef.current.length - 1] = { q: lastQ, a: answer };
-      await continueDeepPhase();
-      return;
+      // ── If we're in the dynamic AI deep-questioning phase, route the answer
+      //    there instead of the fixed script. ──
+      if (inDeepPhaseRef.current) {
+        const lastQ = deepQARef.current[deepQARef.current.length - 1]?.q ?? "";
+        deepQARef.current[deepQARef.current.length - 1] = { q: lastQ, a: answer };
+        await continueDeepPhase();
+        return;
+      }
+
+      const steps = script();
+      let idx = stepRef.current;
+      const cur = steps[idx];
+      if (!cur) { setBusy(false); await beginDeepPhase(answersRef.current); return; }
+
+      // Record answer + side effects.
+      const next: Answers = { ...answersRef.current, [cur.key]: answer };
+      if (cur.key === "identity") setIsReturning(/before|visited|purana|pehle/i.test(answer));
+      answersRef.current = next;
+      setAnswers(next);
+
+      // As soon as we know the complaint, research (in the background) WHAT a
+      // doctor should ask for this condition, so the deep questions are guided.
+      if (cur.key === "complaint" && answer.trim().length > 2) {
+        void buildResearchPlan(next);
+      }
+
+      // Advance to next non-skipped step.
+      idx += 1;
+      while (steps[idx] && steps[idx].skip?.(next)) idx += 1;
+      stepRef.current = idx;
+
+      // More fixed questions remain → ask the next.
+      if (steps[idx]) {
+        const q = await phrase(steps[idx], answer);
+        logQuestion(steps[idx].key, q);
+        setTurns((p) => [...p, { role: "assistant", content: q }]);
+        setOptions(steps[idx].options ?? []);
+        setBusy(false);
+        return;
+      }
+
+      // Fixed script finished → start the AI deep-questioning phase.
+      await beginDeepPhase(next);
+    } finally {
+      processingRef.current = false;
     }
-
-    const steps = script();
-    let idx = stepRef.current;
-    const cur = steps[idx];
-    if (!cur) { setBusy(false); await beginDeepPhase(answersRef.current); return; }
-
-    // Record answer + side effects.
-    const next: Answers = { ...answersRef.current, [cur.key]: answer };
-    if (cur.key === "identity") setIsReturning(/before|visited|purana|pehle/i.test(answer));
-    answersRef.current = next;
-    setAnswers(next);
-
-    // As soon as we know the complaint, research (in the background) WHAT a
-    // doctor should ask for this condition, so the deep questions are guided.
-    if (cur.key === "complaint" && answer.trim().length > 2) {
-      void buildResearchPlan(next);
-    }
-
-    // Advance to next non-skipped step.
-    idx += 1;
-    while (steps[idx] && steps[idx].skip?.(next)) idx += 1;
-    stepRef.current = idx;
-
-    // More fixed questions remain → ask the next.
-    if (steps[idx]) {
-      const q = await phrase(steps[idx], answer);
-      logQuestion(steps[idx].key, q);
-      setTurns((p) => [...p, { role: "assistant", content: q }]);
-      setOptions(steps[idx].options ?? []);
-      setBusy(false);
-      return;
-    }
-
-    // Fixed script finished → start the AI deep-questioning phase.
-    await beginDeepPhase(next);
   }
 
   // Start the dynamic phase: AI asks the FIRST complaint-specific deep question.
@@ -341,12 +350,14 @@ function AppointmentFlow() {
             content: [
               `You are an experienced doctor doing intake with a patient in ${langTxt}.`,
               "You have a research-based PLAN of the questions a doctor should ask for this condition.",
-              "Ask the SINGLE most useful NEXT question from/inspired by that plan that has not been covered yet",
+              "Ask the SINGLE most useful NEXT question on a NEW topic not yet covered",
               "(relevant associated symptoms, character/severity, timing/triggers, relevant history, and DANGER/red-flag signs).",
               "The question MUST be specific to their complaint — never generic or irrelevant.",
-              "Do NOT repeat anything already asked. Do NOT diagnose or advise.",
-              "If the plan is sufficiently covered and you have enough to brief the doctor, reply with exactly: STOP",
-              "Otherwise output ONLY the single question (max ~25 words).",
+              "CRITICAL: Never repeat or re-ask a topic already asked (even in different words). Look at the",
+              "'Deep questions asked so far' and pick something genuinely NEW.",
+              "If the key topics are already covered OR the patient's answers already give enough to brief the",
+              "doctor, reply with exactly: STOP (do not keep asking for the sake of it).",
+              "Otherwise output ONLY the single new question (max ~25 words).",
             ].join("\n"),
           },
           {
@@ -365,6 +376,8 @@ function AppointmentFlow() {
       );
       const clean = (out ?? "").trim();
       if (/^stop\b/i.test(clean) || clean.length < 3) return "";
+      // Guard against the AI re-asking the same thing in different words.
+      if (isDuplicateQuestion(clean)) return "";
       return clean;
     } catch {
       // AI unavailable → ask ONE complaint-aware fallback the first time only.
@@ -375,6 +388,23 @@ function AppointmentFlow() {
       }
       return "";
     }
+  }
+
+  // True if `q` overlaps heavily (>=55% shared significant words) with a question
+  // already asked — so we don't repeat the same question in different wording.
+  function isDuplicateQuestion(q: string): boolean {
+    const norm = (s: string) =>
+      s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((w) => w.length > 3);
+    const words = new Set(norm(q));
+    if (words.size === 0) return false;
+    for (const prev of deepQARef.current) {
+      const pw = norm(prev.q);
+      if (pw.length === 0) continue;
+      const shared = pw.filter((w) => words.has(w)).length;
+      const ratio = shared / Math.min(words.size, pw.length);
+      if (ratio >= 0.55) return true;
+    }
+    return false;
   }
 
   // Build the clinical snapshot from collected answers + uploaded report findings.
@@ -534,7 +564,7 @@ function AppointmentFlow() {
 
   function send(v: string) {
     const t = v.trim();
-    if (!t || busy || analyzing || phase !== "chat") return;
+    if (!t || busy || analyzing || phase !== "chat" || processingRef.current) return;
     void advance(t);
   }
 
