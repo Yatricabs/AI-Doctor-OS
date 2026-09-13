@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useDispatch, useSelector } from "react-redux";
-import { navigate, workspaceSelectors, type AppDispatch, type WorkspaceNav } from "@/lib/workspaceStore";
+import { navigate, workspaceNavFromQuery, workspaceQuery, workspaceSelectors, type WorkspaceNav } from "@/lib/workspaceStore";
+import { useWorkspaceDispatch, useWorkspaceSelector } from "@/lib/reduxHooks";
 import Link from "next/link";
 import { CalendarDays, LayoutDashboard, Package, Receipt, Stethoscope, Users } from "lucide-react";
 import DashboardScreen from "./workspace/DashboardScreen";
@@ -29,16 +29,16 @@ const NAV: { label: Nav; icon: React.ComponentType<{ className?: string }> }[] =
 ];
 
 function navFromQuery(value: string | null): WorkspaceNav {
-  return NAV.some((item) => item.label === value) ? value as WorkspaceNav : "Dashboard";
+  return workspaceNavFromQuery(value);
 }
 
 export default function DoctorWorkspace() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const dispatch = useDispatch<AppDispatch>();
-  const activeNav = useSelector(workspaceSelectors.activeNav);
-  const selectedPatientId = useSelector(workspaceSelectors.selectedPatientId);
+  const dispatch = useWorkspaceDispatch();
+  const activeNav = useWorkspaceSelector(workspaceSelectors.activeNav);
+  const selectedPatientId = useWorkspaceSelector(workspaceSelectors.selectedPatientId);
 
   useEffect(() => {
     const screen = searchParams.get("screen");
@@ -49,10 +49,7 @@ export default function DoctorWorkspace() {
   function goto(nav: string, patientId?: string) {
     const nextNav = navFromQuery(nav);
     dispatch(navigate({ nav: nextNav, patientId }));
-    const params = new URLSearchParams();
-    params.set("screen", nextNav);
-    if (nextNav === "Patients" && patientId) params.set("patientId", patientId);
-    router.push(`${pathname}?${params.toString()}`);
+    router.push(`${pathname}?${workspaceQuery(nextNav, patientId)}`);
   }
 
   return (
