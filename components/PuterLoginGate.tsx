@@ -13,13 +13,25 @@ type Props = {
   children: React.ReactNode;
   /** Shown on the login card, e.g. "Doctor Workspace". */
   title?: string;
+  /** Card body copy. Defaults to the clinician wording. */
+  description?: string;
+  /** Primary button label. */
+  ctaLabel?: string;
   /** If true, allow entering without AI when Puter can't load (degraded mode). */
   allowSkipWhenUnavailable?: boolean;
+  /** If true, always show a "Continue without AI" option (AI is optional here). */
+  allowSkipAlways?: boolean;
 };
 
-export default function PuterLoginGate({ children, title = "Doctor Workspace", allowSkipWhenUnavailable = true }: Props) {
+export default function PuterLoginGate({
+  children,
+  title = "Doctor Workspace",
+  description = "Sign in to enter the workspace. This also connects AI (Copilot, Scribe, report reading) to your account, so it's ready instantly — no pop-up in the middle of your work.",
+  ctaLabel = "Enter workspace & connect AI",
+  allowSkipWhenUnavailable = true,
+  allowSkipAlways = false,
+}: Props) {
   const auth = usePuterAuth();
-  const [name, setName] = useState("");
   const [skipped, setSkipped] = useState(false);
 
   // Already signed in (session persisted), or user chose degraded mode → show app.
@@ -45,20 +57,7 @@ export default function PuterLoginGate({ children, title = "Doctor Workspace", a
         </div>
 
         <h1 className="mt-6 text-xl font-bold text-[#173f3c]">{title}</h1>
-        <p className="mt-2 text-sm leading-6 text-[#5a7a6e]">
-          Sign in to enter the workspace. This also connects AI (Copilot, Scribe, report reading) to your account,
-          so it&apos;s ready instantly — no pop-up in the middle of your work.
-        </p>
-
-        <div className="mt-6">
-          <label className="text-xs font-bold uppercase tracking-wide text-[#5a967e]">Your name (optional)</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Dr. Ananya Arya"
-            className="mt-1.5 w-full rounded-lg border border-[#dce9e3] px-3 py-2.5 text-sm outline-none focus:border-[#07947f]"
-          />
-        </div>
+        <p className="mt-2 text-sm leading-6 text-[#5a7a6e]">{description}</p>
 
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-[#dbe6ee] bg-[#f2f7fb] p-3">
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[#3a6f8f]" />
@@ -92,16 +91,16 @@ export default function PuterLoginGate({ children, title = "Doctor Workspace", a
           ) : auth.loading ? (
             <><Loader2 className="h-4 w-4 animate-spin" /> Connecting AI…</>
           ) : (
-            <><ShieldCheck className="h-4 w-4" /> Enter workspace &amp; connect AI</>
+            <><ShieldCheck className="h-4 w-4" /> {ctaLabel}</>
           )}
         </button>
 
-        {allowSkipWhenUnavailable && auth.unavailable && (
+        {(allowSkipAlways || (allowSkipWhenUnavailable && auth.unavailable)) && (
           <button
             onClick={() => setSkipped(true)}
             className="mt-2 w-full rounded-xl border border-[#dce9e3] py-2.5 text-sm font-semibold text-[#5a967e] hover:bg-[#f0f6f3]"
           >
-            Enter without AI
+            Continue without AI
           </button>
         )}
 

@@ -25,6 +25,7 @@ import {
   type ReportKind,
 } from "@/lib/clientPrompts";
 import { logAiTraining } from "@/lib/aiTraining";
+import PuterLoginGate from "@/components/PuterLoginGate";
 
 type Turn = { role: "assistant" | "user"; content: string };
 type Phase = "chat" | "finalizing" | "done";
@@ -51,7 +52,23 @@ function kindFromFile(name: string, mime: string): ReportKind {
   return "Lab report";
 }
 
+// Page: gate on a Puter (User-Pays) sign-in first, so AI is connected up front
+// and questions/research run seamlessly (no mid-flow popup). If AI can't load,
+// the gate lets the patient continue and the flow still works on base questions.
 export default function AppointmentFlowPage() {
+  return (
+    <PuterLoginGate
+      title="Book an appointment"
+      description="Connect AI to book your appointment and let it prepare your details for the doctor. A sign-in window opens once, then it's remembered on this device. You can also continue without AI."
+      ctaLabel="Connect AI & start"
+      allowSkipAlways
+    >
+      <AppointmentFlow />
+    </PuterLoginGate>
+  );
+}
+
+function AppointmentFlow() {
   const [lang, setLang] = useState<Lang>("hinglish");
   const [phase, setPhase] = useState<Phase>("chat");
   const [turns, setTurns] = useState<Turn[]>([]);
