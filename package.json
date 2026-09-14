@@ -7,7 +7,9 @@
     "prebuild": "node scripts/verify-css.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:clinical-report-renderer": "node --experimental-strip-types scripts/clinical-report-renderer-contract-tests.mjs",
+    "test:clinical-report-renderer:semantic": "node scripts/clinical-report-renderer-semantic-state-tests.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.2.7",
@@ -26,6 +28,7 @@
     "unrs-resolver": true
   },
   "devDependencies": {
+    "@playwright/test": "1.49.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20.14.0",
     "@types/pg": "^8.23.1",
