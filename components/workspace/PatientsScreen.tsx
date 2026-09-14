@@ -5,6 +5,8 @@ import { Activity, AlertTriangle, ArrowLeft, FileText, FlaskConical, HeartPulse,
 import { apiGet } from "./api";
 import PrescriptionLetter from "./PrescriptionLetter";
 import { formatINR, humanize } from "@/lib/format";
+import ClinicalReportRenderer from "../clinical-report-renderer/ClinicalReportRenderer";
+import { parseClinicalReport } from "@/lib/clinical-report-renderer";
 
 type Patient = { id: string; name: string; initials?: string; status?: string; phone?: string; gender?: string; dateOfBirth?: string; patientType?: string; appointment?: string };
 
@@ -357,7 +359,7 @@ function AiDoctorReport({
 
       {/* Overview */}
       {(r?.summary || fallbackSummary) && (
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#4a3d57]">{r?.summary || fallbackSummary}</p>
+        <ClinicalReportRenderer className="mt-2" ir={parseClinicalReport({ source: r?.summary || fallbackSummary })} />
       )}
 
       <div className="mt-3 space-y-3">
@@ -428,7 +430,7 @@ function AiDoctorReport({
         {research && (
           <details className="rounded-lg border border-[#dbe6ee] bg-white p-3">
             <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wide text-[#4a6f8a]">AI internet research (with sources)</summary>
-            <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[#41627a]">{research}</p>
+            <ClinicalReportRenderer ir={parseClinicalReport({ source: research })} />
           </details>
         )}
       </div>

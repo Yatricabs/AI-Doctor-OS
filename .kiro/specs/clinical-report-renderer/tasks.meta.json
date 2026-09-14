@@ -1,0 +1,120 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "6.2 Write mandatory renderer semantic and state tests.": [
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361338438
+      },
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361352030
+      },
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361998972
+      }
+    ],
+    "11.1 Create `tests/clinical-report-renderer/fixtures/second-host/` with the same public host adapter shape as the primary host.": [
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361338729
+      }
+    ],
+    "11.2 Write mandatory integration-boundary tests comparing primary and second hosts.": [
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361338891
+      }
+    ],
+    "9.1 Add or update the repository-root test package manifest at `package.json` to declare exactly `@playwright/test` at pinned version `1.49.1`.": [
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361339025
+      },
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789362011491
+      },
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789362131378
+      }
+    ],
+    "9.2 Resolve the same `@playwright/test` `1.49.1` version in the repository-root `package-lock.json` and configure single-run Playwright projects for Chromium, Firefox, and WebKit.": [
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361339227
+      },
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789362145077
+      },
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789365675747
+      }
+    ],
+    "10.1 Write mandatory browser tests for the browser-verifiable acceptance checklist and renderer semantic/state browser cases.": [
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361339484
+      },
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789365698488
+      }
+    ],
+    "10.2 Write mandatory accessibility tests in the same Chromium/Firefox/WebKit matrix and both viewport profiles.": [
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361339739
+      },
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789365705361
+      },
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789369851317
+      }
+    ],
+    "12.1 Run type check, lint, unit/property, renderer semantic/state, browser, accessibility, dependency smoke, and host-equivalence tests in single-run mode.": [
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361339998
+      }
+    ],
+    "6. Implement the reusable renderer component": [
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789361999205
+      }
+    ],
+    "9. Complete renderer semantic test prerequisites and exact browser test setup": [
+      {
+        "executionId": "78733360-54ec-414c-96d7-a7dafbf9b229",
+        "chatSessionId": "sess_e673dda9-dba2-4ff3-8219-ae1bc8613846",
+        "timestamp": 1789365675975
+      }
+    ]
+  }
+}
