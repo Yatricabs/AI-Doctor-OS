@@ -45,10 +45,12 @@ export default function Header() {
               <button className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-emerald-400 transition-colors">
                 Platform <ChevronDown className="h-3.5 w-3.5" />
               </button>
-              <div className="absolute left-0 top-full mt-2 w-48 rounded-xl border border-white/10 bg-[#0F172A] py-2 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all shadow-xl z-50">
-                {platformLinks.map(({ label, href }) => (
-                  <Link key={label} href={href} className="block px-4 py-2 text-xs text-slate-400 hover:text-emerald-400 hover:bg-white/5 transition-colors">{label}</Link>
-                ))}
+              <div className="absolute left-0 top-[calc(100%_-_8px)] w-48 pt-4 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all z-50">
+                <div className="rounded-xl border border-white/10 bg-[#0F172A] py-2 shadow-xl">
+                  {platformLinks.map(({ label, href }) => (
+                    <Link key={label} href={href} className="block px-4 py-2 text-xs text-slate-400 hover:text-emerald-400 hover:bg-white/5 transition-colors">{label}</Link>
+                  ))}
+                </div>
               </div>
             </div>
           </nav>
