@@ -1,27 +1,99 @@
 # AI UPCHAR — Project Status / परियोजना स्थिति
 
-**Last Updated:** 2026-09-12
+**Last Updated:** 2026-09-14
 **Version:** v2.0
 **Live Demo:** https://aiupchar.com/demo
 
-> यह document batata hai ki **kya kiya hai**, **kya karna baaki hai**, aur **jo kiya hai vo kyu kiya hai**.
-> (This document explains what has been done, what remains, and why the decisions were made.)
+> यह document batata hai ki **kya complete hai**, **kya abhi pending hai**, aur **current implementation ki boundaries kya hain**. AI UPCHAR ka core principle hai: **AI assists. Clinicians decide.**
 
 ---
 
-## 1. Executive Summary / सारांश
+## 1. Recent delivery since 2026-09-12 / हाल की डिलीवरी
 
-AI UPCHAR ek **patient-to-provider orchestration platform** hai jo Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS, aur SQLite (better-sqlite3) par bana hai. Supabase (PostgreSQL) production persistence ke liye connected hai.
+The items below are committed work in the repository history. They are grouped by workstream so the completed product behavior is distinguishable from future production hardening.
 
-Core principle: **"AI assists. Clinicians decide."** — AI kabhi bhi apne aap diagnose, prescribe, ya patient ko message nahi karta. Har clinical action ke liye doctor ki explicit approval zaroori hai.
+### 1.1 Platform, data, and AI / प्लेटफ़ॉर्म, डेटा और AI
+
+| Commit | Completed work |
+| --- | --- |
+| `71820d0` | Data layer migration toward Supabase Postgres and Puter.js client-side AI across API/client boundaries. This is a migration path, not a claim that every production write has completed a single-store cutover. |
+| `4c7ce52` | Real browser-side AI and patient report intelligence: Puter client/types/prompts, report upload/storage, signed URLs, GPT-4o + Gemini vision findings, report-driven adaptive questions, and detailed pre-visit report summary. |
+| `f84e510` | Combined Puter login gate with optional degraded mode. The appointment workflow can continue when browser AI is unavailable or skipped. |
+| `646e190` | Server-side AI/hybrid intake state-machine foundation and AI endpoints. Server AI is optional; the browser User-Pays path remains the primary demo path. |
+
+### 1.2 Patient intake and appointment / रोगी intake और appointment
+
+| Commit | Completed work |
+| --- | --- |
+| `d1dca7d` | AI conversational appointment flow, internet research, training-data capture, and pre-visit report preparation. |
+| `341cf36` | Guaranteed non-empty bilingual appointment questions, greeting, AI adaptive follow-ups, and question logging. |
+| `d6a73a4` | Puter sign-in gate at the start of appointment flow so AI connects up front rather than interrupting the conversation later. |
+| `03165a0` | Complaint-specific deep questioning with the reasoning model and complaint-aware fallback. |
+| `2392465` | Research-informed history/question planning and a section-wise doctor report. This is structured history/report assistance for clinician review, not autonomous diagnosis. |
+| `f855511` | Duplicate-question prevention, firmer `STOP` handling, and a double-submit processing lock. |
+| `42bd3fa` | Per-appointment chat history, AI past-visit context, and printable prescription support. |
+
+The current appointment flow is intentionally adaptive rather than a universal questionnaire:
+
+1. A fixed script captures new/returning status, phone and identity details, basic demographics, appointment date/time, chief complaint, duration, prior care, and report prompts.
+2. The complaint is resolved against the curated clinical context. A pathway, when confidently available, frames focused history; research/AI and deterministic fallback support unmatched complaints or unavailable services.
+3. The dynamic deep phase asks one new complaint-specific question at a time, records question/answer metadata, and uses coverage to avoid re-asking dimensions already supported by the patient’s own words.
+4. Research and report generation are best-effort. The collected snapshot and deterministic safety overlay remain available if external AI/research fails.
+5. Finalization saves the doctor-facing pre-visit report, creates the appointment, saves the transcript, and shows the established success state.
+
+There is no universal question list and no fixed clinical question count. `MAX_DEEP` is a ceiling for ordinary dynamic questioning; adaptive coverage and explicit safety evidence determine completion. If the ceiling is reached with unresolved safety, the limitation is retained for clinician review rather than represented as a safely completed screen.
+
+### 1.3 Clinical pathways and safety / clinical safety
+
+| Commit | Completed work |
+| --- | --- |
+| `bc1c48f` | Phase-1 clinical pathway library and explainable general/pathway red-flag engine in `lib/clinicalPathways.ts`. |
+| `8ebfb94` | Additive chest-pain safety context/resolver, source-aware explicit safety-screen evidence, adaptive fallback, exact eight-phrase regressions, non-chest regressions, and `MAX_DEEP` unresolved-safety handling. |
+
+### 1.4 Doctor workspace, inventory, billing, and state / डॉक्टर workspace
+
+| Commit | Completed work |
+| --- | --- |
+| `170a8af` | Clinic workflow workspace with dashboard, appointments, patients, inventory, billing, queue, inbox, and follow-up surfaces. |
+| `96ae41e` | Inventory catalogue, purchase price, stock ledger, and billing/inventory API and UI updates. |
+| `d5948fa` | Prescription inventory UX and workspace routing with Redux store/provider. |
+| `b0378d4` | Typed Redux workspace state/hooks, state audit, and URL query synchronization. |
+
+### 1.5 Clinical Report Renderer and verification / report renderer और tests
+
+| Commit | Completed work |
+| --- | --- |
+| `11aec8c` | Reusable Clinical Report Renderer: parser diagnostics and semantic state, typed IR, safe links, accessible renderer, semantic/state tests, browser/accessibility checks, and test-only host-equivalence validation. |
+
+Renderer pipeline:
+
+```text
+raw report + explicit metadata/state
+  -> parser diagnostics + semantic state
+  -> typed ClinicalReportIR
+  -> accessible ClinicalReportRenderer
+  -> patient/doctor host surface
+```
+
+The renderer preserves wording, qualifiers, citations, source order, links, and explicit priority metadata. It does not infer a warning, red flag, urgency, diagnosis, or treatment from ordinary keywords, bold, or emphasis.
+
+### 1.6 Pre-existing dirty worktree / uncommitted स्थिति
+
+The current worktree also contains files that are not part of the committed delivery above. They are not treated as released functionality in this status report:
+
+- Modified: `components/Header.tsx`, `tsconfig.tsbuildinfo`.
+- Untracked: `.kiro/specs/appointment-patient-identity-adaptive-intake/`, `components/DatePicker.tsx`, `components/PatientAutocomplete.tsx`, `components/ReduxProvider.tsx`, `components/TimeSelect.tsx`, `lib/workspaceApi.ts`, `scripts/appointment-bug-condition-exploration.mjs`, `scripts/appointment-bug-condition-fixed-regression.mjs`, `scripts/appointment-task-3-4-contracts.mjs`, `scripts/appointment-task-3-5-contracts.mjs`, `scripts/appointment-task-3-6-tests.mjs`, `scripts/appointment-task-3-7-tests.mjs`, `scripts/audit-frontend-api.mjs`, `scripts/clinical-pathways-task-3-3-tests.mjs`, `scripts/preservation-property-tests.mjs`, and `test-results/`.
+
+This documentation update changes only `README.md` and `docs/PROJECT_STATUS.md`. It does not absorb or modify the worktree files above.
 
 ---
 
-## 2. ✅ KYA KIYA HAI (What's Been Done)
+## 2. ✅ KYA KIYA HAI (What’s Been Done)
 
 ### 2.1 Marketing / Landing Site (100% Complete)
+
 | Page | Route | Status |
-|------|-------|--------|
+| --- | --- | --- |
 | Homepage | `/` | ✅ Done |
 | Product | `/product` | ✅ Done |
 | Workflow | `/workflow` | ✅ Done |
@@ -30,221 +102,281 @@ Core principle: **"AI assists. Clinicians decide."** — AI kabhi bhi apne aap d
 | About | `/about` | ✅ Done |
 | Contact | `/contact` | ✅ Done |
 
-**Components built:** Hero, Header, Footer, PatientChannelsSection, WorkflowSection, InteractiveEngineSection, ProblemsSection, FeaturesGrid, CTASection, DemoDialog, DashboardMockup.
+Core components include Hero, Header, Footer, patient-channel and workflow sections, interactive AI explanation, product features, CTA, demo dialog, and dashboard mockup.
 
-### 2.2 Doctor Workspace (Demo — Functional)
-| Feature | Route/Component | Status |
-|---------|-----------------|--------|
-| Doctor Workspace | `/demo` → `DoctorWorkspace.tsx` | ✅ Done |
+### 2.2 Doctor Workspace (Functional demo)
+
+| Feature | Route/component | Status |
+| --- | --- | --- |
+| Doctor Workspace | `/demo` → `components/DoctorWorkspace.tsx` | ✅ Done |
 | Morning Brief | `/doctor/morning-brief` | ✅ Done |
 | Live Queue | `/doctor/queue` | ✅ Done |
 | AI Inbox | `/doctor/inbox` | ✅ Done |
 | Follow-ups | `/doctor/follow-ups` | ✅ Done |
 | Pre-Visit Brief | `components/workspace/PreVisitBrief.tsx` | ✅ Done |
 | Prescription Builder + Safety | `components/workspace/PrescriptionBuilder.tsx` | ✅ Done |
+| Clinical Report Renderer | `components/clinical-report-renderer/ClinicalReportRenderer.tsx` | ✅ Done |
 
-### 2.3 Patient-Facing Pages
+### 2.3 Patient-facing pages
+
 | Feature | Route | Status |
-|---------|-------|--------|
+| --- | --- | --- |
 | Patient Portal | `/patient/portal` | ✅ Done |
-| Appointment Booking | `/patient/book` | ✅ Done (multi-step) |
+| Appointment Booking | `/patient/book` | ✅ Done |
+| Conversational Appointment + Adaptive Intake | `/patient/appointment` | ✅ Done |
 | Smart Intake | `/patient/intake` | ✅ Done |
+| Report upload and AI-read findings | `/patient/intake`, `/patient/appointment` | ✅ Done; review-required |
 
-### 2.4 Reception & Admin
+### 2.4 Reception and admin
+
 | Feature | Route | Status |
-|---------|-------|--------|
+| --- | --- | --- |
 | Reception Check-in | `/reception/checkin` | ✅ Done |
 | Admin Analytics | `/admin/analytics` | ✅ Done |
 
-### 2.5 Backend API Routes (23 endpoints)
-All routes use the `{ ok: boolean, data: T }` response envelope.
+### 2.5 Backend API surface
 
-| API | Methods | Purpose |
-|-----|---------|---------|
-| `/api/appointments` | GET, POST | Appointment booking & listing |
-| `/api/queue` | GET, POST | Queue management & priority |
-| `/api/intake` | GET, POST | Smart patient intake |
-| `/api/pre-visit` | GET, POST | Pre-visit brief generation |
-| `/api/prescriptions` | GET, POST | Prescription draft/sign/dispatch |
-| `/api/referrals` | GET, POST | Referral management |
-| `/api/follow-ups` | GET, POST | Follow-up tracking |
-| `/api/inbox` | GET, POST | AI inbox for tasks/results |
-| `/api/communications` | GET, POST | Message dispatch (WhatsApp/SMS/email) |
-| `/api/briefs/morning` | GET | Morning brief |
-| `/api/analytics` | GET | Clinic metrics |
-| `/api/patients` | GET, POST | Patient records |
-| `/api/patients/context` | GET | Full patient context |
-| `/api/copilot` | POST | AI clinical assistant (demo) |
-| `/api/scribe` | POST | Voice clinical notes (demo) |
-| `/api/symptom-analysis` | POST | Symptom analysis (demo) |
-| `/api/medical-records/*` | POST | Report analyze/summarize/reports |
-| `/api/insights` | POST | Clinical insights |
-| `/api/sessions` | POST | AI sessions |
-| `/api/workspace/actions` | POST | Workspace actions |
+The repository currently contains 27 route-handler files under `/api`:
 
-### 2.6 Database (SQLite + Supabase)
-- **35+ tables** defined in `app/api/_lib/database.ts`
-- Seed data for demo: patients, reports, insights, appointments, queue, medications, allergies, conditions, follow-ups, referrals, diagnostic orders, inbox items, drug interactions.
-- Supabase REST API sync for production persistence.
+- Appointment and patient flow: `/api/appointments`, `/api/appointments/chat`, `/api/patients`, `/api/patients/context`, `/api/pre-visit`, `/api/pre-visit/summary`, `/api/intake`, `/api/intake/next`.
+- Doctor workflow: `/api/briefs/morning`, `/api/queue`, `/api/inbox`, `/api/follow-ups`, `/api/referrals`, `/api/communications`, `/api/workspace/actions`, `/api/workspace/summary`.
+- Clinical and AI support: `/api/copilot`, `/api/scribe`, `/api/symptom-analysis`, `/api/insights`, `/api/sessions`, `/api/ai-training`.
+- Reports and records: `/api/reports/upload`, `/api/medical-records/analyze`, `/api/medical-records/summarize`, `/api/medical-records/reports`.
+- Operations: `/api/analytics`, `/api/billing`, `/api/inventory`, `/api/prescriptions`, `/api/profile/settings`.
 
-### 2.7 Recent Fixes (Git History)
-1. `c290890` — Exported `insert, update, remove` from demo.ts (build fix)
-2. `6831da5` — Imported `remove` from database.ts (build fix)
-3. `f873f40` — Straightened Hero section badge alignment
-4. `f6812c8` — Added favicon + SEO metadata
-5. `3499796` — Added error handling to pre-visit API
-6. `6e22133` — Implemented patient portal, booking flow, error boundary
+Routes use the project’s consistent JSON-envelope convention where implemented: `{ ok: boolean, data: T }` for success and `{ ok: false, error: ... }` for errors. API availability does not imply that authentication, tenant isolation, or audit enforcement is complete.
 
-### 2.8 🆕 Real AI + Report Intelligence (This Session — Complete)
+### 2.6 Database and storage
 
-Yeh session mein AI ab **real** hai (mock nahi), aur patient reports ka poora upload → AI analysis → doctor summary pipeline ban gaya. Sab kuch **"AI assists, clinician decides"** principle follow karta hai — AI kabhi diagnose ya prescribe nahi karta, sirf transcribe/organize karke doctor ko review ke liye deta hai.
+- Local/demo SQLite persistence is stored in `data/ai-upchar.sqlite` and accessed through `app/api/_lib/database.ts`.
+- Supabase/Postgres schema and seed are in `supabase/schema.sql` and `supabase/seed.sql`; the migration path was advanced by `71820d0` but is not a completed universal cutover.
+- `app/api/_lib/storage.ts` uploads accepted PNG/JPG/WEBP/PDF report files (maximum 20 MB) to the private `patient-reports` bucket and mints short-lived signed URLs.
+- Report rows retain `storage_path` and `ai_findings`; the original file remains available to the doctor through a signed link when Storage is configured.
+- `.env.example` documents `SUPABASE_URL`, server-only `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, and optional `PUTER_API_TOKEN`.
 
-#### Kya naya banaya (What was newly built)
+### 2.7 Real AI and report intelligence
 
-| Feature | Kahan (Where) | Status |
-|---------|---------------|--------|
-| **Browser-side AI (free, User-Pays)** | `lib/puterClient.ts`, `lib/clientPrompts.ts`, `lib/puter.d.ts`, Puter `<script>` in `app/layout.tsx` | ✅ Done |
-| Copilot + Symptom Checker stream real AI | `components/DoctorWorkspace.tsx` (browser `aiChatStream`, server `/api` fallback) | ✅ Done |
-| Scribe drafts SOAP via real AI | `components/DoctorWorkspace.tsx` (`generateNote`) | ✅ Done |
-| **Hybrid intake** (fixed decision-tree order + AI phrasing) | `app/api/intake/next/route.ts` + `app/api/_lib/prompts.ts` | ✅ Done |
-| **Supabase Storage** — private `patient-reports` bucket (20MB, mime allowlist) | `app/api/_lib/storage.ts` | ✅ Done + verified live |
-| Report upload + signed-URL + findings API | `app/api/reports/upload/route.ts` (POST/GET/PATCH) | ✅ Done |
-| **Report upload UI** in intake chat (attach button + status chips) | `app/patient/intake/page.tsx` | ✅ Done |
-| **AI vision analysis** of reports — GPT-4o **+** Gemini 2.5 Flash | `lib/clientPrompts.ts` (`buildReportVisionPrompt`, `mergeFindings`) | ✅ Done |
-| **Report-driven adaptive questions** (abnormal → symptom-specific; normal → progress) | `app/patient/intake/page.tsx` + `buildAdaptiveQuestionMessages` | ✅ Done |
-| **Detailed pre-visit summary** for doctor (intake story + report findings + signed file link) | `app/api/pre-visit/summary/route.ts` + `components/workspace/PreVisitBrief.tsx` | ✅ Done |
-| DB: `storage_path` + `ai_findings` columns on `reports` | `supabase/schema.sql` (+ live DB migrated) | ✅ Done |
+Browser-side Puter.js is real AI, not a static mock. `lib/puterClient.ts` uses the end user’s Puter session for fast, reasoning, vision, and research model calls. `lib/clientPrompts.ts` builds clinician-controlled copilot, scribe, report-vision, adaptive-question, research, and pre-visit-report prompts.
 
-#### How the report pipeline works (end-to-end)
-1. Patient intake chat mein report upload karta hai (PDF/JPG/PNG/WEBP, max 20MB).
-2. File **Supabase private Storage** mein jaati hai (durable copy) + `reports` row banti hai.
-3. Browser mein **GPT-4o aur Gemini** dono file ko padhte hain (Puter.js vision), findings merge hote hain — values, abnormal/normal, medicines, impression. **No diagnosis.**
-4. Findings `reports.ai_findings` mein save hote hain; ek adaptive follow-up question chat mein aata hai.
-5. Doctor ke **Pre-visit Brief** tab par: patient ki poori intake story + har report ka AI-read summary + **"View file"** (1-hour signed private link to the actual document).
+The report pipeline is:
 
-#### Kyu (Why these decisions)
-- **Browser-side Puter.js (not server-side):** Puter ka server-side REST har model ke liye `402 "A subscription is required"` deta hai (paid). Browser-side "User-Pays" model **free** hai. Isliye AI browser mein chalti hai; server routes optional fallback hain.
-- **Supabase Storage + service_role + private bucket + signed URLs:** Medical files ke liye anon-key + manual RLS fragile hai. service_role se server safely upload karta hai; doctor ko short-lived signed link milta hai (bucket kabhi public nahi hota).
-- **Actual file store + doctor ko dikhana:** User ne findings-text-only ke bajaye asli file bhi store karke doctor ko dikhane ka explicit choice kiya.
-- **GPT + Gemini dono:** Do independent readings merge karne se transcription zyada reliable hoti hai (ek fail ho to doosra chalta hai).
+1. Patient uploads a PNG/JPG/WEBP/PDF report or prescription.
+2. The API stores report metadata and, when configured, the original in private Supabase Storage.
+3. Browser vision requests use GPT-4o and Gemini 2.5 Flash; their findings are merged as transcription/organization, not diagnosis.
+4. Findings are saved to `reports.ai_findings`, and report-driven adaptive questions may be asked.
+5. The pre-visit brief shows intake context, report findings, review notes, and a signed link to the original file.
+
+The server-side AI/hybrid intake foundation remains available as an optional boundary. Puter sign-in and external research can fail; deterministic appointment questions, clinical pathway coverage, red-flag overlays, and doctor-review disclaimers remain the safety-preserving fallback.
+
+### 2.8 Clinical Report Renderer
+
+The renderer is a reusable presentation boundary under:
+
+- `lib/clinical-report-renderer/types.ts` — typed input, IR, metadata, block, citation, source, state, and link contracts.
+- `lib/clinical-report-renderer/parser.ts` — Markdown/structure parsing, diagnostics, safe-link handling, and semantic state.
+- `lib/clinical-report-renderer/index.ts` — public exports.
+- `components/clinical-report-renderer/ClinicalReportRenderer.tsx` — accessible semantic renderer.
+- `components/clinical-report-renderer/clinical-report-renderer.css` — renderer layout and priority treatments.
+
+The parser produces a typed IR before presentation. It preserves source text and explicit metadata, supports readable fallback for malformed input, distinguishes `empty`, `error`, `fallback`, and `ready`, and never invents clinical content. Renderer validation includes semantic/state tests, contract/property runs, browser verification, accessibility, safe-link behavior, and a test-only second host.
 
 ---
 
-## 3. ⏳ KYA KARNA BAAKI HAI (What Remains)
+## 3. Current clinical-safety architecture / वर्तमान clinical safety
 
-### 3.1 P0 — Critical (Production Blockers)
-- [ ] **Authentication & Authorization** — MFA, role-based access control (Doctor/Reception/Staff/Admin/Patient), session management. Abhi koi real auth nahi hai.
-- [x] **Real AI Integration** — ✅ Copilot, scribe, symptom checker, aur report vision ab **real** hain (browser-side Puter.js: GPT/Claude/Gemini). Intake hybrid hai (fixed order + AI phrasing). *(Server-side Puter paid tha — 402; isliye browser-side free path liya.)*
-- [ ] **Multi-tenant Isolation** — Clinic-level data separation abhi nahi hai.
-- [ ] **Audit Logging** — Table defined hai par active logging implement nahi hui.
+The chest change is additive. It does not replace the general pathway matcher or turn pathway recognition into diagnosis.
 
-### 3.2 P1 — Important
-- [ ] **Real Communication Dispatch** — WhatsApp/SMS/email abhi simulate hota hai. Twilio/WhatsApp Business API integrate karna hai.
-- [x] **Document Upload & AI Reading** — ✅ Patient reports Supabase private Storage mein upload hote hain; GPT-4o + Gemini vision se AI padhta hai (findings extract). Doctor ko signed link + findings dikhte hain. *(Traditional OCR ki jagah vision-model reading li — handwritten prescriptions bhi handle ho jaati hain.)*
-- [ ] **Voice Call Intake** — UI mockup hai, real telephony (voice IVR) baaki.
-- [ ] **Vitals Device Integration** — Manual entry possible, device integration nahi.
-- [ ] **Consent Management** — Table hai, workflow UI baaki.
+### 3.1 Resolution and route modes
 
-### 3.3 P2 — Nice to Have (Future)
-- [ ] ABDM/ABHA integration (India health records)
-- [ ] Hospital Information System (HIS) adapters
-- [ ] Lab & Pharmacy system integration
+- `matchPathway(complaint, extra?)` remains the compatible curated API.
+- `assessChestSafety(complaint, extra?)` recognizes a bounded chest location/quality combination, including reviewed English, Roman Hindi/Hinglish, and Unicode variants for pain, pressure, heaviness, burning, and tightness.
+- `resolveClinicalContext(complaint, extra?)` combines the ordinary pathway result and chest assessment.
+- The context route is one of `curated_pathway`, `chest_safety_fallback`, or `generic_fallback`.
+- `pathwayForClinicalContext()` can reuse the reviewed `chest_pain` pathway as a safety profile even when the ordinary matcher returned `null`.
+- Standalone `chest`, `seene`, `dard`, `pain`, `pressure`, `left`, or `baaye` do not create a chest route, and non-chest controls retain their existing pathways.
+
+### 3.2 Explicit safety-evidence boundary
+
+- Complaint text is context. It may raise an explainable signal for clinician visibility, but complaint wording never completes `red_flag_screen`.
+- `coverageFor()` and `evaluateSafetyEvidence()` use source-attributed evidence. Only a targeted answer/structured safety answer with the `red_flag_screen` dimension can complete the screen.
+- Clear negative targeted answers become `negative`; clear affirmative answers with recognized signals become `positive`; missing, ambiguous, off-topic, or contradictory answers remain `unanswered`/`uncertain`.
+- Existing pathway/general red-flag meanings and urgency values are retained. Emergency signals sort before urgent signals, and the final overlay can raise AI urgency to the deterministic worst signal but cannot lower it.
+- `MAX_DEEP` remains a ceiling, not a completion condition. If safety remains unresolved at the ceiling, the snapshot/report states that clinician review is required.
+
+The system still does not diagnose, prescribe, or issue autonomous emergency/treatment decisions. The safety layer ensures that the doctor sees the signal and the missing evidence.
+
+---
+
+## 4. Architecture snapshot / architecture स्थिति
+
+The current implementation is a Next.js modular monolith with client pages, direct API routes, local/demo SQLite, Supabase/Postgres integration paths, private Storage, and browser AI. The target architecture in `docs/ARCHITECTURE.md`—AI Gateway, tenant boundary, asynchronous jobs, retrieval, PostgreSQL-first persistence, and complete audit/governance—is **recommended future architecture**, not current production completion.
+
+```text
+Browser UI
+├── Doctor workspace + patient routes
+├── PuterLoginGate → optional Puter.js User-Pays AI
+├── deterministic/degraded fallback
+└── Next.js API routes
+    ├── local SQLite demo persistence
+    ├── Supabase/Postgres integration path
+    └── private Supabase Storage + signed report URLs
+
+Appointment route
+└── fixed identity/scheduling
+    → resolveClinicalContext
+    → adaptive coverage
+    → explicit safety evidence
+    → snapshot/report overlay
+    → pre-visit + appointment + transcript persistence
+```
+
+---
+
+## 5. State boundaries and Redux / state सीमा
+
+Redux is mounted at the doctor demo boundary by `components/WorkspaceReduxProvider.tsx`. It stores only cross-workspace coordination state:
+
+- `workspace.activeNav`: selected doctor workspace screen, synchronized with the `screen` query parameter.
+- `workspace.selectedPatientId`: opaque selected-patient ID shared by shell and patient panels.
+
+The following intentionally remain local or API-owned: appointment answers and transcript, deep-question counters, uploads and report findings, prescription letter drafts, inventory/appointment/billing/dashboard responses, patient details, AI summaries, filters, expanded panels, and request state. Sensitive clinical content is not placed in a global Redux cache. See [docs/redux-state-audit.md](redux-state-audit.md).
+
+---
+
+## 6. Persistence, deployment, and security reality / वर्तमान सीमाएँ
+
+### Current paths
+
+- **Local/demo:** `data/ai-upchar.sqlite` through `app/api/_lib/database.ts`; this file is ignored by Git.
+- **Hosted database path:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `DATABASE_URL` support Supabase/Postgres integration. `supabase/schema.sql` is the generated schema source; it includes patients, appointments, reports, AI outputs, inventory, billing, messages, consent, and audit tables.
+- **Report files:** `app/api/_lib/storage.ts` uses the server-only service-role key for the private `patient-reports` bucket. It enforces the current MIME allowlist and 20 MB limit and issues signed URLs that default to one hour.
+- **Browser AI:** Puter.js uses the end user’s browser session. `PUTER_API_TOKEN` is optional server-side configuration and must not be sent to the client.
+
+### Production blockers still open
+
+- Real authentication, MFA, session management, and RBAC for Doctor, Reception, Care staff, Clinic admin, and Patient roles.
+- End-to-end clinic tenant isolation and patient-scope authorization on every protected API route.
+- Active immutable audit logging. The schema/table foundation exists, but complete action logging and review governance are not activated everywhere.
+- Full SQLite-to-Postgres migration, deployment secrets, backups, monitoring, rate limits, and disaster recovery.
+- Real WhatsApp/SMS/email dispatch, voice/telephony, vitals devices, consent UI, ABDM/ABHA, lab/pharmacy integrations, and payment gateway.
+- Broader natural-language coverage beyond reviewed pathway anchors. Keyword matching cannot replace clinician review.
+- Live Puter session/model availability and web research reliability; degraded mode remains necessary.
+
+`docs/ARCHITECTURE.md` should be read as a target/recommended production design. It must not be used as evidence that the current demo already has an authenticated AI Gateway, full tenant isolation, or complete audit controls.
+
+---
+
+## 7. Validation and test status / परीक्षण स्थिति
+
+### Current validation results
+
+- Chest pathway/safety harness: **12/12 checks passed**.
+- Adaptive appointment harness: **8/8 checks passed**.
+- Clinical Report Renderer semantic/state suite: **10/10 passed**.
+- Clinical Report Renderer contract/property suite: **100 iterations per property passed**.
+- `npm run lint`: passed.
+- `node node_modules/typescript/bin/tsc --noEmit`: passed.
+- `npm run build`: passed.
+- Renderer browser/accessibility/host-equivalence validation was delivered with the renderer work. Browser smoke and Puter degraded-mode checks remain separate environment-sensitive checks because browser engine and external Puter availability can vary.
+- **Known legacy drift:** `scripts/clinical-pathways-task-3-3-tests.mjs` still targets an older `clinicalPathways` contract. It remains drifted and was not fixed as part of the chest-pain work or this documentation update. Do not use it to contradict the current 12/12 chest harness.
+
+### Exact single-run commands
+
+```bash
+npm run lint
+node node_modules/typescript/bin/tsc --noEmit
+npm run build
+npm run test:appointment-adaptive-interview
+node --experimental-strip-types scripts/chest-pain-pathway-matching-tests.mjs
+npm run test:clinical-report-renderer:semantic
+npm run test:clinical-report-renderer
+```
+
+Renderer browser suites are under `tests/clinical-report-renderer/` and are separate from the Node command list. When browser smoke is run, verify both the normal Puter-connected path and the optional/degraded path; a missing Puter session must not remove the deterministic appointment/safety workflow.
+
+---
+
+## 8. ⏳ KYA KARNA BAAKI HAI (What Remains)
+
+### 8.1 P0 — Critical production blockers
+
+- [ ] **Authentication & Authorization** — MFA, role-based access control, session management, and explicit clinic/patient scope checks. The current demo has no complete application auth boundary.
+- [ ] **Multi-tenant isolation** — clinic-level data separation and authorization on every protected operation.
+- [ ] **Audit logging activation** — immutable logs for clinical actions, AI output, review, edit, sign, and share events.
+- [ ] **Production persistence cutover** — complete and verify the SQLite-to-Postgres migration, backups, monitoring, and recovery.
+
+### 8.2 P1 — Important integrations
+
+- [ ] **Real communication dispatch** — WhatsApp/SMS/email provider integration; current communication workflows remain draft/simulated.
+- [x] **Document upload and AI reading** — Supabase private Storage plus GPT-4o/Gemini browser vision findings are implemented; clinician verification remains required.
+- [ ] **Voice call intake** — UI concept exists; real telephony/IVR is pending.
+- [ ] **Vitals device integration** — manual data paths exist; device adapters are pending.
+- [ ] **Consent management workflow** — schema foundations exist; complete consent UI/policy enforcement is pending.
+
+### 8.3 P2 — Future capabilities
+
+- [ ] ABDM/ABHA integration
+- [ ] Hospital information system adapters
+- [ ] Laboratory and pharmacy integrations
 - [ ] Payment gateway
 - [ ] Enterprise SSO
 - [ ] Offline mode for poor connectivity
 - [ ] Multilingual voice scribe
 
-### 3.4 Technical Debt
-- [ ] SQLite → PostgreSQL full migration (abhi hybrid hai)
-- [ ] Remaining `useEffect` dependency warnings (minor lint)
-- [ ] Unit + integration tests (koi test suite nahi hai abhi)
-- [ ] Error boundary sirf demo page par hai, saare pages par chahiye
+### 8.4 Technical debt and quality
+
+- [ ] Expand unit, integration, API-contract, and end-to-end coverage beyond the targeted harnesses.
+- [ ] Keep browser smoke/degraded-mode checks in CI or release validation where external prerequisites are available.
+- [ ] Reconcile or retire the drifted `scripts/clinical-pathways-task-3-3-tests.mjs` rather than weakening the current safety harness.
+- [ ] Address remaining minor lint/type-loader notes when they are isolated from the committed feature work.
+- [ ] Add broader error boundaries and production observability across all routes.
 
 ---
 
-## 4. 💡 KYU KIYA (Why These Decisions)
+## 9. 💡 KYU KIYA (Why These Decisions)
 
-### 4.1 SQLite + Supabase Hybrid — Kyu?
-**Decision:** Local SQLite (better-sqlite3) primary DB, Supabase REST API for sync.
-**Reason:** SQLite fast development aur zero-config demo ke liye perfect hai. Supabase production persistence deta hai bina heavy setup ke. Isse demo turant chalta hai aur production-ready path bhi maintain rehta hai.
-*(Content was rephrased for compliance with licensing restrictions)*
+### 9.1 Browser-side Puter User-Pays AI
 
-### 4.2 `{ ok, data }` Response Envelope — Kyu?
-**Decision:** Har API `{ ok: boolean, data: T }` ya `{ ok: false, error: {...} }` return karti hai.
-**Reason:** Consistent frontend error handling. Component sirf `payload.ok` check karke data ya error dikha sakta hai. Predictable contract se bugs kam hote hain.
+Puter browser calls let each end user connect their own session without putting a model key in the browser application. The login gate connects AI up front, while optional degraded mode prevents AI availability from blocking basic appointment capture.
 
-### 4.3 Demo-Level AI (Mock) — Kyu?
-**Decision:** Copilot, scribe, symptom analysis abhi rule-based/mock responses dete hain.
-**Reason:** UI/UX aur workflow pehle validate karna zaroori tha bina API cost aur latency ke. Real AI baad mein plug karna aasaan hai kyunki interface already defined hai.
+### 9.2 SQLite + Supabase/Postgres migration path
 
-### 4.4 Error Boundary on Demo Page — Kyu?
-**Decision:** Demo page ko `ErrorBoundary` component se wrap kiya.
-**Reason:** Demo public-facing hai. Agar koi API fail ho (jaise pre-visit ka DOCTYPE JSON error tha), to poora page crash na ho — user ko graceful "refresh" option mile. Yeh professional impression banaye rakhta hai.
+SQLite keeps the local demo fast and low-friction. Supabase/Postgres and Storage provide a hosted path for durable data and private report files. The two paths are intentionally documented as current integration/deployment stages, not falsely presented as a finished single-store production architecture.
 
-### 4.5 Hero Badge Rotation Hataya — Kyu?
-**Decision:** Feature badges se `rotate` classes remove ki.
-**Reason:** User feedback: badges "tedha" (crooked) dikh rahe the. Rotation stylistic tha par misaligned lag raha tha. Straight alignment cleaner aur professional lagta hai.
+### 9.3 Adaptive intake and reviewed pathways
 
-### 4.6 Server-Side try-catch in APIs — Kyu?
-**Decision:** Pre-visit API (aur baaki) mein try-catch wrap kiya jo `error(...)` JSON return kare.
-**Reason:** Bina try-catch ke, server crash hone par Next.js HTML error page bhejta tha. Frontend `res.json()` karta to "Unexpected token '<'" error aata. try-catch se hamesha valid JSON milta hai.
+The pathway library supplies a consistent reviewed starting frame. Coverage tracks history dimensions rather than forcing every patient through one questionnaire. AI can choose or phrase the next question, but deterministic fallback and safety evidence prevent an AI failure or early `STOP` from silently erasing required review context.
 
-### 4.7 Multi-channel Access (WhatsApp/Voice/App/Web) — Kyu?
-**Decision:** Patient intake 4 channels se possible design kiya.
-**Reason:** India mein har patient ke paas smartphone/app nahi hota. WhatsApp har family use karti hai, aur voice call literacy/smartphone barrier hata deta hai. Government hospital + rural reach ke liye zaroori.
+### 9.4 Source-aware safety evidence
+
+Complaint context and explicit safety answers are different kinds of evidence. The chest resolver can route a meaningful chest complaint to the right safety profile, while only an attributable targeted answer can complete `red_flag_screen`. This avoids treating the word “chest” or “seene” as a confirmed negative or positive danger-screen response.
+
+### 9.5 Clinical Report Renderer as a presentation boundary
+
+Parsing into a typed IR before rendering makes source order, citations, safe links, explicit priority, fallback diagnostics, and host equivalence testable. It also keeps presentation from inventing clinical meaning or coupling report display to fetching, generation, or diagnosis logic.
+
+### 9.6 Redux only for coordination state
+
+Only navigation and opaque patient selection cross doctor-workspace boundaries in the current UI. Keeping sensitive conversation and API responses local reduces stale global copies and limits the amount of clinical content retained in client-wide state.
 
 ---
 
-## 5. 🏗️ Architecture Snapshot
+## 10. Core principles / मूल सिद्धांत
 
-```
-Frontend (Next.js App Router)
-├── Marketing pages (/, /product, /workflow, ...)
-├── Doctor workspace (/demo, /doctor/*)
-├── Patient pages (/patient/portal, /patient/book, /patient/intake)
-├── Reception (/reception/checkin)
-└── Admin (/admin/analytics)
+1. **AI assists. Clinicians decide.**
+2. **Explicit approval** for prescriptions, record changes, referrals, and patient-facing clinical communication.
+3. **Source provenance** for AI/report content wherever available.
+4. **Patient safety first** through deterministic checks and visible unresolved states.
+5. **Privacy by design** through data minimization, private files, and signed URLs.
+6. **Audit everything** once the production audit boundary is activated.
+7. **Graceful degradation** when AI, research, storage, or integrations are unavailable.
+8. **Multilingual and accessible** patient/clinician experiences.
+9. **Workflow-native AI** rather than autonomous action.
+10. **Longitudinal thinking** across appointments, reports, notes, and follow-ups.
 
-Backend (Next.js API Routes)
-├── 23 REST endpoints under /api/*
-├── Response envelope: { ok, data }
-└── Shared helpers in /api/_lib/demo.ts + database.ts
-
-Database
-├── SQLite (data/ai-upchar.sqlite) — primary
-├── 35+ tables (patients, appointments, queue, prescriptions, ...)
-└── Supabase (PostgreSQL) — production sync
-```
-
----
-
-## 6. 🎯 Next Immediate Steps (Priority Order)
-
-1. **Authentication** — NextAuth.js ya Supabase Auth setup karo (roles ke saath)
-2. **Real messaging** — WhatsApp Business API / Twilio integrate karo
-3. **Testing** — Vitest + Playwright setup karo
-4. **Audit logging** — Har clinical action log karo
-5. **Deploy env** — Vercel par `SUPABASE_SERVICE_ROLE_KEY` (+ baaki Supabase env) set karo taaki report Storage production mein bhi chale
-6. **PDF vision reliability** — multi-page PDF reports par vision reading ko aur test/tune karo
-
-> ✅ **Ab complete:** Real AI (browser-side), document upload + AI report reading. *(pichle steps 2-3 done)*
-
----
-
-## 7. 🚨 Core Principles (Kabhi Na Toota Jaaye)
-
-1. **AI assists. Clinicians decide.** — Koi autonomous clinical action nahi
-2. **Explicit approval** — Har action doctor sign-off maange
-3. **Source provenance** — AI output kahan se aaya, dikhao
-4. **Patient safety first** — Multi-layer medication safety checks
-5. **Privacy by design** — Consent-based processing
-6. **Audit everything** — Immutable clinical trail
-7. **Graceful degradation** — AI fail ho to bhi system chale
-8. **Multilingual & accessible** — Diverse patients ko support
-9. **Workflow-native AI** — AI natural workflow mein embed ho
-10. **Longitudinal thinking** — Patient story time ke saath banaye
+No current feature should be described as autonomous diagnosis, autonomous treatment, autonomous prescribing, or an approved patient instruction without clinician review.
 
 ---
 
 **Maintainer:** AI UPCHAR Product Team
-**Related Docs:** `ARCHITECTURE.md`, `V2_IMPLEMENTATION_PLAN.md`
+**Related docs:** [README.md](../README.md), [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/redux-state-audit.md](redux-state-audit.md)
