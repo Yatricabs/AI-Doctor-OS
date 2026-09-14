@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:clinical-report-renderer": "node --experimental-strip-types scripts/clinical-report-renderer-contract-tests.mjs",
-    "test:clinical-report-renderer:semantic": "node scripts/clinical-report-renderer-semantic-state-tests.mjs"
+    "test:clinical-report-renderer:semantic": "node scripts/clinical-report-renderer-semantic-state-tests.mjs",
+    "test:appointment-adaptive-interview": "node --experimental-strip-types scripts/appointment-adaptive-interview-tests.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.2.7",

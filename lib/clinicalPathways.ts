@@ -111,7 +111,7 @@ const PATHWAYS: ClinicalPathway[] = [
       { hinglish: "Pehle se dil ki bimari, BP, diabetes ya cholesterol hai?", english: "Any known heart disease, BP, diabetes, or cholesterol?" },
     ],
     redFlags: [
-      { id: "chest_radiation", match: ["arm", "haath", "jabda", "jaw", "back", "peeth", "paseena", "sweating", "breathless", "saans phool"], signal: "Chest pain with radiation / sweating / breathlessness (possible cardiac)", urgency: "emergency" },
+      { id: "chest_radiation", match: ["radiat", "arm", "haath", "jabda", "jaw", "back", "peeth", "paseena", "sweating", "breathless", "saans phool"], signal: "Chest pain with radiation / sweating / breathlessness (possible cardiac)", urgency: "emergency" },
       { id: "chest_exertion", match: ["chalne", "mehnat", "exertion", "walking", "seedhi", "stairs"], signal: "Exertional chest pain", urgency: "urgent" },
     ],
     investigationConsiderations: ["ECG (urgent)", "Troponin if cardiac suspicion", "Chest X-ray", "Vitals & BP", "Refer/emergency assessment per clinician"],
@@ -442,6 +442,132 @@ export function detectRedFlags(pathway: ClinicalPathway | null, patientText: str
   return hits.sort((a, b) => (a.urgency === b.urgency ? 0 : a.urgency === "emergency" ? -1 : 1));
 }
 
+function isClinicalContext(value: ClinicalPathway | ClinicalContext | null): value is ClinicalContext {
+  return Boolean(value && "route" in value && "chestSafety" in value);
+}
+
+function contextFromSubject(subject: ClinicalPathway | ClinicalContext | null): ClinicalContext {
+  if (isClinicalContext(subject)) return subject;
+  const chest = subject?.id === "chest_pain";
+  return {
+    pathway: subject,
+    chestSafety: chest ? { relevant: true, confidence: "high", evidence: ["chest_pain pathway"], profileId: "chest_pain" } : { relevant: false, confidence: null, evidence: [], profileId: null },
+    route: subject ? "curated_pathway" : "generic_fallback",
+  };
+}
+
+function flagDefinitionsForContext(context: ClinicalContext): { flag: RedFlag; source: "pathway" | "general" }[] {
+  const definitions: { flag: RedFlag; source: "pathway" | "general" }[] = [];
+  const seen = new Set<string>();
+  const add = (flags: RedFlag[], source: "pathway" | "general") => {
+    for (const flag of flags) {
+      if (!seen.has(flag.id)) { definitions.push({ flag, source }); seen.add(flag.id); }
+    }
+  };
+  if (context.pathway) add(context.pathway.redFlags, "pathway");
+  if (context.chestSafety.relevant && context.pathway?.id !== "chest_pain") add(chestSafetyPathway().redFlags, "pathway");
+  add(GENERAL_RED_FLAGS, "general");
+  return definitions;
+}
+
+function phraseOccursUnnegated(normalizedText: string, phrase: string): boolean {
+  const textTokens = tokensFor(normalizedText);
+  const wanted = phraseTokens(phrase);
+  if (!wanted.length) return false;
+  for (let i = 0; i <= textTokens.length - wanted.length; i += 1) {
+    if (!wanted.every((part, offset) => textTokens[i + offset] === part)) continue;
+    const before = textTokens.slice(Math.max(0, i - 3), i);
+    const negated = before.some((token) => ["no", "nahi", "nahin", "not", "without", "koi"].includes(token));
+    // In Hinglish, "saans nahi phoolti" is a negative answer, whereas
+    // "saans nahi" by itself is the established positive danger phrase.
+    const following = textTokens[i + wanted.length];
+    if (wanted.join(" ") === "saans nahi" && ["phoolti", "phoolta", "phoolti", "hoti", "hota"].includes(following ?? "")) continue;
+    if (!negated) return true;
+  }
+  return false;
+}
+
+function positiveSafetyFlags(context: ClinicalContext, text: string): DetectedRedFlag[] {
+  const normalizedText = normalize(text);
+  const hits: DetectedRedFlag[] = [];
+  const seen = new Set<string>();
+  for (const { flag, source } of flagDefinitionsForContext(context)) {
+    if (seen.has(flag.id)) continue;
+    if (flag.match.some((match) => phraseOccursUnnegated(normalizedText, match))) {
+      hits.push({ signal: flag.signal, urgency: flag.urgency, source });
+      seen.add(flag.id);
+    }
+  }
+  return hits.sort((a, b) => (a.urgency === b.urgency ? 0 : a.urgency === "emergency" ? -1 : 1));
+}
+
+/** Detect explainable signals using the same resolved context. Complaint text
+ * may raise a signal for clinician visibility, but this does not complete the
+ * safety screen. */
+export function detectRedFlagsForContext(context: ClinicalContext, patientText: string): DetectedRedFlag[] {
+  const primary = detectRedFlags(context.pathway, patientText);
+  const chest = context.chestSafety.relevant && context.pathway?.id !== "chest_pain"
+    ? detectRedFlags(chestSafetyPathway(), patientText)
+    : [];
+  const merged = [...primary, ...chest];
+  const seen = new Set<string>();
+  return merged.filter((flag) => {
+    const key = `${flag.source}:${flag.signal}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((a, b) => (a.urgency === b.urgency ? 0 : a.urgency === "emergency" ? -1 : 1));
+}
+
+function isEligibleSafetyEvidence(evidence: SafetyEvidence): boolean {
+  if (evidence.source === "complaint") return false;
+  return evidence.questionDimension === "red_flag_screen";
+}
+
+function hasClearNegativeAnswer(text: string): boolean {
+  const normalized = normalize(text).trim();
+  if (!normalized || /\b(pata nahi|nahi pata|shayad|maybe|not sure|unclear)\b/.test(normalized)) return false;
+  // A bare no/nahin is a complete answer to a targeted safety question. A
+  // phrase such as "No reports" is off-topic and must remain unresolved.
+  return /^(no|nahi|nahin|none|nope)[.!]?$/.test(normalized)
+    || /\b(no|nahi|nahin|none)\s+(red flag|danger|warning|other symptom|radiat|sweat|paseena|saans|breath|behosh|faint|arm|haath|jaw|back|peeth)/.test(normalized)
+    || /\b(koi|kuch)\s+.+\s+(nahi|nahin)\b/.test(normalized)
+    || /\b(aisa kuch nahi|no red flag|no warning|nothing like that|none of these)\b/.test(normalized)
+    || (/\b(no|none)\b/.test(normalized) && /\b(danger|red flag|warning)\b/.test(normalized));
+}
+
+/** Evaluate only attributable, targeted safety answers. Complaint context and
+ * off-topic/ambiguous answers remain unanswered or unresolved. */
+export function evaluateSafetyEvidence(
+  subject: ClinicalPathway | ClinicalContext | null,
+  evidence: SafetyEvidence[],
+): SafetyEvaluation {
+  const context = contextFromSubject(subject);
+  const eligible = evidence.filter(isEligibleSafetyEvidence).map((item) => ({ ...item }));
+  const evaluated = eligible.map((item) => {
+    const signals = positiveSafetyFlags(context, item.text);
+    let state: SafetyScreenState = "uncertain";
+    if (signals.length) state = "positive";
+    else if (hasClearNegativeAnswer(item.text)) state = "negative";
+    else if (!item.text.trim()) state = "unanswered";
+    return { ...item, state, signals };
+  });
+  const signals = evaluated.flatMap((item) => item.signals ?? []);
+  const uniqueSignals = signals.filter((signal, index, all) => all.findIndex((other) => other.signal === signal.signal && other.urgency === signal.urgency) === index);
+  const hasPositive = evaluated.some((item) => item.state === "positive");
+  const hasUncertain = evaluated.some((item) => item.state === "uncertain" || item.state === "unanswered");
+  const hasNegative = evaluated.some((item) => item.state === "negative");
+  const state: SafetyScreenState = hasPositive ? "positive" : hasUncertain ? "uncertain" : hasNegative ? "negative" : "unanswered";
+  return {
+    state,
+    evidence: evaluated,
+    signals: uniqueSignals,
+    explicit: evaluated.length > 0,
+    complete: state === "positive" || state === "negative",
+    unresolved: state === "unanswered" || state === "uncertain",
+  };
+}
+
 /** Compact plain-text summary of a pathway for injecting into an AI prompt. */
 export function pathwayGuidance(p: ClinicalPathway, lang: "hinglish" | "english"): string {
   const qs = p.coreQuestions.map((q, i) => `${i + 1}. ${lang === "english" ? q.english : q.hinglish}`).join("\n");
@@ -459,3 +585,449 @@ export function pathwayGuidance(p: ClinicalPathway, lang: "hinglish" | "english"
 export function allPathways(): ClinicalPathway[] {
   return PATHWAYS;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chest-safety routing and source-aware evidence. This layer is deliberately
+// additive: matchPathway() remains the legacy curated matcher, while the
+// resolver can attach the existing chest pathway as a safety profile when
+// natural language does not contain one of its contiguous synonyms.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type EvidenceSource = "complaint" | "patient_answer" | "structured_safety_answer" | "clinician_input";
+export type SafetyScreenState = "unanswered" | "negative" | "positive" | "uncertain";
+export type ChestConfidence = "high" | "possible";
+
+export type ChestSafetyAssessment = {
+  relevant: boolean;
+  confidence: ChestConfidence | null;
+  evidence: string[];
+  profileId: "chest_pain" | null;
+};
+
+export type ClinicalContext = {
+  pathway: ClinicalPathway | null;
+  chestSafety: ChestSafetyAssessment;
+  route: "curated_pathway" | "chest_safety_fallback" | "generic_fallback";
+};
+
+/** A source-attributed answer. Complaint context is never sufficient to
+ * complete red_flag_screen; targeted answer metadata is required. */
+export type SafetyEvidence = {
+  source: EvidenceSource;
+  text: string;
+  questionDimension?: "red_flag_screen";
+  state?: SafetyScreenState;
+  signals?: DetectedRedFlag[];
+};
+
+export type SafetyEvaluation = {
+  state: SafetyScreenState;
+  evidence: SafetyEvidence[];
+  signals: DetectedRedFlag[];
+  explicit: boolean;
+  complete: boolean;
+  unresolved: boolean;
+};
+
+const CHEST_LOCATION_ANCHORS = [
+  "chest", "seene", "seenein", "sine", "chhati", "chati", "heart", "dil", "सीने", "छाती", "हृदय",
+  "left side", "left-sided", "baaye taraf", "baayi taraf", "baye taraf", "baen taraf", "baaye side", "baen side",
+];
+const CHEST_QUALITY_ANCHORS = [
+  "pain", "dard", "pressure", "dabav", "dabao", "heaviness", "heavy", "bojh", "bojhal", "bhaari", "bhari", "bharipan", "bhaaripan", "bhaarpan",
+  "burning", "jalan", "tightness", "tight", "jakdan", "jakanan", "chubhan", "ache", "aching", "discomfort",
+  "takleef", "uneasiness", "bechaini", "दर्द", "दबाव", "जलन", "भारीपन", "भारी", "बोझ",
+];
+const CHEST_ACUITY_ANCHORS = ["sudden", "achanak", "abhi", "right now", "shuru hua", "started", "अचानक"];
+
+function tokensFor(text: string): string[] {
+  return normalize(text).trim().split(/\s+/).filter(Boolean);
+}
+
+function phraseTokens(phrase: string): string[] {
+  return tokensFor(phrase);
+}
+
+function anchorPositions(tokens: string[], anchors: string[]): { anchor: string; index: number }[] {
+  const hits: { anchor: string; index: number }[] = [];
+  for (const anchor of anchors) {
+    const wanted = phraseTokens(anchor);
+    if (!wanted.length) continue;
+    for (let i = 0; i <= tokens.length - wanted.length; i += 1) {
+      if (wanted.every((part, offset) => tokens[i + offset] === part)) hits.push({ anchor, index: i });
+    }
+  }
+  return hits;
+}
+
+/** Recognize a bounded location/quality combination, not a standalone keyword. */
+export function assessChestSafety(complaint: string, extra = ""): ChestSafetyAssessment {
+  const text = `${complaint || ""} ${extra || ""}`.trim();
+  if (text.length < 2) return { relevant: false, confidence: null, evidence: [], profileId: null };
+  const tokens = tokensFor(text);
+  const locations = anchorPositions(tokens, CHEST_LOCATION_ANCHORS);
+  const qualities = anchorPositions(tokens, CHEST_QUALITY_ANCHORS);
+  const acuity = anchorPositions(tokens, CHEST_ACUITY_ANCHORS);
+  const pairs = locations.flatMap((location) => qualities
+    .map((quality) => ({ location, quality, distance: Math.abs(location.index - quality.index) }))
+    .filter((pair) => pair.distance <= 8));
+  if (!pairs.length) return { relevant: false, confidence: null, evidence: [], profileId: null };
+  const best = pairs.sort((a, b) => a.distance - b.distance)[0];
+  const evidence = Array.from(new Set([
+    best.location.anchor,
+    best.quality.anchor,
+    ...acuity.filter((item) => Math.abs(item.index - best.location.index) <= 8).map((item) => item.anchor),
+  ]));
+  const directLocation = !/^(left side|left-sided|baaye taraf|baayi taraf|baye taraf|baen taraf|baaye side|baen side)$/.test(best.location.anchor);
+  return {
+    relevant: true,
+    confidence: directLocation && best.distance <= 5 ? "high" : "possible",
+    evidence,
+    profileId: "chest_pain",
+  };
+}
+
+/** Return the reviewed chest pathway used as the additive safety profile. */
+export function chestSafetyPathway(): ClinicalPathway {
+  return PATHWAYS.find((pathway) => pathway.id === "chest_pain") as ClinicalPathway;
+}
+
+/** Resolve a context once and reuse it throughout the intake. */
+export function resolveClinicalContext(complaint: string, extra = ""): ClinicalContext {
+  const pathway = matchPathway(complaint, extra);
+  const chestSafety = assessChestSafety(complaint, extra);
+  if (pathway?.id === "chest_pain") {
+    return { pathway, chestSafety: chestSafety.relevant ? chestSafety : { relevant: true, confidence: "high", evidence: ["chest_pain pathway"], profileId: "chest_pain" }, route: "curated_pathway" };
+  }
+  if (chestSafety.relevant) {
+    return { pathway, chestSafety, route: pathway ? "curated_pathway" : "chest_safety_fallback" };
+  }
+  return { pathway, chestSafety, route: pathway ? "curated_pathway" : "generic_fallback" };
+}
+
+/** Resolve the pathway used for questions/red-flag definitions. A null ordinary
+ * match can still use the existing chest pathway without changing its route. */
+export function pathwayForClinicalContext(context: ClinicalContext): ClinicalPathway | null {
+  return context.pathway ?? (context.chestSafety.relevant ? chestSafetyPathway() : null);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// History-COVERAGE model (spec §11 blueprint, §26 completeness) — pure &
+// browser-safe. This is a COMPLETENESS/COVERAGE model, NOT a fixed
+// questionnaire and NOT a fixed question count. It answers one question:
+// "Given everything the patient has said so far, which clinically-relevant
+// history DIMENSIONS have plausibly been addressed, and which are still
+// MISSING?" The adaptive interview uses this to decide when it is safe to
+// finalize (all required dimensions covered) versus keep asking — while the AI
+// still chooses/phrases the actual next question dynamically.
+//
+// Detection is transparent and explainable (bilingual keyword/phrase presence
+// in the patient's OWN words, same style as detectRedFlags). Keywords are used
+// ONLY to detect whether a dimension has plausibly been touched — never to
+// fabricate clinical meaning or to diagnose.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The clinically-relevant history dimensions a clinician gathers (spec §11). */
+export type HistoryDimension =
+  | "onset_duration"      // when it started / how long
+  | "severity_character"  // how bad / what it feels like
+  | "associated_symptoms" // other symptoms accompanying the complaint
+  | "prior_care"          // already seen a doctor / took medicine / prior tests
+  | "relevant_history"    // relevant past/medical/exposure history
+  | "red_flag_screen";    // danger-sign screen for this complaint
+
+/** Human-readable label for a dimension (for logs / doctor-facing summaries). */
+export function dimensionLabel(d: HistoryDimension): string {
+  switch (d) {
+    case "onset_duration": return "Onset / duration";
+    case "severity_character": return "Severity / character";
+    case "associated_symptoms": return "Associated symptoms";
+    case "prior_care": return "Prior care / treatment";
+    case "relevant_history": return "Relevant history";
+    case "red_flag_screen": return "Danger-sign (red-flag) screen";
+  }
+}
+
+// Bilingual (English + Hindi/Hinglish-Roman) cue words/phrases that indicate a
+// patient's text has plausibly ADDRESSED a given dimension. Kept transparent
+// and additive; matched as simple substring presence like detectRedFlags.
+const DIMENSION_CUES: Record<HistoryDimension, string[]> = {
+  onset_duration: [
+    // time spans / onset — numbers with day/week/month markers + words
+    "din", "dino", "hafte", "hafta", "hafte", "mahine", "mahina", "saal",
+    "day", "days", "week", "weeks", "month", "months", "year", "years",
+    "hour", "hours", "ghante", "ghanta", "since", "se ho", "se hai", "kab se",
+    "kal se", "aaj se", "subah se", "raat se", "achanak", "sudden", "gradually",
+    "dheere", "shuru hua", "started", "onset", "ago", "pehle se",
+    "yesterday", "kal", "recently", "haal hi", "purana", "chronic",
+  ],
+  severity_character: [
+    // severity
+    "bahut", "tez", "severe", "mild", "halka", "thoda", "unbearable",
+    "bardaasht", "0 se 10", "out of 10", "/10", "scale", "intense", "worst",
+    "kam", "zyada",
+    // character / quality
+    "jalan", "burning", "marod", "cramp", "cramping", "dabav", "pressure",
+    "jakdan", "tightness", "chubhan", "sharp", "dull", "throbbing", "dhak dhak",
+    "stabbing", "aching", "kaisa", "kaise", "type of pain", "character",
+    "paani jaisa", "watery", "dry", "sukhi", "sookhi",
+  ],
+  associated_symptoms: [
+    // common accompanying symptoms (bilingual)
+    "bukhar", "fever", "ulti", "vomit", "vomiting", "nausea", "jee michlana",
+    "motion", "motions", "loose", "dast", "diarrhea", "khaansi", "khansi",
+    "cough", "saans", "breathless", "sar dard", "headache", "chakkar", "dizzy",
+    "kamzori", "weakness", "paseena", "sweating", "peshaab", "urine", "khoon",
+    "blood", "rash", "chakatte", "soojan", "swelling", "dard bhi", "ke saath",
+    "along with", "also have", "bhi ho", "chills", "thandi",
+  ],
+  prior_care: [
+    "doctor", "dikhaya", "dikhaya", "seen", "consult", "hospital", "clinic",
+    "dawa", "dawai", "medicine", "tablet", "goli", "syrup", "antibiotic",
+    "self medicine", "khud dawa", "test", "report", "reports", "jaanch",
+    "parchi", "prescription", "ilaaj", "treatment", "pehle liya", "already took",
+    "no reports", "koi report nahi", "nahi dikhaya", "not seen", "no doctor",
+    "no medicine", "koi dawa nahi",
+  ],
+  relevant_history: [
+    "pehle se", "known", "history", "purani bimari", "bp", "blood pressure",
+    "diabetes", "sugar", "shugar", "heart", "dil", "thyroid", "surgery",
+    "operation", "allergy", "allergic", "smoking", "beedi", "cigarette",
+    "tambakoo", "sharaab", "alcohol", "pregnan", "garbh", "family history",
+    "ghar mein", "travel", "safar", "exposure", "sampark", "chronic",
+    "recurrent", "baar baar hota",
+  ],
+  red_flag_screen: [
+    // These cues identify a TARGETED safety question when examining a
+    // deterministic question. They are intentionally not used to mark the
+    // initial complaint as screened; coverageFor() consults SafetyEvidence.
+    "danger sign", "red flag", "breathlessness", "breathless", "saans phool", "cannot breathe",
+    "can't breathe", "radiat", "haath tak", "arm", "jaw", "jabda", "back", "peeth",
+    "paseena", "sweating", "faint", "behosh", "unconscious", "convulsion", "daura", "jhatke",
+    "gardan akdan", "neck stiff", "no urine", "peshaab nahi", "weight loss", "wazan kam",
+    "night sweat", "raat paseena", "control nahi", "danger", "emergency", "no other symptom",
+    "koi aur lakshan nahi", "aisa kuch nahi", "no red flag", "no warning",
+  ],
+};
+
+/** The required dimensions for the GENERIC floor (no pathway matched). Minimal
+ *  but non-empty so the flow can never finalize after only identity/date/
+ *  complaint/duration + yes-no answers (spec §26 completeness). */
+const GENERIC_REQUIRED_DIMENSIONS: HistoryDimension[] = [
+  "onset_duration",
+  "severity_character",
+  "associated_symptoms",
+  "prior_care",
+];
+
+/**
+ * Derive the required history dimensions for a matched pathway from ITS OWN
+ * data — this is what makes coverage ADAPTIVE (different complaints require
+ * different dimensions), not one fixed questionnaire. Every pathway needs the
+ * core four; pathways whose curated questions probe past/medical history add
+ * `relevant_history`, and any pathway that carries red flags adds a
+ * `red_flag_screen` requirement.
+ */
+export function requiredDimensions(subject: ClinicalPathway | ClinicalContext | null): HistoryDimension[] {
+  const context = contextFromSubject(subject);
+  const pathway = context.pathway ?? (context.chestSafety.relevant ? chestSafetyPathway() : null);
+  if (!pathway) return [...GENERIC_REQUIRED_DIMENSIONS];
+  const dims: HistoryDimension[] = [
+    "onset_duration",
+    "severity_character",
+    "associated_symptoms",
+    "prior_care",
+  ];
+  // Does the pathway explicitly probe relevant history? (heuristic over its own
+  // curated questions — transparent and data-driven).
+  const qText = pathway.coreQuestions
+    .map((q) => `${q.english} ${q.hinglish}`.toLowerCase())
+    .join(" ");
+  const probesHistory = [
+    "known", "pehle se", "history", "previous", "diabetes", "bp", "smok",
+    "tambakoo", "beedi", "travel", "safar", "contact", "sampark", "family",
+    "allerg", "surgery", "operation", "recurrent", "baar-baar", "baar baar",
+    "pregnan",
+  ].some((w) => qText.includes(w));
+  if (probesHistory || context.chestSafety.relevant) dims.push("relevant_history");
+  // A chest profile attached to an otherwise unrelated curated pathway still
+  // receives the chest safety dimensions, while a normal generic fallback does
+  // not acquire them.
+  if (pathway.redFlags.length > 0 || context.chestSafety.relevant) dims.push("red_flag_screen");
+  return dims;
+}
+
+/** Per-dimension coverage result: satisfied dimensions + source-aware safety
+ * state. Complaint context can satisfy ordinary history dimensions, but never
+ * red_flag_screen without explicit attributable evidence. */
+export type CoverageResult = {
+  required: HistoryDimension[];
+  satisfied: HistoryDimension[];
+  missing: HistoryDimension[];
+  /** true when no required dimension is missing → interview may finalize. */
+  complete: boolean;
+  /** which cue or explicit state satisfied each dimension. */
+  evidence: Partial<Record<HistoryDimension, string>>;
+  safetyState: SafetyScreenState;
+  safetyEvaluation: SafetyEvaluation;
+};
+
+/** Does the patient text plausibly address an ordinary dimension? For
+ * red_flag_screen this helper is used only to classify targeted question
+ * wording; coverageFor() uses SafetyEvaluation for patient evidence. */
+function dimensionHit(
+  d: HistoryDimension,
+  normalizedText: string,
+  pathway: ClinicalPathway | null,
+): string | null {
+  for (const cue of DIMENSION_CUES[d]) {
+    if (normalizedText.includes(cue.toLowerCase())) return cue;
+  }
+  if (d === "red_flag_screen" && pathway) {
+    for (const f of pathway.redFlags) {
+      for (const m of f.match) {
+        if (normalizedText.includes(m.toLowerCase())) return m;
+      }
+    }
+  }
+  // onset_duration: also satisfied by a bare "<number> <time-unit>" pattern that
+  // the cue list might miss (e.g. "2 hafta", "5 din").
+  if (d === "onset_duration") {
+    if (/\b\d{1,3}\s*(din|dino|hafte|hafta|mahine|mahina|saal|day|days|week|weeks|month|months|year|years|hour|hours|ghante|ghanta)\b/.test(normalizedText)) {
+      return "duration-number-pattern";
+    }
+  }
+  // severity_character: also satisfied by a "<n>/10"-style rating.
+  if (d === "severity_character") {
+    if (/\b(\d{1,2})\s*(\/|out of)\s*10\b/.test(normalizedText)) return "severity-rating";
+  }
+  return null;
+}
+
+/**
+ * COVERAGE MODEL — the core completeness gate (spec §26).
+ *
+ * Given the matched pathway (or null for the generic floor) and ALL text the
+ * patient has provided so far (initial complaint + duration + seen-doctor/
+ * self-medicine + every deep Q/A answer), returns which required dimensions are
+ * ALREADY SATISFIED versus STILL MISSING, plus `complete` (no dimension
+ * missing).
+ *
+ * IMPORTANT: dimensions already covered by the INITIAL complaint/duration are
+ * treated as satisfied (e.g. "5 din se fever" satisfies onset_duration), so the
+ * flow never blindly re-asks satisfied dimensions.
+ *
+ * This is pure, deterministic and unit-testable. It does NOT impose an order or
+ * a fixed count — callers combine `missing` with their own MAX ceiling.
+ *
+ * @param pathway matched ClinicalPathway or null (generic floor)
+ * @param patientTexts every patient-provided string so far (complaint,
+ *        duration, prior-care answers, each deep answer, etc.)
+ */
+export type CoverageInput =
+  | (string | undefined | null)[]
+  | SafetyEvidence[]
+  | { patientTexts?: (string | undefined | null)[]; safetyEvidence?: SafetyEvidence[]; evidence?: SafetyEvidence[] };
+
+function isSafetyEvidenceArray(input: CoverageInput): input is SafetyEvidence[] {
+  return Array.isArray(input) && input.every((item) => typeof item === "object" && item !== null && "source" in item);
+}
+
+/**
+ * COVERAGE MODEL — the core completeness gate (spec §26). It accepts the old
+ * string-array form for compatibility and a source-aware form for the fixed
+ * safety boundary. The latter is required for red_flag_screen completion.
+ */
+export function coverageFor(
+  subject: ClinicalPathway | ClinicalContext | null,
+  input: CoverageInput,
+  explicitSafetyEvidence: SafetyEvidence[] = [],
+): CoverageResult {
+  const context = contextFromSubject(subject);
+  const evidenceArray = isSafetyEvidenceArray(input);
+  const patientTexts = evidenceArray ? input.map((item) => item.text) : Array.isArray(input) ? input : (input.patientTexts ?? []);
+  const suppliedSafety = evidenceArray
+    ? [...input, ...explicitSafetyEvidence]
+    : Array.isArray(input)
+      ? explicitSafetyEvidence
+      : [...(input.safetyEvidence ?? input.evidence ?? []), ...explicitSafetyEvidence];
+  const safetyEvaluation = evaluateSafetyEvidence(context, suppliedSafety);
+  const normalizedText = normalize([
+    ...patientTexts.filter(Boolean),
+    ...suppliedSafety.filter(isEligibleSafetyEvidence).map((item) => item.text),
+  ].join(" . "));
+  const required = requiredDimensions(context);
+  const effectivePathway = pathwayForClinicalContext(context);
+  const satisfied: HistoryDimension[] = [];
+  const missing: HistoryDimension[] = [];
+  const evidence: Partial<Record<HistoryDimension, string>> = {};
+  for (const dimension of required) {
+    if (dimension === "red_flag_screen") {
+      if (safetyEvaluation.complete) {
+        satisfied.push(dimension);
+        evidence[dimension] = safetyEvaluation.state;
+      } else {
+        missing.push(dimension);
+      }
+      continue;
+    }
+    const hit = dimensionHit(dimension, normalizedText, effectivePathway);
+    if (hit) { satisfied.push(dimension); evidence[dimension] = hit; }
+    else missing.push(dimension);
+  }
+  return {
+    required,
+    satisfied,
+    missing,
+    complete: missing.length === 0,
+    evidence,
+    safetyState: safetyEvaluation.state,
+    safetyEvaluation,
+  };
+}
+
+/**
+ * Pick a deterministic question that targets an uncovered dimension. Used when
+ * the AI is unavailable OR the AI tries to STOP while a required dimension is
+ * still missing. Prefers the matched pathway's curated coreQuestions relevant
+ * to `dimension`; otherwise returns a generic bilingual dimension question.
+ * `skip` lets the caller exclude topics already asked (dedupe/coverage), and
+ * this returns null when it can find nothing new for the dimension.
+ *
+ * @returns a bilingual question object, or null if nothing suitable/new.
+ */
+export function questionForDimension(
+  subject: ClinicalPathway | ClinicalContext | null,
+  dimension: HistoryDimension,
+  skip?: (text: string) => boolean,
+): { hinglish: string; english: string } | null {
+  const skipFn = skip ?? (() => false);
+  const context = contextFromSubject(subject);
+  const chest = context.chestSafety.relevant ? chestSafetyPathway() : null;
+  const candidates = dimension === "red_flag_screen" && chest
+    ? [chest, context.pathway].filter((pathway, index, all): pathway is ClinicalPathway => Boolean(pathway) && all.findIndex((other) => other?.id === pathway?.id) === index)
+    : [context.pathway, chest].filter((pathway, index, all): pathway is ClinicalPathway => Boolean(pathway) && all.findIndex((other) => other?.id === pathway?.id) === index);
+  for (const pathway of candidates) {
+    // Match the pathway's own curated questions to the target dimension using
+    // the same cue vocabulary, so phrasing stays complaint-specific and safe.
+    for (const q of pathway.coreQuestions) {
+      const probe = normalize(`${q.english} ${q.hinglish}`);
+      const hit = dimensionHit(dimension, probe, pathway);
+      if (hit && !skipFn(q.english) && !skipFn(q.hinglish)) return q;
+    }
+  }
+  const generic = GENERIC_DIMENSION_QUESTIONS[dimension];
+  if (generic && !skipFn(generic.english) && !skipFn(generic.hinglish)) return generic;
+  return null;
+}
+
+// Generic bilingual questions per dimension — the safe deterministic fallback
+// when no pathway matched (or the pathway had nothing new for the dimension).
+const GENERIC_DIMENSION_QUESTIONS: Record<HistoryDimension, { hinglish: string; english: string }> = {
+  onset_duration: { hinglish: "Yeh takleef aapko theek se kab se hai — kitne din/hafte se?", english: "Exactly how long have you had this — how many days or weeks?" },
+  severity_character: { hinglish: "Takleef kitni tez hai (0 se 10 mein) aur kaisi mehsoos hoti hai?", english: "How severe is it (0–10) and what does it feel like?" },
+  associated_symptoms: { hinglish: "Iske saath aur koi lakshan hai — bukhar, ulti, kamzori, ya kuch aur?", english: "Any other symptoms with it — fever, vomiting, weakness, or anything else?" },
+  prior_care: { hinglish: "Iske liye pehle koi dawa li ya kisi doctor ko dikhaya hai?", english: "Have you taken any medicine or seen a doctor for this already?" },
+  relevant_history: { hinglish: "Koi purani bimari (BP, sugar, dil, etc.) ya zaroori medical history hai?", english: "Any existing conditions (BP, sugar, heart, etc.) or relevant medical history?" },
+  red_flag_screen: { hinglish: "Koi khatre ka lakshan to nahi — bahut tez dard, saans phoolna, behoshi, ya khoon?", english: "Any danger signs — very severe pain, breathlessness, fainting, or bleeding?" },
+};

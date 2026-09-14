@@ -27,10 +27,17 @@ import {
 } from "@/lib/clientPrompts";
 import { logAiTraining } from "@/lib/aiTraining";
 import {
-  matchPathway,
-  detectRedFlags,
+  resolveClinicalContext,
+  pathwayForClinicalContext,
+  detectRedFlagsForContext,
   pathwayGuidance,
+  coverageFor,
+  questionForDimension,
+  type ClinicalContext,
+  type SafetyEvidence,
+  type CoverageResult,
   type ClinicalPathway,
+  type HistoryDimension,
 } from "@/lib/clinicalPathways";
 import PuterLoginGate from "@/components/PuterLoginGate";
 
@@ -50,6 +57,7 @@ type StepKey =
   | "symptoms" | "upload_prompt";
 
 type Answers = Partial<Record<StepKey, string>>;
+type DeepQuestion = { text: string; dimension?: HistoryDimension; source: "ai" | "deterministic" };
 
 function kindFromFile(name: string, mime: string): ReportKind {
   const n = name.toLowerCase();
@@ -101,15 +109,17 @@ function AppointmentFlow() {
   // Dynamic AI deep-questioning phase (after the fixed script):
   const inDeepPhaseRef = useRef(false);   // are we asking complaint-specific Qs?
   const deepCountRef = useRef(0);          // how many deep Qs asked so far
-  const deepQARef = useRef<{ q: string; a: string }[]>([]); // collected Q/A
+  const deepQARef = useRef<{ q: string; a: string; dimension?: HistoryDimension; source?: "ai" | "deterministic" }[]>([]); // collected Q/A + target metadata
   const answersRef = useRef<Answers>({});  // latest answers (for finalize)
   const questionPlanRef = useRef("");      // research-informed plan of what to ask
   const researchRef = useRef("");          // cached web research (reused at finalize)
   const processingRef = useRef(false);     // hard lock to prevent double-submits
   const turnsRef = useRef<Turn[]>([]);     // mirror of `turns` for async save
   const pastVisitsRef = useRef("");        // AI context: summary of previous visits
-  // Clinical Question & Reasoning Library (spec): the matched Phase-1 pathway
-  // frames the deep questions and its red flags are checked against answers.
+  // Keep one resolved context for routing, adaptive coverage, snapshots, and
+  // final overlays. pathwayRef remains as a compatibility alias for existing
+  // curated guidance callers and is never the sole safety decision.
+  const clinicalContextRef = useRef<ClinicalContext>(resolveClinicalContext(""));
   const pathwayRef = useRef<ClinicalPathway | null>(null);
 
   useEffect(() => { turnsRef.current = turns; scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns, busy, analyzing]);
@@ -245,8 +255,9 @@ function AppointmentFlow() {
       // ── If we're in the dynamic AI deep-questioning phase, route the answer
       //    there instead of the fixed script. ──
       if (inDeepPhaseRef.current) {
-        const lastQ = deepQARef.current[deepQARef.current.length - 1]?.q ?? "";
-        deepQARef.current[deepQARef.current.length - 1] = { q: lastQ, a: answer };
+        const lastIndex = deepQARef.current.length - 1;
+        const currentDeep = deepQARef.current[lastIndex];
+        if (currentDeep) deepQARef.current[lastIndex] = { ...currentDeep, a: answer };
         await continueDeepPhase();
         return;
       }
@@ -266,7 +277,9 @@ function AppointmentFlow() {
       // to frame safe, consistent questioning, and (2) research (in background)
       // WHAT a doctor should ask for this condition, guiding the deep questions.
       if (cur.key === "complaint" && answer.trim().length > 2) {
-        pathwayRef.current = matchPathway(answer, next.duration);
+        const context = resolveClinicalContext(answer, next.duration ?? "");
+        clinicalContextRef.current = context;
+        pathwayRef.current = context.pathway;
         void buildResearchPlan(next);
       }
 
@@ -298,25 +311,30 @@ function AppointmentFlow() {
     deepCountRef.current = 0;
     deepQARef.current = [];
     setBusy(true);
-    const q = await nextDeepQuestion(a);
-    if (!q) { await finishFromDeep(a); return; }
+    const selection = await nextDeepQuestion(a);
+    // A null selection is safe only when coverage is complete or the hard
+    // MAX_DEEP ceiling has been reached. An unresolved safety screen is carried
+    // into finalization as clinician-review-needed, never as a passed screen.
+    if (!selection) { await finishFromDeep(a); return; }
     deepCountRef.current = 1;
-    deepQARef.current.push({ q, a: "" });
-    logQuestion("deep_symptom", q);
-    setTurns((p) => [...p, { role: "assistant", content: q }]);
+    deepQARef.current.push({ q: selection.text, a: "", dimension: selection.dimension, source: selection.source });
+    logQuestion("deep_symptom", selection.text);
+    setTurns((p) => [...p, { role: "assistant", content: selection.text }]);
     setBusy(false);
   }
 
   // After a deep answer: decide whether to ask another or finalize.
   async function continueDeepPhase() {
     setBusy(true);
+    // Hard SAFETY CEILING (not the completion criterion): the interview can
+    // never loop past MAX_DEEP complaint-specific questions.
     if (deepCountRef.current >= MAX_DEEP) { await finishFromDeep(answersRef.current); return; }
-    const q = await nextDeepQuestion(answersRef.current);
-    if (!q) { await finishFromDeep(answersRef.current); return; }
+    const selection = await nextDeepQuestion(answersRef.current);
+    if (!selection) { await finishFromDeep(answersRef.current); return; }
     deepCountRef.current += 1;
-    deepQARef.current.push({ q, a: "" });
-    logQuestion("deep_symptom", q);
-    setTurns((p) => [...p, { role: "assistant", content: q }]);
+    deepQARef.current.push({ q: selection.text, a: "", dimension: selection.dimension, source: selection.source });
+    logQuestion("deep_symptom", selection.text);
+    setTurns((p) => [...p, { role: "assistant", content: selection.text }]);
     setBusy(false);
   }
 
@@ -350,74 +368,86 @@ function AppointmentFlow() {
 
   // The core intelligence: AI generates ONE complaint-specific deep question,
   // guided by the research question-plan, aware of everything asked so far.
-  // Returns "STOP"->"" when it has enough, or "" if AI is unavailable (a
-  // complaint-aware fallback is used the first time).
-  async function nextDeepQuestion(a: Answers): Promise<string> {
+  // The return value carries target metadata so only a targeted safety question
+  // can produce explicit red_flag_screen evidence.
+  async function nextDeepQuestion(a: Answers): Promise<DeepQuestion | null> {
+    const coverage = coverageNow(a);
+    if (coverage.complete) return null;
     const langTxt = lang === "english" ? "simple clear English" : "simple warm Hindi/Hinglish (Roman script)";
     const asked = deepQARef.current.map((x, i) => `Q${i + 1}: ${x.q}\nA${i + 1}: ${x.a || "(not answered yet)"}`).join("\n");
     const plan = questionPlanRef.current;
-    const pathway = pathwayRef.current;
+    const context = clinicalContextRef.current;
+    const pathway = pathwayForClinicalContext(context);
     const guidance = pathway ? pathwayGuidance(pathway, lang) : "";
+    const mustContinue = !coverage.complete;
     try {
-      const out = await aiChat(
-        [
-          {
-            role: "system",
-            content: [
-              `You are an experienced doctor doing intake with a patient in ${langTxt}.`,
-              pathway
-                ? "You have a curated CLINICAL PATHWAY (reviewed question set + danger signs) for this complaint, plus a research-based plan. Use the pathway as your primary guide and cover its key questions and danger signs first."
-                : "You have a research-based PLAN of the questions a doctor should ask for this condition.",
-              "Ask the SINGLE most useful NEXT question on a NEW topic not yet covered",
-              "(relevant associated symptoms, character/severity, timing/triggers, relevant history, and DANGER/red-flag signs).",
-              "The question MUST be specific to their complaint — never generic or irrelevant.",
-              "CRITICAL: Never repeat or re-ask a topic already asked (even in different words). Look at the",
-              "'Deep questions asked so far' and pick something genuinely NEW.",
-              "If the key topics are already covered OR the patient's answers already give enough to brief the",
-              "doctor, reply with exactly: STOP (do not keep asking for the sake of it).",
-              "Otherwise output ONLY the single new question (max ~25 words).",
-            ].join("\n"),
-          },
-          {
-            role: "user",
-            content: [
-              `Main complaint: ${a.complaint ?? ""}`,
-              `Duration: ${a.duration ?? ""}`,
-              `Seen a doctor before: ${a.seen_doctor ?? ""}`,
-              `Age: ${a.age ?? ""}, Sex: ${a.sex ?? ""}`,
-              guidance ? guidance : "",
-              plan ? `RESEARCH-BASED QUESTION PLAN:\n${plan}` : "",
-              asked ? `Deep questions asked so far:\n${asked}` : "No deep questions asked yet — ask the first, most relevant one.",
-            ].filter(Boolean).join("\n"),
-          },
-        ],
-        { model: MODELS.reasoning, temperature: 0.5, maxTokens: 80 }
-      );
+      const out = await Promise.race([
+        aiChat(
+          [
+            {
+              role: "system",
+              content: [
+                `You are an experienced doctor doing intake with a patient in ${langTxt}.`,
+                pathway
+                  ? "You have a curated CLINICAL PATHWAY (reviewed question set + danger signs) for this complaint, plus a research-based plan. Use the pathway as your primary guide and cover its key questions and danger signs first."
+                  : "You have a research-based PLAN of the questions a doctor should ask for this condition.",
+                "Ask the SINGLE most useful NEXT question on a NEW topic that is still missing from the adaptive coverage.",
+                "Cover only relevant associated symptoms, character/severity, timing/triggers, relevant history, and DANGER/red-flag signs.",
+                "The question MUST be specific to their complaint — never generic or irrelevant.",
+                "CRITICAL: Never repeat or re-ask a topic already asked (even in different words). Look at the",
+                "'Deep questions asked so far' and pick something genuinely NEW.",
+                "If the key topics are already covered OR the patient's answers already give enough to brief the",
+                "doctor, reply with exactly: STOP (do not keep asking for the sake of it).",
+                "Otherwise output ONLY the single new question (max ~25 words).",
+              ].join("\n"),
+            },
+            {
+              role: "user",
+              content: [
+                `Main complaint: ${a.complaint ?? ""}`,
+                `Duration: ${a.duration ?? ""}`,
+                `Seen a doctor before: ${a.seen_doctor ?? ""}`,
+                `Age: ${a.age ?? ""}, Sex: ${a.sex ?? ""}`,
+                guidance ? guidance : "",
+                plan ? `RESEARCH-BASED QUESTION PLAN:\n${plan}` : "",
+                `MISSING COVERAGE DIMENSIONS: ${coverage.missing.join(", ")}`,
+                asked ? `Deep questions asked so far:\n${asked}` : "No deep questions asked yet — ask the first, most relevant one.",
+              ].filter(Boolean).join("\n"),
+            },
+          ],
+          { model: MODELS.reasoning, temperature: 0.5, maxTokens: 80 }
+        ),
+        new Promise<string>((resolve) => setTimeout(() => resolve(""), 12000)),
+      ]);
       const clean = (out ?? "").trim();
-      if (/^stop\b/i.test(clean) || clean.length < 3) return "";
-      // Guard against the AI re-asking the same thing in different words.
-      if (isDuplicateQuestion(clean)) return "";
-      return clean;
+      const wantsStop = /^stop\b/i.test(clean) || clean.length < 3;
+      // The AI wants to stop, or gave a duplicate. While coverage is missing,
+      // deterministically ask the next missing dimension instead.
+      if (wantsStop || isDuplicateQuestion(clean)) {
+        if (mustContinue) return dimensionQuestion(coverage.missing);
+        return null;
+      }
+      return { text: clean, source: "ai", dimension: inferQuestionDimension(clean) };
     } catch {
-      // AI unavailable → walk the matched pathway's curated questions, skipping
-      // any topic already covered. This keeps questioning complaint-specific and
-      // safe even fully offline.
-      if (pathway) {
-        for (const q of pathway.coreQuestions) {
-          const text = lang === "english" ? q.english : q.hinglish;
-          if (!isDuplicateQuestion(text)) return text;
-        }
-        return "";
-      }
-      // No pathway matched → one generic complaint-aware fallback (first time).
-      if (deepCountRef.current === 0) {
-        return lang === "english"
-          ? `About your "${a.complaint ?? "problem"}" — please describe your symptoms in detail: how often, how severe, and anything that makes it better or worse.`
-          : `Aapki "${a.complaint ?? "takleef"}" ke baare mein — kripya vistaar se batayein: kitni baar hota hai, kitna tez hai, aur kis cheez se badhta ya kam hota hai.`;
-      }
-      return "";
+      // AI unavailable → ask about the next uncovered dimension deterministically,
+      // preferring the resolved pathway's curated question. This preserves
+      // complaint-specific adaptive questioning even fully offline.
+      if (mustContinue) return dimensionQuestion(coverage.missing);
+      return null;
     }
   }
+
+  function inferQuestionDimension(question: string): HistoryDimension | undefined {
+    const q = question.toLowerCase();
+    if (/danger|red flag|breath|saans|radiat|arm|haath|jaw|jabda|sweat|paseena|faint|behosh|unconscious|bleed|khoon|exertion|mehnat|chalne/.test(q)) return "red_flag_screen";
+    if (/when|since|long|start|kab|kitne din|hafte|shuru|duration|onset|aaj|kal/.test(q)) return "onset_duration";
+    if (/severe|severity|how bad|0.?10|feel|character|pressure|burning|dard kaisa|kitna tez|kaisa/.test(q)) return "severity_character";
+    if (/other symptom|associated|along with|anything else|aur koi|saath|ulti|bukhar|nausea|symptom/.test(q)) return "associated_symptoms";
+    if (/doctor|medicine|dawa|treatment|report|test|pehle.*dikhaya/.test(q)) return "prior_care";
+    if (/history|known|diabetes|blood pressure|bp|heart disease|smok|bimari|medical/.test(q)) return "relevant_history";
+    return undefined;
+  }
+
 
   // True if `q` overlaps heavily (>=55% shared significant words) with a question
   // already asked — so we don't repeat the same question in different wording.
@@ -446,15 +476,75 @@ function AppointmentFlow() {
     } catch { /* best effort */ }
   }
 
-  // Build the clinical snapshot from collected answers + uploaded report findings.
-  function snapshotFrom(a: Answers): IntakeSnapshot {
-    // Scan everything the patient said (complaint + answers + deep Q/A) for
-    // explainable red flags, using the matched pathway + general safety checks.
-    const patientText = [
-      a.complaint, a.duration, a.symptoms, a.seen_doctor, a.self_medicine,
+  // Patient evidence is deliberately separate from the assistant's question
+  // transcript. Question wording must never satisfy coverage or raise a safety
+  // signal after finishFromDeep folds Q/A into `a.symptoms`.
+  function patientTextsFrom(a: Answers): string[] {
+    return [
+      a.complaint, a.duration, a.seen_doctor, a.self_medicine,
       ...deepQARef.current.map((x) => x.a),
-    ].filter(Boolean).join(" . ");
-    const flags = detectRedFlags(pathwayRef.current, patientText);
+    ].filter((x): x is string => Boolean(x));
+  }
+
+  function patientSafetyText(a: Answers): string {
+    return patientTextsFrom(a).join(" . ");
+  }
+
+  // Coverage/completeness snapshot for the CURRENT collected info. Completion of
+  // the deep phase is gated on this (not on a fixed count/order): the interview
+  // may finalize only when no required clinical dimension is still missing.
+  function safetyEvidenceFrom(): SafetyEvidence[] {
+    return deepQARef.current
+      .filter((item) => Boolean(item.a) && item.dimension === "red_flag_screen")
+      .map((item) => ({ source: "patient_answer" as const, text: item.a, questionDimension: "red_flag_screen" as const }));
+  }
+
+  // Coverage/completeness snapshot for the CURRENT collected info. Completion of
+  // the deep phase is gated on this (not on a fixed count/order): the interview
+  // may finalize only when no required clinical dimension is still missing.
+  function coverageNow(a: Answers) {
+    return coverageFor(clinicalContextRef.current, {
+      patientTexts: patientTextsFrom(a),
+      safetyEvidence: safetyEvidenceFrom(),
+    });
+  }
+
+  // Deterministic question targeting the next uncovered dimension — used when
+  // the AI is unavailable OR tries to STOP while a dimension is still missing.
+  // The returned target metadata is what makes a later answer eligible for the
+  // explicit safety-screen evidence boundary.
+  function dimensionQuestion(missing: HistoryDimension[]): DeepQuestion | null {
+    for (const dimension of missing) {
+      const q = questionForDimension(clinicalContextRef.current, dimension, isDuplicateQuestion);
+      if (q) return { text: lang === "english" ? q.english : q.hinglish, dimension, source: "deterministic" };
+    }
+    const fallbackDimension = missing[0];
+    if (fallbackDimension) {
+      const fallbackText: Record<HistoryDimension, string> = {
+        onset_duration: "Please clarify exactly when this started and how long it has been happening.",
+        severity_character: "Please describe how severe this is and what the sensation feels like.",
+        associated_symptoms: "Please tell me whether any other symptoms occur with this problem.",
+        prior_care: "Please tell me whether you have already seen a doctor, taken medicine, or had tests for this.",
+        relevant_history: "Please share any relevant existing medical conditions or previous history.",
+        red_flag_screen: "Please answer the danger-sign question explicitly: are any warning signs present, or none?",
+      };
+      return { text: fallbackText[fallbackDimension], dimension: fallbackDimension, source: "deterministic" };
+    }
+    return null;
+  }
+
+  // Build the clinical snapshot from collected answers + uploaded report findings.
+  function snapshotFrom(a: Answers, coverage: CoverageResult = coverageNow(a)): IntakeSnapshot {
+    const context = clinicalContextRef.current;
+    const patientText = patientSafetyText(a);
+    const flags = detectRedFlagsForContext(context, patientText);
+    const safetyNote = coverage.required.includes("red_flag_screen") && coverage.safetyEvaluation.unresolved
+      ? "Safety screen unresolved/incomplete — explicit targeted answer and clinician review required"
+      : "";
+    const redFlagLines = [
+      ...flags.map((flag) => `${flag.signal} [${flag.urgency}]`),
+      safetyNote,
+    ].filter(Boolean);
     return {
       patientType: isReturning ? "returning" : "new",
       name: a.name, age: a.age, sex: a.sex,
@@ -463,8 +553,8 @@ function AppointmentFlow() {
       history: [a.seen_doctor ? `Seen a doctor before: ${a.seen_doctor}` : "", a.self_medicine ?? ""].filter(Boolean).join("; "),
       symptoms: a.symptoms,
       reportFindings: findings.map((f) => `${f.documentType || "report"}: ${f.overallImpression}${f.abnormal.length ? ` | abnormal: ${f.abnormal.join("; ")}` : ""}`).join(" || "),
-      pathway: pathwayRef.current?.displayName,
-      redFlags: flags.length ? flags.map((f) => `${f.signal} [${f.urgency}]`).join("; ") : undefined,
+      pathway: pathwayForClinicalContext(context)?.displayName,
+      redFlags: redFlagLines.length ? redFlagLines.join("; ") : undefined,
       pastVisits: pastVisitsRef.current || undefined,
     };
   }
@@ -477,7 +567,9 @@ function AppointmentFlow() {
     const pid = await ensurePatient();
     if (!pid) { setError("Could not create your patient record. Please check your details."); setPhase("chat"); return; }
 
-    const snapshot = snapshotFrom(a);
+    const finalCoverage = coverageNow(a);
+    const finalSafety = finalCoverage.safetyEvaluation;
+    const snapshot = snapshotFrom(a, finalCoverage);
 
     // 2) Internet deep research (Perplexity sonar). Now the snapshot includes all
     //    symptom answers, so run a full briefing (best effort).
@@ -507,26 +599,37 @@ function AppointmentFlow() {
       report.summary = `${snapshot.chiefComplaint || "Patient"} — ${snapshot.duration ?? ""}. ${snapshot.symptoms ?? ""}`.trim();
     }
 
-    // 3b) Deterministic safety overlay (Clinical Library §7): fold the red flags
-    //     detected from the patient's own words into the report so the doctor
-    //     always sees them, and escalate urgency to match the worst signal. This
-    //     is explainable (each flag is a human-readable signal) and never lowers
-    //     the AI's urgency — safety takes priority (spec §26).
-    const detected = detectRedFlags(pathwayRef.current, [
-      a.complaint, a.duration, a.symptoms, a.seen_doctor, a.self_medicine,
-      ...deepQARef.current.map((x) => x.a),
-    ].filter(Boolean).join(" . "));
-    if (detected.length) {
+    // 3b) Deterministic safety overlay (Clinical Library §7): reuse the same
+    //     resolved context and final safety evaluation used by coverage/snapshot.
+    //     Complaint context can surface explainable signals, but only explicit
+    //     targeted evidence can complete red_flag_screen.
+    const context = clinicalContextRef.current;
+    const patientText = patientSafetyText(a);
+    const detected = detectRedFlagsForContext(context, patientText);
+    const allDetected = [...finalSafety.signals, ...detected].filter((flag, index, all) =>
+      all.findIndex((other) => other.signal === flag.signal && other.urgency === flag.urgency) === index,
+    );
+    const unresolvedNote = "Safety screen unresolved/incomplete — clinician review required";
+    if (finalCoverage.missing.length) {
+      const incompleteNote = `Adaptive intake incomplete — unresolved dimensions: ${finalCoverage.missing.join(", ")}; clinician review required`;
+      if (!report.missingInfo.some((item) => item.toLowerCase().includes("adaptive intake incomplete"))) report.missingInfo.push(incompleteNote);
+    }
+    if (finalCoverage.required.includes("red_flag_screen") && finalSafety.unresolved) {
+      if (!report.missingInfo.some((item) => item.toLowerCase().includes("safety screen"))) report.missingInfo.push(unresolvedNote);
+      if (!report.redFlags.some((item) => item.toLowerCase().includes("safety screen"))) report.redFlags.push(unresolvedNote);
+      if (!report.urgencyReason) report.urgencyReason = unresolvedNote;
+    }
+    if (allDetected.length) {
       const existing = new Set(report.redFlags.map((r) => r.toLowerCase()));
-      for (const f of detected) {
+      for (const f of allDetected) {
         const line = `${f.signal} (${f.urgency})`;
         if (!existing.has(line.toLowerCase())) report.redFlags.push(line);
       }
       const rank: Record<string, number> = { routine: 0, opd: 1, urgent: 2, admit: 3, emergency: 4 };
-      const worst = detected.some((f) => f.urgency === "emergency") ? "emergency" : "urgent";
+      const worst = allDetected.some((f) => f.urgency === "emergency") ? "emergency" : "urgent";
       if ((rank[worst] ?? 0) > (rank[report.urgency] ?? 0)) {
         report.urgency = worst as typeof report.urgency;
-        if (!report.urgencyReason) report.urgencyReason = `Auto-flagged: ${detected[0].signal}`;
+        if (!report.urgencyReason) report.urgencyReason = `Auto-flagged: ${allDetected[0].signal}`;
       }
     }
 
