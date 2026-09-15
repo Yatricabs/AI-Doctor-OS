@@ -1,175 +1,99 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Loader2, Plus, Printer, Save, Trash2, X } from "lucide-react";
-import { apiGet, apiSend } from "./api";
-import { formatINR } from "@/lib/format";
+import { useMemo, useState } from "react";
+import { CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, HeartPulse, Loader2, Plus, Printer, Save, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
+import { apiSend } from "./api";
 
-type Category = "medicine" | "test" | "scan";
-type InventoryItem = { id: string; name: string; category: Category; unit?: string; price: number };
-type Item = { medicationName: string; dose: string; frequency: string; duration: string; quantity: number; inventoryItemId: string | null; unitPrice: number };
-type Service = { id: string; name: string; category: "test" | "scan"; quantity: number; unitPrice: number };
-type Prefill = { medicines?: string[]; tests?: string[]; advice?: string[] };
+type Medicine = { id: string; brand: string; generic: string; strength: string; form: string; dose: string; frequency: string; timing: string; duration: string; afterCourse: string; quantity: number };
+type Test = { id: string; name: string; category: string; reason: string; priority: string; instruction: string };
+type SafetyCheck = { id: string; checkType: string; severity: string; message: string; recommendation?: string; isOverridden: boolean };
+type Step = "clinical" | "medicines" | "tests" | "advice" | "preview";
 
-const EMPTY: Item = { medicationName: "", dose: "", frequency: "Once daily", duration: "", quantity: 1, inventoryItemId: null, unitPrice: 0 };
-const FREQ = ["Once daily", "Twice daily", "Thrice daily", "Once at night", "Every 8 hours", "As needed (SOS)"];
-
-function parseMedicine(s: string): Item {
-  const dose = s.match(/\d+\s?(mg|mcg|ml|g|iu|units?)/i)?.[0] ?? "";
-  const name = s.split(/\d/)[0].trim() || s.trim();
-  return { ...EMPTY, medicationName: name, dose };
-}
+const steps: { id: Step; label: string }[] = [
+  { id: "clinical", label: "Clinical Details" }, { id: "medicines", label: "Medicines" }, { id: "tests", label: "Investigations" }, { id: "advice", label: "Advice & Follow-up" }, { id: "preview", label: "Preview & Sign" },
+];
+const frequencies = ["Once daily", "Twice daily", "Thrice daily", "Once weekly", "As needed (SOS)"];
+const timings = ["Before breakfast", "Before meals", "After meals", "After food", "At bedtime"];
+const forms = ["Tablet", "Capsule", "Syrup", "Injection", "Cream", "Spray"];
+const emptyMedicine = (): Medicine => ({ id: crypto.randomUUID(), brand: "", generic: "", strength: "", form: "Tablet", dose: "1 tablet", frequency: "Once daily", timing: "After meals", duration: "5 days", afterCourse: "Stop", quantity: 10 });
+const emptyTest = (): Test => ({ id: crypto.randomUUID(), name: "", category: "Blood Test", reason: "", priority: "Routine", instruction: "" });
 
 export default function PrescriptionLetter({ patientId, patientName, patientMeta, appointmentId, prefill, onClose, onSaved }: {
-  patientId: string; patientName: string; patientMeta?: string; appointmentId?: string; prefill?: Prefill; onClose: () => void; onSaved?: () => void;
+  patientId: string; patientName: string; patientMeta?: string; appointmentId?: string;
+  prefill?: { medicines?: string[]; tests?: string[]; advice?: string[] };
+  onClose: () => void; onSaved?: () => void;
 }) {
-  const [items, setItems] = useState<Item[]>([]);
-  const [tests, setTests] = useState("");
-  const [services, setServices] = useState<Service[]>([]);
-  const [serviceQuery, setServiceQuery] = useState("");
-  const [advice, setAdvice] = useState("");
-  const [followUp, setFollowUp] = useState("");
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [inventoryLoading, setInventoryLoading] = useState(true);
-  const [inventoryError, setInventoryError] = useState("");
-  const [medicineQuery, setMedicineQuery] = useState("");
-  const [activeMedicine, setActiveMedicine] = useState<number | null>(null);
-  const [activeService, setActiveService] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [step, setStep] = useState<Step>("clinical");
+  const [diagnosis, setDiagnosis] = useState("");
+  const [secondaryDiagnosis, setSecondaryDiagnosis] = useState("");
+  const [symptoms, setSymptoms] = useState<string[]>([]);
+  const [symptomInput, setSymptomInput] = useState("");
+  const [clinicalNotes, setClinicalNotes] = useState("");
+  const [severity, setSeverity] = useState("Stable / Routine");
+  const [medicines, setMedicines] = useState<Medicine[]>(() => { const parsed = (prefill?.medicines ?? []).map((value) => ({ ...emptyMedicine(), brand: value })); return parsed.length ? parsed : [emptyMedicine()]; });
+  const [tests, setTests] = useState<Test[]>(() => (prefill?.tests ?? []).map((value) => ({ ...emptyTest(), name: value })));
+  const [advice, setAdvice] = useState<string[]>(prefill?.advice ?? []);
+  const [adviceInput, setAdviceInput] = useState("");
+  const [followUpEnabled, setFollowUpEnabled] = useState(true);
+  const [followUpAfter, setFollowUpAfter] = useState("1 week");
+  const [followUpDate, setFollowUpDate] = useState("");
+  const [followUpPurpose, setFollowUpPurpose] = useState("Review response to treatment");
+  const [appointmentType, setAppointmentType] = useState("Regular Follow-up");
+  const [prescriptionId, setPrescriptionId] = useState("");
+  const [safetyChecks, setSafetyChecks] = useState<SafetyCheck[]>([]);
+  const [overrideReasons, setOverrideReasons] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
-  const printRef = useRef<HTMLDivElement>(null);
-  const medicineBoxRef = useRef<HTMLDivElement>(null);
-  const serviceBoxRef = useRef<HTMLDivElement>(null);
+  const [notice, setNotice] = useState("");
+  const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    const meds = (prefill?.medicines ?? []).map(parseMedicine);
-    setItems(meds.length ? meds : [{ ...EMPTY }]);
-    setTests((prefill?.tests ?? []).join(", "));
-    setAdvice((prefill?.advice ?? []).join("; "));
-  }, [prefill]);
+  const stepIndex = steps.findIndex((item) => item.id === step);
+  const blockedAlerts = safetyChecks.filter((item) => item.severity === "blocked" && !item.isOverridden);
+  const totalQuantity = useMemo(() => medicines.reduce((sum, item) => sum + Math.max(0, item.quantity || 0), 0), [medicines]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setInventoryLoading(true); setInventoryError("");
-      try {
-        const [medicines, testItems, scans] = await Promise.all([
-          apiGet<{ items: InventoryItem[] }>("/api/inventory?category=medicine"),
-          apiGet<{ items: InventoryItem[] }>("/api/inventory?category=test"),
-          apiGet<{ items: InventoryItem[] }>("/api/inventory?category=scan"),
-        ]);
-        if (!cancelled) setInventory([...medicines.items, ...testItems.items, ...scans.items]);
-      } catch (e) { if (!cancelled) setInventoryError(e instanceof Error ? e.message : "Could not load inventory suggestions."); }
-      finally { if (!cancelled) setInventoryLoading(false); }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  function addSymptom() { const value = symptomInput.trim(); if (value && !symptoms.includes(value)) setSymptoms([...symptoms, value]); setSymptomInput(""); }
+  function updateMedicine(id: string, key: keyof Medicine, value: string | number) { setMedicines((items) => items.map((item) => item.id === id ? { ...item, [key]: value } : item)); }
+  function updateTest(id: string, key: keyof Test, value: string) { setTests((items) => items.map((item) => item.id === id ? { ...item, [key]: value } : item)); }
+  function addAdvice() { const value = adviceInput.trim(); if (value && !advice.includes(value)) setAdvice([...advice, value]); setAdviceInput(""); }
+  function next() { if (stepIndex < steps.length - 1) setStep(steps[stepIndex + 1].id); }
+  function back() { if (stepIndex > 0) setStep(steps[stepIndex - 1].id); }
+  function buildNotes() { return [diagnosis && `Diagnosis: ${diagnosis}${secondaryDiagnosis ? `; ${secondaryDiagnosis}` : ""}`, symptoms.length && `Symptoms: ${symptoms.join(", ")}`, clinicalNotes && `Clinical notes: ${clinicalNotes}`, `Clinical status: ${severity}`, tests.length && `Investigations: ${tests.filter((item) => item.name.trim()).map((item) => `${item.name} (${item.priority})${item.reason ? ` - ${item.reason}` : ""}`).join("; ")}`, advice.length && `Advice: ${advice.join("; ")}`, followUpEnabled && `Follow-up: ${followUpDate || followUpAfter}; ${followUpPurpose}; ${appointmentType}`].filter(Boolean).join(" | "); }
 
-  useEffect(() => {
-    function close(event: MouseEvent) {
-      const target = event.target as Node;
-      if (!medicineBoxRef.current?.contains(target)) setActiveMedicine(null);
-      if (!serviceBoxRef.current?.contains(target)) setActiveService(false);
-    }
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, []);
-
-  function update(i: number, key: keyof Item, value: string | number | null) {
-    setItems((prev) => prev.map((item, index) => index === i ? { ...item, [key]: value } : item));
-  }
-  function selectMedicine(i: number, item: InventoryItem) {
-    setItems((prev) => prev.map((line, index) => index === i ? { ...line, medicationName: item.name, inventoryItemId: item.id, unitPrice: item.price } : line));
-    setMedicineQuery(""); setActiveMedicine(null);
-  }
-  function addItem() { setItems((prev) => [...prev, { ...EMPTY }]); }
-  function removeItem(i: number) { setItems((prev) => prev.filter((_, index) => index !== i)); }
-  function addService(item: InventoryItem) {
-    if (services.some((service) => service.id === item.id)) { setServiceQuery(""); setActiveService(false); return; }
-    setServices((prev) => [...prev, { id: item.id, name: item.name, category: item.category as "test" | "scan", quantity: 1, unitPrice: item.price }]);
-    setServiceQuery(""); setActiveService(false);
-  }
-  function updateService(id: string, quantity: number) { setServices((prev) => prev.map((service) => service.id === id ? { ...service, quantity: Math.max(1, Math.floor(quantity) || 1) } : service)); }
-  function removeService(id: string) { setServices((prev) => prev.filter((service) => service.id !== id)); }
-
-  const medicineSuggestions = medicineQuery.trim() ? inventory.filter((item) => item.category === "medicine" && item.name.toLowerCase().includes(medicineQuery.toLowerCase())).slice(0, 8) : [];
-  const serviceSuggestions = serviceQuery.trim() ? inventory.filter((item) => (item.category === "test" || item.category === "scan") && item.name.toLowerCase().includes(serviceQuery.toLowerCase()) && !services.some((service) => service.id === item.id)).slice(0, 8) : [];
-  const medicineTotal = items.reduce((sum, item) => sum + item.unitPrice * Math.max(1, item.quantity || 1), 0);
-  const serviceTotal = services.reduce((sum, service) => sum + service.unitPrice * service.quantity, 0);
-
-  async function save() {
-    const valid = items.filter((item) => item.medicationName.trim());
-    setSaving(true); setError("");
+  async function createAndCheck() {
+    const valid = medicines.filter((item) => item.brand.trim() && item.dose.trim());
+    if (!valid.length) { setError("Add at least one medicine with name and dose."); setStep("medicines"); return; }
+    setLoading("creating"); setError(""); setNotice("");
     try {
-      const notesParts = [
-        tests.trim() ? `Tests advised: ${tests.trim()}` : "",
-        services.length ? `Selected services: ${services.map((service) => `${service.name} [${service.id}] ×${service.quantity} @ ${service.unitPrice}`).join(", ")}` : "",
-        advice.trim() ? `Advice: ${advice.trim()}` : "",
-        followUp ? `Follow-up date: ${followUp}` : "",
-        valid.some((item) => item.inventoryItemId) ? `Inventory medicines: ${valid.filter((item) => item.inventoryItemId).map((item) => `${item.medicationName} [${item.inventoryItemId}] ×${item.quantity} @ ${item.unitPrice}`).join(", ")}` : "",
-      ].filter(Boolean);
-      const created = await apiSend<{ prescription: { id: string } }>("/api/prescriptions", "POST", {
-        action: "create", patientId, visitId: appointmentId, notes: notesParts.join(" | "),
-        items: valid.map((item) => ({ medicationName: item.medicationName, dose: item.dose, frequency: item.frequency, duration: item.duration, quantity: String(item.quantity), instructions: item.inventoryItemId ? `Inventory item: ${item.inventoryItemId}; unit price: ${item.unitPrice}` : undefined })),
-      });
-      await apiSend("/api/prescriptions", "POST", { action: "sign", prescriptionId: created.prescription.id }).catch(() => { });
-      setSaved(true); onSaved?.();
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not save prescription."); }
-    finally { setSaving(false); }
+      const created = await apiSend<{ prescription: { id: string } }>("/api/prescriptions", "POST", { action: "create", patientId, visitId: appointmentId, notes: buildNotes(), items: valid.map((item) => ({ medicationName: item.brand, genericName: item.generic, dose: `${item.strength} ${item.dose}`.trim(), frequency: item.frequency, route: item.form.toLowerCase(), duration: item.duration, quantity: String(item.quantity), instructions: `${item.timing}; ${item.afterCourse}` })) });
+      setPrescriptionId(created.prescription.id);
+      const checked = await apiSend<{ safetyChecks: SafetyCheck[]; message: string }>("/api/prescriptions", "POST", { action: "safety_check", prescriptionId: created.prescription.id });
+      setSafetyChecks(checked.safetyChecks ?? []); setNotice(checked.message); setStep("preview");
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not create prescription."); } finally { setLoading(""); }
   }
+  async function overrideAlert(check: SafetyCheck) { const reason = overrideReasons[check.id]?.trim(); if (!reason) { setError("Provide a clinical reason before overriding the alert."); return; } setLoading(`override-${check.id}`); setError(""); try { await apiSend("/api/prescriptions", "POST", { action: "override_alert", checkId: check.id, reason }); setSafetyChecks((items) => items.map((item) => item.id === check.id ? { ...item, isOverridden: true } : item)); } catch (e) { setError(e instanceof Error ? e.message : "Could not override alert."); } finally { setLoading(""); } }
+  async function sign() { if (!prescriptionId || blockedAlerts.length) return; setLoading("signing"); setError(""); try { await apiSend("/api/prescriptions", "POST", { action: "sign", prescriptionId }); setSaved(true); setNotice("Prescription signed successfully. It is ready to dispatch or print."); onSaved?.(); } catch (e) { setError(e instanceof Error ? e.message : "Could not sign prescription."); } finally { setLoading(""); } }
 
-  function print() {
-    const html = printRef.current?.innerHTML;
-    if (!html) return;
-    const w = window.open("", "_blank", "width=800,height=900");
-    if (!w) return;
-    w.document.write(`<!doctype html><html><head><title>Prescription — ${patientName}</title><style>body{font-family:Georgia,serif;color:#1f2d2b;padding:40px;max-width:720px;margin:auto}h1{color:#07634f;margin:0}.muted{color:#6b7c78;font-size:13px}hr{border:none;border-top:2px solid #07947f;margin:14px 0}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #dde}th{font-size:12px;text-transform:uppercase;color:#5a7a6e}.rx{font-size:28px;color:#07634f;font-weight:bold}.sec{margin-top:16px}.sec b{color:#07634f}.sign{margin-top:48px;text-align:right}</style></head><body>${html}</body></html>`);
-    w.document.close(); w.focus(); w.print();
-  }
+  return <div className="fixed inset-0 z-50 flex bg-[#f6fbfa]" onClick={onClose}>
+    <div className="flex h-full w-full flex-col overflow-hidden" onClick={(event) => event.stopPropagation()}>
+      <header className="flex min-h-[76px] items-center gap-6 border-b border-[#dbe8e4] bg-white px-6"><div className="min-w-[220px] flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[#e8f7f2] text-[#0b8975]"><HeartPulse className="h-5 w-5" /></div><div><div className="text-[22px] font-black tracking-tight text-[#15584c]"><span className="text-[#0c9b83]">AI</span> UPCHAR</div><p className="text-[10px] text-[#78918c]">Smarter Healthcare for a Healthier Tomorrow</p></div></div><div className="hidden flex-1 items-center justify-center gap-5 xl:flex">{steps.map((item, index) => <button key={item.id} onClick={() => setStep(item.id)} className={`relative flex items-center gap-2 text-[11px] font-bold ${step === item.id ? "text-[#214840]" : "text-[#829690]"}`}><span className={`grid h-6 w-6 place-items-center rounded-full ${step === item.id ? "bg-[#0c9b83] text-white" : index < stepIndex ? "bg-[#d9f0e8] text-[#317b67]" : "bg-[#e8efec]"}`}>{index + 1}</span>{item.label}{index < steps.length - 1 && <span className="absolute left-[calc(100%+7px)] w-7 border-t border-[#dbe7e4]" />}</button>)}</div><div className="ml-auto flex items-center gap-2"><button className="hidden rounded-lg border border-[#dbe8e4] px-3 py-2 text-xs font-bold text-[#54716d] sm:block">Save Draft</button><button onClick={() => window.print()} className="hidden items-center gap-1 rounded-lg border border-[#8ccabd] px-3 py-2 text-xs font-bold text-[#0b7f6d] sm:flex"><Printer className="h-4 w-4" /> Print</button><button onClick={onClose} aria-label="Close" className="rounded-lg p-2 text-[#78908a] hover:bg-[#eef7f4]"><X className="h-5 w-5" /></button></div></header>
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        {notice && <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#b9decf] bg-[#f0faf5] px-3 py-2 text-sm text-[#317b67]"><CheckCircle2 className="h-4 w-4" />{notice}</div>}{error && <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600"><CircleAlert className="h-4 w-4" />{error}</div>}
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-[#dbe8e4] bg-white p-3"><div className="grid h-10 w-10 place-items-center rounded-full bg-[#e8f5f0] text-sm font-bold text-[#317b67]"><UserRound className="h-5 w-5" /></div><div><p className="font-bold text-[#244840]">{patientName}</p><p className="text-xs text-[#78908a]">{patientMeta || patientId}{appointmentId ? ` · Appointment ${appointmentId}` : ""}</p></div></div>
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-    <div className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
-      <div className="flex items-center justify-between border-b border-[#eef4f1] px-6 py-4"><h2 className="text-lg font-bold text-[#173f3c]">Prescription letter</h2><button onClick={onClose} aria-label="Close"><X className="h-5 w-5 text-[#8a9e98]" /></button></div>
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {error && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2.5 text-sm text-red-600">{error}</div>}
-        {saved && <div className="mb-3 rounded-lg border border-[#c2ddd5] bg-[#f0faf5] p-2.5 text-sm text-[#317b67]">Prescription saved &amp; signed. You can print it now.</div>}
-        <p className="mb-2 text-[11px] text-[#8a9e98]">Pre-filled from the AI report — review and edit before signing. The clinician is responsible for the final prescription.</p>
-        {inventoryLoading && <p className="mb-2 text-xs text-[#5f7c70]">Loading inventory suggestions…</p>}
-        {inventoryError && <p className="mb-2 text-xs text-amber-700">Inventory suggestions unavailable: {inventoryError}</p>}
-        <p className="text-xs font-bold uppercase tracking-wide text-[#5a967e]">Medicines</p>
-        <div className="mt-1.5 space-y-2">{items.map((item, i) => {
-          const suggestions = activeMedicine === i ? medicineSuggestions : [];
-          return <div key={i} ref={i === activeMedicine ? medicineBoxRef : undefined} className="relative flex flex-wrap items-center gap-2 rounded-lg border border-[#e4efe9] bg-[#fbfdfc] p-2">
-            <input value={item.medicationName} onChange={(event) => { update(i, "medicationName", event.target.value); update(i, "inventoryItemId", null); setMedicineQuery(event.target.value); setActiveMedicine(i); }} onFocus={() => { setMedicineQuery(item.medicationName); setActiveMedicine(i); }} onKeyDown={(event) => { if (event.key === "Escape") setActiveMedicine(null); if (event.key === "ArrowDown" && suggestions[0]) { event.preventDefault(); selectMedicine(i, suggestions[0]); } }} placeholder="Medicine" className="min-w-[140px] flex-1 rounded border border-[#dce9e3] px-2 py-1 text-sm outline-none" />
-            {suggestions.length > 0 && <div className="absolute left-2 right-2 top-full z-20 mt-1 overflow-hidden rounded-lg border border-[#dce9e3] bg-white shadow-lg">{suggestions.map((suggestion) => <button key={suggestion.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => selectMedicine(i, suggestion)} className="flex w-full items-center justify-between px-3 py-2 text-left text-xs hover:bg-[#f0f6f3]"><span>{suggestion.name}</span><span className="font-semibold text-[#317b67]">{formatINR(suggestion.price)}</span></button>)}</div>}
-            {activeMedicine === i && medicineQuery.trim() && !inventoryLoading && !inventoryError && suggestions.length === 0 && <div className="absolute left-2 right-2 top-full z-20 mt-1 rounded-lg border border-[#dce9e3] bg-white px-3 py-2 text-xs text-[#8a9e98] shadow-lg">No matching medicines.</div>}
-            <input value={item.dose} onChange={(event) => update(i, "dose", event.target.value)} placeholder="Dose" className="w-20 rounded border border-[#dce9e3] px-2 py-1 text-sm outline-none" />
-            <select value={item.frequency} onChange={(event) => update(i, "frequency", event.target.value)} className="rounded border border-[#dce9e3] px-2 py-1 text-xs outline-none">{FREQ.map((frequency) => <option key={frequency}>{frequency}</option>)}</select>
-            <input value={item.duration} onChange={(event) => update(i, "duration", event.target.value)} placeholder="Duration" className="w-24 rounded border border-[#dce9e3] px-2 py-1 text-sm outline-none" />
-            <input type="number" min="1" value={item.quantity} onChange={(event) => update(i, "quantity", Math.max(1, Number(event.target.value) || 1))} aria-label="Medicine quantity" className="w-16 rounded border border-[#dce9e3] px-2 py-1 text-sm outline-none" />
-            <span className="w-20 text-right text-xs font-semibold text-[#41627a]">{formatINR(item.unitPrice * Math.max(1, item.quantity))}</span>
-            <button onClick={() => removeItem(i)} aria-label="Remove"><Trash2 className="h-4 w-4 text-red-400" /></button>
-          </div>;
-        })}</div>
-        <button onClick={addItem} className="mt-2 flex items-center gap-1 text-xs font-semibold text-[#07947f]"><Plus className="h-3.5 w-3.5" /> Add medicine</button>
-        <div className="mt-2 text-right text-xs font-bold text-[#24443f]">Medicine subtotal: {formatINR(medicineTotal)}</div>
+        {step === "clinical" && <section className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]"><div className="rounded-xl border border-[#dbe8e4] bg-white p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-bold text-[#244840]"><HeartPulse className="h-4 w-4 text-[#0b8975]" /> Clinical Assessment</h2><div className="grid gap-3 sm:grid-cols-2"><Field label="Primary diagnosis *"><input value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} placeholder="e.g. Acute gastritis" /></Field><Field label="Secondary diagnosis"><input value={secondaryDiagnosis} onChange={(e) => setSecondaryDiagnosis(e.target.value)} placeholder="Optional" /></Field></div><Field label="Symptoms / complaints"><div className="flex flex-wrap gap-2 rounded-lg border border-[#dce9e3] p-2">{symptoms.map((item) => <span key={item} className="rounded-full bg-[#edf8f4] px-2.5 py-1 text-xs text-[#317b67]">{item}<button onClick={() => setSymptoms(symptoms.filter((s) => s !== item))} className="ml-1">×</button></span>)}<input className="min-w-[140px] flex-1 border-0 p-1 text-sm outline-none" value={symptomInput} onChange={(e) => setSymptomInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSymptom())} placeholder="Add symptom and press Enter" /></div></Field><Field label="Clinical notes"><textarea rows={5} value={clinicalNotes} onChange={(e) => setClinicalNotes(e.target.value)} placeholder="Relevant findings, history, and physician notes" /></Field></div><div className="rounded-xl border border-[#dbe8e4] bg-white p-5"><h2 className="mb-4 text-base font-bold text-[#244840]">Clinical Severity / Risk Status</h2><div className="grid gap-2">{["Stable / Routine", "Needs Close Monitoring", "Serious / Red Flag", "Emergency", "Under Evaluation"].map((item) => <button key={item} onClick={() => setSeverity(item)} className={`rounded-lg border p-3 text-left text-sm ${severity === item ? "border-[#6cc6b2] bg-[#eef9f5] text-[#267b68]" : "border-[#e1e9e5] text-[#5f7c70]"}`}>{item}</button>)}</div><div className="mt-4 rounded-lg bg-[#fff9e8] p-3 text-xs text-[#8b6d27]">Doctor-confirmed status is recorded with the prescription for review and follow-up.</div></div></section>}
 
-        <div className="mt-4" ref={serviceBoxRef}>
-          <Field label="Tests advised"><input value={serviceQuery} onChange={(event) => { setServiceQuery(event.target.value); setActiveService(true); }} onFocus={() => setActiveService(true)} onKeyDown={(event) => { if (event.key === "Escape") setActiveService(false); if (event.key === "ArrowDown" && serviceSuggestions[0]) { event.preventDefault(); addService(serviceSuggestions[0]); } }} placeholder="Type to search tests or scans" className="in" /></Field>
-          {activeService && serviceQuery.trim() && <div className="relative"><div className="absolute left-0 right-0 z-20 mt-1 overflow-hidden rounded-lg border border-[#dce9e3] bg-white shadow-lg">{serviceSuggestions.length ? serviceSuggestions.map((service) => <button key={service.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => addService(service)} className="flex w-full items-center justify-between px-3 py-2 text-left text-xs hover:bg-[#f0f6f3]"><span>{service.name} <span className="text-[#8a9e98]">· {service.category}</span></span><span className="font-semibold text-[#317b67]">{formatINR(service.price)}</span></button>) : <p className="px-3 py-2 text-xs text-[#8a9e98]">No matching tests or scans.</p>}</div></div>}
-          <div className="mt-2 space-y-1.5">{services.map((service) => <div key={service.id} className="flex items-center gap-2 rounded-lg border border-[#e4efe9] bg-[#fbfdfc] px-3 py-2 text-xs"><span className="min-w-0 flex-1 truncate font-semibold text-[#24443f]">{service.name}<span className="ml-1 font-normal text-[#8a9e98]">({service.category})</span></span><input type="number" min="1" value={service.quantity} onChange={(event) => updateService(service.id, Number(event.target.value))} className="w-14 rounded border border-[#dce9e3] px-2 py-1 text-center" /><span className="w-20 text-right font-semibold text-[#41627a]">{formatINR(service.unitPrice * service.quantity)}</span><button onClick={() => removeService(service.id)} aria-label={`Remove ${service.name}`}><Trash2 className="h-3.5 w-3.5 text-red-400" /></button></div>)}</div>
-          <textarea value={tests} onChange={(event) => setTests(event.target.value)} rows={2} placeholder="Additional test instructions or free-text advice" className="in mt-2" />
-          <div className="mt-2 text-right text-xs font-bold text-[#24443f]">Tests/services total: {formatINR(serviceTotal)}</div>
-        </div>
-        <div className="mt-4 grid gap-3"><Field label="Advice / instructions"><textarea value={advice} onChange={(event) => setAdvice(event.target.value)} rows={2} placeholder="e.g. Stay hydrated, avoid oily food" className="in" /></Field><Field label="Follow-up date"><input type="date" value={followUp} onChange={(event) => setFollowUp(event.target.value)} className="in" /><span className="mt-1 block text-xs text-[#5f7c70]">{followUp ? `Selected follow-up: ${new Date(`${followUp}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}` : "Choose a review date"}</span></Field></div>
+        {step === "medicines" && <section className="rounded-xl border border-[#dbe8e4] bg-white p-5"><div className="mb-4 flex items-center justify-between"><div><h2 className="text-base font-bold text-[#244840]">Medicines</h2><p className="text-xs text-[#78908a]">Add brand, generic, dose, timing, duration, and calculated quantity.</p></div><button onClick={() => setMedicines([...medicines, emptyMedicine()])} className="flex items-center gap-1 rounded-lg border border-[#8ccabd] px-3 py-2 text-xs font-bold text-[#0b7f6d]"><Plus className="h-3.5 w-3.5" /> Add medicine</button></div><div className="space-y-3">{medicines.map((item, index) => <div key={item.id} className="rounded-xl border border-[#e1e9e5] bg-[#fbfdfc] p-3"><div className="mb-2 flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wide text-[#5a967e]">Medicine {index + 1}</p>{medicines.length > 1 && <button onClick={() => setMedicines(medicines.filter((medicine) => medicine.id !== item.id))} className="text-red-400"><Trash2 className="h-4 w-4" /></button>}</div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><input value={item.brand} onChange={(e) => updateMedicine(item.id, "brand", e.target.value)} placeholder="Medicine / Brand *" /><input value={item.generic} onChange={(e) => updateMedicine(item.id, "generic", e.target.value)} placeholder="Generic" /><input value={item.strength} onChange={(e) => updateMedicine(item.id, "strength", e.target.value)} placeholder="Strength (e.g. 40 mg)" /><select value={item.form} onChange={(e) => updateMedicine(item.id, "form", e.target.value)}>{forms.map((form) => <option key={form}>{form}</option>)}</select><input value={item.dose} onChange={(e) => updateMedicine(item.id, "dose", e.target.value)} placeholder="Dose per intake *" /><select value={item.frequency} onChange={(e) => updateMedicine(item.id, "frequency", e.target.value)}>{frequencies.map((frequency) => <option key={frequency}>{frequency}</option>)}</select><select value={item.timing} onChange={(e) => updateMedicine(item.id, "timing", e.target.value)}>{timings.map((timing) => <option key={timing}>{timing}</option>)}</select><input value={item.duration} onChange={(e) => updateMedicine(item.id, "duration", e.target.value)} placeholder="Duration (e.g. 5 days)" /><select value={item.afterCourse} onChange={(e) => updateMedicine(item.id, "afterCourse", e.target.value)}><option>Stop</option><option>Continue</option><option>Review</option></select><input type="number" min={1} value={item.quantity} onChange={(e) => updateMedicine(item.id, "quantity", Number(e.target.value) || 1)} placeholder="Total quantity" /></div></div>)}</div><div className="mt-3 text-right text-xs text-[#5f7c70]">Total medicine units: <b>{totalQuantity}</b></div></section>}
 
-        <div className="hidden"><div ref={printRef}><h1>AI UPCHAR Clinic</h1><p className="muted">Dr. Ananya Arya · General Medicine · Reg. no. XXXXXX</p><hr /><p><b>Patient:</b> {patientName}{patientMeta ? ` (${patientMeta})` : ""}</p><p className="muted">Date: {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p><p className="rx">℞</p><table><thead><tr><th>Medicine</th><th>Dose</th><th>Frequency</th><th>Qty</th><th>Total</th></tr></thead><tbody>{items.filter((item) => item.medicationName.trim()).map((item, i) => <tr key={i}><td>{item.medicationName}</td><td>{item.dose}</td><td>{item.frequency}</td><td>{item.quantity}</td><td>{formatINR(item.unitPrice * item.quantity)}</td></tr>)}</tbody></table><p className="sec"><b>Medicine subtotal:</b> {formatINR(medicineTotal)}</p>{services.length > 0 && <><p className="sec"><b>Tests &amp; scans:</b></p><table><tbody>{services.map((service) => <tr key={service.id}><td>{service.name} ({service.category})</td><td>{service.quantity}</td><td>{formatINR(service.unitPrice * service.quantity)}</td></tr>)}</tbody></table><p className="sec"><b>Tests/services total:</b> {formatINR(serviceTotal)}</p></>}{tests.trim() && <p className="sec"><b>Additional tests:</b> {tests}</p>}{advice.trim() && <p className="sec"><b>Advice:</b> {advice}</p>}{followUp && <p className="sec"><b>Follow-up date:</b> {new Date(`${followUp}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>}<div className="sign"><p>_______________________<br />Dr. Ananya Arya</p></div></div></div>
+        {step === "tests" && <section className="rounded-xl border border-[#dbe8e4] bg-white p-5"><div className="mb-4 flex items-center justify-between"><div><h2 className="text-base font-bold text-[#244840]">Investigations / Tests Advised</h2><p className="text-xs text-[#78908a]">Add tests with clinical reason, priority, and instructions.</p></div><button onClick={() => setTests([...tests, emptyTest()])} className="flex items-center gap-1 rounded-lg border border-[#8ccabd] px-3 py-2 text-xs font-bold text-[#0b7f6d]"><Plus className="h-3.5 w-3.5" /> Add test</button></div>{tests.length === 0 && <div className="rounded-lg border border-dashed border-[#cdded8] p-8 text-center text-sm text-[#78908a]">No investigations added. You can continue or add a test.</div>}<div className="space-y-3">{tests.map((item, index) => <div key={item.id} className="grid gap-2 rounded-xl border border-[#e1e9e5] bg-[#fbfdfc] p-3 sm:grid-cols-2 lg:grid-cols-6"><input className="lg:col-span-2" value={item.name} onChange={(e) => updateTest(item.id, "name", e.target.value)} placeholder={`Test ${index + 1} name`} /><select value={item.category} onChange={(e) => updateTest(item.id, "category", e.target.value)}><option>Blood Test</option><option>Urine</option><option>Ultrasound</option><option>CT Scan</option><option>MRI</option><option>ECG</option><option>Other</option></select><select value={item.priority} onChange={(e) => updateTest(item.id, "priority", e.target.value)}><option>Routine</option><option>Urgent</option></select><input value={item.reason} onChange={(e) => updateTest(item.id, "reason", e.target.value)} placeholder="Clinical reason" /><button onClick={() => setTests(tests.filter((test) => test.id !== item.id))} className="justify-self-end text-red-400"><Trash2 className="h-4 w-4" /></button><input className="sm:col-span-2 lg:col-span-6" value={item.instruction} onChange={(e) => updateTest(item.id, "instruction", e.target.value)} placeholder="Instructions" /></div>)}</div></section>}
+
+        {step === "advice" && <section className="grid gap-4 lg:grid-cols-2"><div className="rounded-xl border border-[#dbe8e4] bg-white p-5"><h2 className="mb-4 text-base font-bold text-[#244840]">Advice / Lifestyle Instructions</h2><div className="mb-3 flex gap-2"><input value={adviceInput} onChange={(e) => setAdviceInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addAdvice())} placeholder="Add advice" /><button onClick={addAdvice} className="rounded-lg bg-[#0c9b83] px-3 text-white"><Plus className="h-4 w-4" /></button></div><div className="flex flex-wrap gap-2">{[...advice, ...(advice.length ? [] : ["Hydration", "Adequate sleep", "Diet modification"])].map((item, index) => <button key={`${item}-${index}`} onClick={() => advice.includes(item) ? setAdvice(advice.filter((value) => value !== item)) : setAdvice([...advice, item])} className={`rounded-full border px-3 py-1.5 text-xs ${advice.includes(item) ? "border-[#8ccabd] bg-[#edf8f4] text-[#317b67]" : "border-[#e1e9e5] text-[#78908a]"}`}>{advice.includes(item) ? "✓ " : "+ "}{item}</button>)}</div></div><div className="rounded-xl border border-[#dbe8e4] bg-white p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-bold text-[#244840]"><CalendarDays className="h-4 w-4 text-[#0b8975]" /> Follow-up Plan</h2><label className="mb-4 flex items-center justify-between rounded-lg bg-[#f7fbfa] p-3 text-sm font-semibold text-[#416b61]">Follow-up required<input type="checkbox" checked={followUpEnabled} onChange={(e) => setFollowUpEnabled(e.target.checked)} className="h-4 w-4 accent-[#0c9b83]" /></label>{followUpEnabled && <div className="grid gap-3 sm:grid-cols-2"><Field label="Follow-up after"><select value={followUpAfter} onChange={(e) => setFollowUpAfter(e.target.value)}><option>1 week</option><option>2 weeks</option><option>4 weeks</option><option>6 weeks</option></select></Field><Field label="Or date"><input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} /></Field><Field label="Purpose"><input value={followUpPurpose} onChange={(e) => setFollowUpPurpose(e.target.value)} /></Field><Field label="Appointment type"><select value={appointmentType} onChange={(e) => setAppointmentType(e.target.value)}><option>Regular Follow-up</option><option>Urgent Follow-up</option><option>Review</option></select></Field></div>}</div></section>}
+
+        {step === "preview" && <section className="grid gap-4 lg:grid-cols-[1.3fr_.7fr]"><div className="rounded-xl border border-[#dbe8e4] bg-white p-6"><div className="flex items-start justify-between border-b border-[#dbe8e4] pb-4"><div><div className="text-2xl font-black tracking-tight text-[#15584c]"><span className="text-[#0c9b83]">AI</span> UPCHAR</div><p className="text-xs text-[#78918c]">Smarter Healthcare for a Healthier Tomorrow</p></div><div className="text-right text-xs text-[#6e8580]"><b className="block text-sm text-[#244d45]">Dr. Ananya Arya</b><span>General Medicine</span><br /><span>Reg. No.: XXXXXX</span></div></div><div className="my-4 border-y border-[#cfdcd8] py-2 text-center text-lg font-black tracking-[.18em] text-[#244840]">PRESCRIPTION</div><div className="mb-4 grid gap-2 text-xs sm:grid-cols-3"><div className="rounded bg-[#fafcfc] p-2"><b className="block text-[9px] uppercase text-[#758a85]">Patient</b>{patientName}</div><div className="rounded bg-[#fafcfc] p-2"><b className="block text-[9px] uppercase text-[#758a85]">Status</b>{severity}</div><div className="rounded bg-[#fafcfc] p-2"><b className="block text-[9px] uppercase text-[#758a85]">Date</b>{new Date().toLocaleDateString("en-IN")}</div></div>{diagnosis && <PreviewSection title="DIAGNOSIS"><p>{diagnosis}{secondaryDiagnosis ? `; ${secondaryDiagnosis}` : ""}</p>{symptoms.length > 0 && <p className="mt-1 text-xs text-[#6e8580]">Symptoms: {symptoms.join(", ")}</p>}</PreviewSection>}<PreviewSection title="MEDICINES"><div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="bg-[#f7fbfa] text-[10px] uppercase text-[#718b85]"><th className="p-2">#</th><th className="p-2">Medicine</th><th className="p-2">Dose</th><th className="p-2">Frequency</th><th className="p-2">Duration</th><th className="p-2">Qty</th></tr></thead><tbody>{medicines.filter((item) => item.brand.trim()).map((item, index) => <tr key={item.id} className="border-b border-[#edf2f1]"><td className="p-2">{index + 1}</td><td className="p-2 font-bold">{item.brand}<span className="block text-[10px] font-normal text-[#889d98]">{item.generic} · {item.strength} · {item.form}</span></td><td className="p-2">{item.dose}<span className="block text-[10px] text-[#889d98]">{item.timing}</span></td><td className="p-2">{item.frequency}</td><td className="p-2">{item.duration}<span className="block text-[10px] text-[#889d98]">{item.afterCourse}</span></td><td className="p-2">{item.quantity}</td></tr>)}</tbody></table></div></PreviewSection>{tests.filter((item) => item.name.trim()).length > 0 && <PreviewSection title="INVESTIGATIONS / TESTS ADVISED"><ul className="list-decimal pl-5 text-xs">{tests.filter((item) => item.name.trim()).map((item) => <li key={item.id}><b>{item.name}</b> — {item.reason || item.category} ({item.priority})</li>)}</ul></PreviewSection>}{advice.length > 0 && <PreviewSection title="ADVICE / LIFESTYLE"><ul className="list-disc pl-5 text-xs">{advice.map((item) => <li key={item}>{item}</li>)}</ul></PreviewSection>}{followUpEnabled && <PreviewSection title="FOLLOW-UP"><p className="text-xs">{followUpDate || followUpAfter} · {followUpPurpose} · {appointmentType}</p></PreviewSection>}<div className="mt-10 text-right text-xs text-[#6e827c]"><div className="mb-1 text-lg text-[#246e61]">________________</div><b>Dr. Ananya Arya</b><br />General Medicine</div></div><aside className="space-y-3"><div className="rounded-xl border border-[#dbe8e4] bg-white p-4"><h3 className="mb-3 flex items-center gap-2 font-bold text-[#244840]"><ShieldCheck className="h-4 w-4 text-[#0b8975]" /> Safety review</h3>{safetyChecks.length === 0 && <p className="text-xs text-[#5f7c70]">No safety alerts detected.</p>}{safetyChecks.map((check) => <div key={check.id} className={`mb-2 rounded-lg border p-3 text-xs ${check.severity === "blocked" && !check.isOverridden ? "border-red-200 bg-red-50" : "border-[#dbe8e4] bg-[#f8fbfa]"}`}><p className="font-bold text-[#244840]">{check.severity} · {check.checkType}</p><p className="mt-1 text-[#5f7c70]">{check.message}</p>{!check.isOverridden && (check.severity === "blocked" || check.severity === "severe") && <div className="mt-2 flex gap-1"><input value={overrideReasons[check.id] ?? ""} onChange={(e) => setOverrideReasons({ ...overrideReasons, [check.id]: e.target.value })} placeholder="Reason" /><button onClick={() => void overrideAlert(check)} disabled={loading === `override-${check.id}`} className="rounded bg-[#fff2cf] px-2 text-[10px] font-bold text-[#8b6d27]">Override</button></div>}</div>)}</div><div className="rounded-xl border border-[#dbe8e4] bg-white p-4 text-xs text-[#78908a]">By signing, the prescribing clinician accepts full clinical responsibility. Safety checks are assistive only.</div></aside></section>}
       </div>
-      <div className="flex items-center justify-between border-t border-[#eef4f1] px-6 py-4"><span className="text-sm text-[#5f7c70]">Total <strong className="ml-1 text-lg text-[#173f3c]">{formatINR(medicineTotal + serviceTotal)}</strong></span><div className="flex gap-2"><button onClick={print} className="flex items-center gap-2 rounded-xl border border-[#dce9e3] px-4 py-2.5 text-sm font-bold text-[#317b67]"><Printer className="h-4 w-4" /> Print</button><button onClick={() => void save()} disabled={saving} className="flex items-center gap-2 rounded-xl bg-[#07947f] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save &amp; sign</button></div></div>
+      <footer className="flex items-center justify-between border-t border-[#dbe8e4] bg-white px-5 py-3"><button onClick={stepIndex === 0 ? onClose : back} className="flex items-center gap-1 rounded-lg border border-[#dbe8e4] px-3 py-2 text-xs font-bold text-[#54716d]">{stepIndex === 0 ? <X className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}{stepIndex === 0 ? "Cancel" : "Back"}</button><div className="flex gap-2">{step === "preview" && <button onClick={() => window.print()} className="flex items-center gap-1 rounded-lg border border-[#8ccabd] px-3 py-2 text-xs font-bold text-[#0b7f6d]"><Printer className="h-4 w-4" /> Print</button>}{step !== "preview" && <button onClick={next} className="flex items-center gap-1 rounded-lg bg-[#0c9b83] px-4 py-2 text-xs font-bold text-white">Continue <ChevronRight className="h-4 w-4" /></button>}{step === "preview" && !prescriptionId && <button onClick={() => void createAndCheck()} disabled={!!loading} className="flex items-center gap-1 rounded-lg bg-[#0c9b83] px-4 py-2 text-xs font-bold text-white disabled:opacity-60">{loading === "creating" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Create &amp; run safety checks</button>}{step === "preview" && prescriptionId && <button onClick={() => void sign()} disabled={!!loading || blockedAlerts.length > 0 || saved} className="flex items-center gap-1 rounded-lg bg-[#0c9b83] px-4 py-2 text-xs font-bold text-white disabled:opacity-60">{loading === "signing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} {saved ? "Signed" : "Sign prescription"}</button>}</div></footer>
     </div>
-    <style jsx>{`.in{width:100%;border:1px solid #dce9e3;border-radius:.5rem;padding:.5rem .75rem;font-size:.875rem;outline:none}.in:focus{border-color:#07947f}`}</style>
   </div>;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-1 block text-xs font-bold uppercase tracking-wide text-[#5a967e]">{label}</span>{children}</label>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-[#6e8781]">{label}</span>{children}</label>; }
+function PreviewSection({ title, children }: { title: string; children: React.ReactNode }) { return <section className="mt-4"><h3 className="mb-2 border-b border-[#e4eeeb] pb-1 text-[10px] font-black tracking-wide text-[#0f7f6e]">{title}</h3>{children}</section>; }

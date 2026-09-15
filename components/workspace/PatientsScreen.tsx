@@ -165,7 +165,7 @@ function PatientDetail({ patientId, onBack }: { patientId: string; onBack: () =>
             <p className="text-[11px] font-bold uppercase tracking-wide text-[#5a967e]">Total billed</p>
             <p className="text-lg font-bold text-[#173f3c]">{formatINR(billTotal)}</p>
           </div>
-          <button onClick={() => setShowRx(true)} className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#066d66]">
+          <button onClick={() => { window.location.href = `/prescription?patientId=${encodeURIComponent(p.id)}`; }} className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#066d66]">
             <Pill className="h-4 w-4" /> Write prescription
           </button>
         </div>
