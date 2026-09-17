@@ -207,7 +207,7 @@ function Header() {
           ))}
         </nav>
         <div className="flex items-center gap-2.5">
-          <button className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[16px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-dark)]">
+          <button className="hidden items-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[16px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-dark)] sm:inline-flex">
             <Play width={13} height={13} /> Watch Demo
           </button>
           <button className="hidden rounded-lg border border-[var(--color-sky-line)] px-4 py-2 text-[16px] font-semibold text-[var(--color-ink-soft)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] sm:block">
@@ -224,7 +224,6 @@ function Header() {
             {NAV.map((n) => <a key={n} href={`#${n.toLowerCase().replaceAll(' ', '-')}`} onClick={() => { dispatch(setActiveSection(n)); setMobileOpen(false) }} className="rounded-lg px-3 py-2.5 text-[16px] font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-mint)] hover:text-[var(--color-brand)]">{n}</a>)}
           </nav>
           <div className="mt-3 flex flex-col gap-2 border-t border-[var(--color-sky-line)] pt-3">
-            <button onClick={() => setMobileOpen(false)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2.5 text-[16px] font-semibold text-white"><Play width={13} height={13} /> Watch Demo</button>
             <button className="rounded-lg border border-[var(--color-sky-line)] px-4 py-2.5 text-[16px] font-semibold text-[var(--color-ink-soft)]">Sign In</button>
           </div>
         </div>
