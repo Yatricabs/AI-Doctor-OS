@@ -788,8 +788,8 @@ function AudienceSection() {
               </div>
             ))}
           </div>
-          <div className="mt-5 rounded-xl bg-white/75 px-3 py-3 text-center ring-1 ring-[var(--color-sky-line)]/60">
-            <Hand className="block text-[20px] font-bold leading-tight !text-[#1d6fff]">
+          <div className="mt-5 rounded-xl bg-white/75 px-3 py-5 text-center ring-1 ring-[var(--color-sky-line)]/60">
+            <Hand className="block -rotate-6 text-[20px] font-bold leading-tight !text-[#1d6fff]">
               <>Same AI. Same Patient Context.<br />Across all platforms.</>
             </Hand>
           </div>
