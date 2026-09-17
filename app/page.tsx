@@ -210,9 +210,9 @@ function Header() {
           <button className="hidden items-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[16px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-dark)] sm:inline-flex">
             <Play width={13} height={13} /> Watch Demo
           </button>
-          <button className="hidden rounded-lg border border-[var(--color-sky-line)] px-4 py-2 text-[16px] font-semibold text-[var(--color-ink-soft)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] sm:block">
+          <a href="/demo" className="hidden rounded-lg border border-[var(--color-sky-line)] px-4 py-2 text-[16px] font-semibold text-[var(--color-ink-soft)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] sm:block">
             Sign In
-          </button>
+          </a>
           <button type="button" aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={mobileOpen} onClick={() => setMobileOpen((open) => !open)} className="rounded-lg border border-[var(--color-sky-line)] p-2 text-[var(--color-ink-soft)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] lg:hidden">
             {mobileOpen ? <X width={20} height={20} /> : <span className="block space-y-1"><span className="block h-0.5 w-5 rounded bg-current" /><span className="block h-0.5 w-5 rounded bg-current" /><span className="block h-0.5 w-5 rounded bg-current" /></span>}
           </button>
@@ -224,7 +224,7 @@ function Header() {
             {NAV.map((n) => <a key={n} href={`#${n.toLowerCase().replaceAll(' ', '-')}`} onClick={() => { dispatch(setActiveSection(n)); setMobileOpen(false) }} className="rounded-lg px-3 py-2.5 text-[16px] font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-mint)] hover:text-[var(--color-brand)]">{n}</a>)}
           </nav>
           <div className="mt-3 flex flex-col gap-2 border-t border-[var(--color-sky-line)] pt-3">
-            <button className="rounded-lg border border-[var(--color-sky-line)] px-4 py-2.5 text-[16px] font-semibold text-[var(--color-ink-soft)]">Sign In</button>
+            <a href="/demo" className="rounded-lg border border-[var(--color-sky-line)] px-4 py-2.5 text-center text-[16px] font-semibold text-[var(--color-ink-soft)]">Sign In</a>
           </div>
         </div>
       )}
