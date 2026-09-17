@@ -72,3 +72,5 @@ The target PostgreSQL schema remains authoritative. The following compatibility 
 - `/api/patient-intake` (alias of the authoritative appointment-intake persistence route)
 
 Existing target routes continue to provide patients, appointments, billing, reports, prescriptions, inbox, insights, and profile settings. The client API adapter normalizes target appointment/patient/billing fields for the ZIP components. This keeps the ZIP layout and interactions while preserving the GitHub repository's database and seeded data.
+
+The Dashboard now includes a `New appointment` action. It opens the Appointments section directly on the ZIP new-patient intake tab, so an appointment can be started without first opening the schedule manually.

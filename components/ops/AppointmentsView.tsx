@@ -8,8 +8,8 @@ import { inr, Patient, priorityTone, todayISO, tone, visitTypeTone } from "./sha
 
 type Tab = "today" | "all" | "new" | "followup";
 
-export default function AppointmentsView({ openPatient }: { openPatient: (patientId: string) => void }) {
-  const [tab, setTab] = useState<Tab>("today");
+export default function AppointmentsView({ openPatient, initialTab = "today" }: { openPatient: (patientId: string) => void; initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [notice, setNotice] = useState("");
   const { data, isLoading } = useGetAppointmentsQuery();
   const appointments = data?.appointments ?? [];

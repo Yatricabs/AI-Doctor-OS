@@ -29,6 +29,7 @@ type SectionKey = (typeof sections)[number]["key"];
 export default function OperationsShell() {
   const [section, setSection] = useState<SectionKey>("Dashboard");
   const [openPatientId, setOpenPatientId] = useState<string | null>(null);
+  const [appointmentsTab, setAppointmentsTab] = useState<"today" | "all" | "new" | "followup">("today");
 
   function openPatient(patientId: string) {
     setOpenPatientId(patientId);
@@ -37,6 +38,11 @@ export default function OperationsShell() {
 
   function navigate(key: string) {
     setOpenPatientId(null);
+    if (key === "Appointments:new" || key === "Appointments:followup") {
+      setAppointmentsTab(key.split(":")[1] as "new" | "followup");
+      setSection("Appointments");
+      return;
+    }
     setSection(key as SectionKey);
   }
 
@@ -64,7 +70,7 @@ export default function OperationsShell() {
           <p className="mt-1 text-sm" style={{ color: tone.muted }}>{descriptionFor(section)}</p>
           <div className="mt-6">
             {section === "Dashboard" && <DashboardView navigate={navigate} />}
-            {section === "Appointments" && <AppointmentsView openPatient={openPatient} />}
+            {section === "Appointments" && <AppointmentsView openPatient={openPatient} initialTab={appointmentsTab} />}
             {section === "Patients" && <PatientsView openPatientId={openPatientId} onOpenPatient={setOpenPatientId} />}
             {section === "Reports & Documents" && <ReportsView openPatient={openPatient} />}
             {section === "Inventory" && <InventoryView />}

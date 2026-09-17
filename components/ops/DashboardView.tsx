@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, IndianRupee, PackageSearch, Users } from "lucide-react";
+import { CalendarClock, IndianRupee, PackageSearch, Plus, Users } from "lucide-react";
 import { useGetDashboardSummaryQuery } from "@/lib/apiSlice";
 import { inr, todayISO, tone } from "./shared";
 
@@ -16,6 +16,10 @@ export default function DashboardView({ navigate }: { navigate: (section: string
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-5" style={{ borderColor: tone.border, background: tone.card }}>
+        <div><h2 className="text-lg font-bold" style={{ color: tone.ink }}>Create an appointment</h2><p className="mt-1 text-sm" style={{ color: tone.muted }}>Start the new-patient intake directly from the dashboard.</p></div>
+        <button onClick={() => navigate("Appointments:new")} className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white" style={{ background: tone.primary }}><Plus className="h-4 w-4" /> New appointment</button>
+      </div>
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={CalendarClock} label="Appointments today" value={String(summary.appointments.total)} detail={`${summary.appointments.new} new · ${summary.appointments.followUp} follow-up`} onClick={() => navigate("Appointments")} />
         <StatCard icon={CalendarClock} label="Estimated clinic time" value={`${hours}h ${minutes}m`} detail={summary.appointments.urgent > 0 ? `${summary.appointments.urgent} urgent case(s) today` : "No urgent cases flagged"} variant={summary.appointments.urgent > 0 ? "danger" : undefined} />
