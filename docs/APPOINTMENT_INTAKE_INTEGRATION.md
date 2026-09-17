@@ -53,6 +53,8 @@ The import is idempotent. ZIP seed IDs that are already present are updated to t
 ## Clinical context gate
 
 The production `/patient/appointment` route evaluates the complaint against the already selected SEX context before moving from complaint to duration. A reported reproductive/vaginal symptom with `Male` is held for respectful clarification; SEX and the complaint remain unchanged until the patient clarifies. The duration question resumes only after clarification.
+
+The semantic gate also has a conservative deterministic fallback. If the AI boundary is unavailable or returns invalid JSON, clinically meaningful anatomy/reproductive facts are still extracted and checked against the structured context before any duration fallback can run. This prevents an AI outage or malformed model response from bypassing a required clarification.
 ## AI provider boundary
 
 The patient appointment flow now uses the server-side `/api/ai/chat` boundary for conversational AI. It sends the existing prompts and context to OpenAI `gpt-5.4-mini`; the browser never receives `OPENAI_API_KEY`. Configure `OPENAI_API_KEY` and optionally `OPENAI_MODEL` in `.env.local`.
