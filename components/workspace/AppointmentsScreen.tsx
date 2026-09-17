@@ -46,10 +46,11 @@ export default function AppointmentsScreen({ onOpenPatient }: { onOpenPatient?: 
           <h1 className="text-2xl font-bold tracking-tight text-[#173f3c]">Appointments</h1>
           <p className="mt-1 text-sm text-[#78908a]">Schedule and manage new and follow-up appointments.</p>
         </div>
-        {/* New appointments are created through the patient-facing AI conversational flow. */}
-        <Link href="/patient/appointment" target="_blank" className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#066d66]">
-          <Sparkles className="h-4 w-4" /> New appointment (AI intake)
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/patient/ai-intake" target="_blank" className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#066d66]">
+            <Sparkles className="h-4 w-4" /> New / follow-up appointment
+          </Link>
+        </div>
       </div>
 
       <div className="mt-6 grid grid-cols-3 gap-3">

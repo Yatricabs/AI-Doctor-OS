@@ -1,0 +1,15 @@
+{
+  "pbtResults": {
+    "1. Write and run the bug-condition exploration property before changing the fix": {
+      "status": "passed",
+      "failingExample": "Phone collision: entered Vijay Verma with 098-765-43210 mapped to P-ROHAN/Rohan Mehta; appointment created with patientId P-ROHAN and patientName Vijay Verma without explicit resolution. Adaptive counterexamples: `seene me tez dard hai pichale 2 din se` with STOP, equivalent Hindi/Hinglish chest pain with empty output, matched chest pain with duplicate output, unmatched complaint with AI failure, and the same Hinglish complaint with one valid AI question all booked with 0 or 1 deep questions (< MIN_DEEP=3) and no safety coverage.",
+      "lastRunTimestamp": 1789309447853
+    },
+    "3.8 Verify bug-condition property now passes": {
+      "status": "passed",
+      "failingExample": "The preserved Task 1 legacy exploration intentionally reproduced 6/6 expected counterexamples; the Task 3.8 fixed companion passed all 6 scoped bug-condition scenarios.",
+      "lastRunTimestamp": 1789313952540
+    }
+  },
+  "executionHistory": {}
+}

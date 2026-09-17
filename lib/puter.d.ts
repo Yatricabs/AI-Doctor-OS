@@ -73,5 +73,6 @@ declare global {
 
   interface Window {
     puter?: Puter;
+    __AI_DOCTOR_TEST_RESPONDER__?: (messages: PuterChatMessage[]) => Promise<string | null> | string | null;
   }
 }
