@@ -2,11 +2,12 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
 import ScrollReset from "@/components/ScrollReset";
+import ReduxProvider from "@/components/ReduxProvider";
 
 export const metadata: Metadata = {
-  title: "AI UPCHAR — Intelligent Clinical Workspace for Doctors",
+  title: "AI UPCHAR — Better Conversations. Healthier Lives.",
   description:
-    "AI UPCHAR brings patient context, clinical documentation, reports, safe prescribing, and follow-ups into one clinician-controlled workspace. For government hospitals, private hospitals, and clinics.",
+    "AI UPCHAR connects patients and doctors through better conversations, intelligent intake, clinical context, and safer care workflows.",
   keywords: ["healthcare", "AI", "clinical", "doctors", "medical records", "patient care", "telemedicine"],
   authors: [{ name: "AI UPCHAR" }],
   creator: "AI UPCHAR",
@@ -15,8 +16,8 @@ export const metadata: Metadata = {
     shortcut: "/favicon.svg",
   },
   openGraph: {
-    title: "AI UPCHAR — Intelligent Clinical Workspace",
-    description: "Patient context, clinical AI, and doctor-controlled decision making in one workspace",
+    title: "AI UPCHAR — Better Conversations. Healthier Lives.",
+    description: "Better patient conversations and clinician-controlled care workflows in one connected experience.",
     type: "website",
     siteName: "AI UPCHAR",
   },
@@ -46,7 +47,7 @@ export default function RootLayout({
       </head>
       <body className="bg-[#080D14] text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-black">
         <ScrollReset />
-        {children}
+        <ReduxProvider>{children}</ReduxProvider>
       </body>
     </html>
   );
