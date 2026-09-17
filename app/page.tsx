@@ -1,11 +1,11 @@
 "use client"
 
-import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import type { AppDispatch, RootState } from '@/lib/store'
 import { closeAppointmentDialog, openAppointmentDialog, setActiveSection } from '@/lib/landingSlice'
-import DemoDialog from '@/components/DemoDialog'
+import PatientIntakeChat from '@/components/ops/PatientIntakeChat'
 
 /* ---------------------------------- Images --------------------------------- */
 const IMG = {
@@ -48,14 +48,13 @@ const Phone = (p: IconProps) => (
   </svg>
 )
 const Whatsapp = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path d="M4 20l1.4-4A8 8 0 1 1 8 18.6L4 20z" />
-    <path d="M9 9c0 3 2.5 5.5 5.5 5.5M9 9c0-.6.5-1 1-1s1 1.5 1.5 2c-.5.5-1 1-.5 1.5s1.5 1 2 .5c.5-.5 1.4 0 2 .5s.5 1-1 1" />
+  <svg {...base({ ...p, fill: 'currentColor', stroke: 'none' })}>
+    <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm5.8 14.13c-.24.68-1.4 1.3-1.94 1.35-.5.05-.96.24-3.2-.67-2.7-1.06-4.42-3.8-4.55-3.98-.13-.18-1.1-1.46-1.1-2.79 0-1.33.7-1.98.95-2.25.24-.27.53-.34.7-.34h.5c.16 0 .38-.06.59.45.24.58.8 2 .87 2.14.07.14.12.3.02.48-.44.88-.9.85-.66 1.26.98 1.68 1.96 2.26 3.45 3 .25.13.4.11.54-.07.14-.18.62-.72.79-.97.16-.24.33-.2.55-.12.22.08 1.42.67 1.66.79.24.12.4.18.46.28.06.1.06.58-.18 1.26z" />
   </svg>
 )
 const PhoneCall = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path d="M4 5c0 8 7 15 15 15 1 0 2-1 2-2l-3-2-2 2c-3-1-6-4-7-7l2-2-2-3c-1 0-2 1-2 2z" />
+  <svg {...base({ ...p, fill: 'currentColor', stroke: 'none' })}>
+    <path d="M6.62 10.79a15.53 15.53 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.07 21 3 13.93 3 5a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2z" />
   </svg>
 )
 const Calendar = (p: IconProps) => (
@@ -153,10 +152,10 @@ function Logo() {
         </span>
       </span>
       <span className="leading-none">
-        <span className="block font-display text-[17px] font-extrabold tracking-tight text-[var(--color-ink)]">
+        <span className="block font-display text-[19.5px] font-extrabold tracking-tight text-[var(--color-ink)]">
           AI UPCHAR
         </span>
-        <span className="block text-[10px] font-medium text-[var(--color-teal-deep)]">
+        <span className="block text-[11.5px] font-medium text-[var(--color-teal-deep)]">
           Better Conversations. Healthier Lives.
         </span>
       </span>
@@ -174,7 +173,7 @@ function Hand({ children, className = '' }: { children: ReactNode; className?: s
 
 function SectionEyebrow({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-block rounded-full bg-[var(--color-mint)] px-3 py-1 text-xs font-semibold text-[var(--color-teal-deep)] ring-1 ring-[var(--color-mint-line)]">
+    <span className="inline-block rounded-full bg-[var(--color-mint)] px-3 py-1 text-[13.8px] font-semibold text-[var(--color-teal-deep)] ring-1 ring-[var(--color-mint-line)]">
       {children}
     </span>
   )
@@ -185,20 +184,18 @@ const NAV = ['Home', 'For Patients', 'For Doctors', 'How It Works', 'Features', 
 
 function Header() {
   const dispatch = useDispatch<AppDispatch>()
-  const [demoOpen, setDemoOpen] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   return (
-    <>
     <header className="sticky top-0 z-50 border-b border-[var(--color-sky-line)]/70 bg-white/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-4 px-5 py-3">
+      <div className="mx-auto flex max-w-none items-center justify-between gap-4 px-5 py-3">
         <Logo />
         <nav className="hidden items-center gap-7 lg:flex">
           {NAV.map((n, i) => (
             <a
               key={n}
               href={`#${n.toLowerCase().replaceAll(' ', '-')}`}
-              onClick={() => dispatch(setActiveSection(n))}
-              className={`relative text-sm font-medium transition-colors hover:text-[var(--color-brand)] ${
+              onClick={() => { dispatch(setActiveSection(n)); setMobileOpen(false) }}
+              className={`relative text-[16px] font-medium transition-colors hover:text-[var(--color-brand)] ${
                 i === 0 ? 'text-[var(--color-ink)]' : 'text-[var(--color-ink-soft)]'
               }`}
             >
@@ -210,19 +207,13 @@ function Header() {
           ))}
         </nav>
         <div className="flex items-center gap-2.5">
-          <button onClick={() => setDemoOpen(true)} className="hidden rounded-lg border border-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-[var(--color-brand)] transition hover:bg-[var(--color-mint)] sm:block">
-            Request a free demo
+          <button className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[16px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-dark)]">
+            <Play width={13} height={13} /> Watch Demo
           </button>
-          <button className="hidden rounded-lg border border-[var(--color-sky-line)] px-4 py-2 text-sm font-semibold text-[var(--color-ink-soft)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] sm:block">
+          <button className="hidden rounded-lg border border-[var(--color-sky-line)] px-4 py-2 text-[16px] font-semibold text-[var(--color-ink-soft)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] sm:block">
             Sign In
           </button>
-          <button
-            type="button"
-            aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
-            aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen((open) => !open)}
-            className="rounded-lg border border-[var(--color-sky-line)] p-2 text-[var(--color-ink-soft)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] lg:hidden"
-          >
+          <button type="button" aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={mobileOpen} onClick={() => setMobileOpen((open) => !open)} className="rounded-lg border border-[var(--color-sky-line)] p-2 text-[var(--color-ink-soft)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] lg:hidden">
             {mobileOpen ? <X width={20} height={20} /> : <span className="block space-y-1"><span className="block h-0.5 w-5 rounded bg-current" /><span className="block h-0.5 w-5 rounded bg-current" /><span className="block h-0.5 w-5 rounded bg-current" /></span>}
           </button>
         </div>
@@ -230,25 +221,15 @@ function Header() {
       {mobileOpen && (
         <div className="border-t border-[var(--color-sky-line)] bg-white px-5 py-4 lg:hidden">
           <nav className="flex flex-col gap-1">
-            {NAV.map((n) => (
-              <a key={n} href={`#${n.toLowerCase().replaceAll(' ', '-')}`} onClick={() => { dispatch(setActiveSection(n)); setMobileOpen(false) }} className="rounded-lg px-3 py-2.5 text-sm font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-mint)] hover:text-[var(--color-brand)]">
-                {n}
-              </a>
-            ))}
+            {NAV.map((n) => <a key={n} href={`#${n.toLowerCase().replaceAll(' ', '-')}`} onClick={() => { dispatch(setActiveSection(n)); setMobileOpen(false) }} className="rounded-lg px-3 py-2.5 text-[16px] font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-mint)] hover:text-[var(--color-brand)]">{n}</a>)}
           </nav>
           <div className="mt-3 flex flex-col gap-2 border-t border-[var(--color-sky-line)] pt-3">
-            <button onClick={() => { setDemoOpen(true); setMobileOpen(false) }} className="rounded-lg border border-[var(--color-brand)] px-4 py-2.5 text-sm font-semibold text-[var(--color-brand)]">
-              Request a free demo
-            </button>
-            <button className="rounded-lg border border-[var(--color-sky-line)] px-4 py-2.5 text-sm font-semibold text-[var(--color-ink-soft)]">
-              Sign In
-            </button>
+            <button onClick={() => setMobileOpen(false)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2.5 text-[16px] font-semibold text-white"><Play width={13} height={13} /> Watch Demo</button>
+            <button className="rounded-lg border border-[var(--color-sky-line)] px-4 py-2.5 text-[16px] font-semibold text-[var(--color-ink-soft)]">Sign In</button>
           </div>
         </div>
       )}
     </header>
-    <DemoDialog open={demoOpen} onClose={() => setDemoOpen(false)} />
-    </>
   )
 }
 
@@ -265,7 +246,7 @@ function ChatBubble({ from, children }: { from: 'ai' | 'user'; children: ReactNo
   return (
     <div className={`flex ${isAi ? 'justify-start' : 'justify-end'}`}>
       <div
-        className={`max-w-[80%] rounded-2xl px-3 py-2 text-[11px] leading-snug ${
+        className={`max-w-[80%] rounded-2xl px-3 py-2 text-[12.7px] leading-snug ${
           isAi
             ? 'rounded-tl-sm bg-[var(--color-sky)] text-[var(--color-ink)]'
             : 'rounded-tr-sm bg-[var(--color-brand)] text-white'
@@ -297,8 +278,43 @@ function BriefRow({
         <Icon width={13} height={13} />
       </span>
       <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-ink)]">{label}</p>
-        <p className="text-[10px] leading-tight text-[var(--color-body)]">{value}</p>
+        <p className="text-[11.5px] font-bold uppercase tracking-wide text-[var(--color-ink)]">{label}</p>
+        <p className="text-[11.5px] leading-tight text-[var(--color-body)]">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+function ClinicalBrief({ className = '' }: { className?: string }) {
+  return (
+    <div
+      className={`rounded-2xl bg-white p-3.5 shadow-2xl ring-1 ring-[var(--color-sky-line)] ${className}`}
+    >
+      <div className="flex items-center justify-between border-b border-[var(--color-sky-line)] pb-2">
+        <p className="font-display text-[13.8px] font-bold text-[var(--color-ink)]">
+          AI Pre-Visit Clinical Brief
+        </p>
+        <X width={13} height={13} className="text-[var(--color-body)]" />
+      </div>
+      <div className="mt-2.5 flex items-center gap-2">
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--color-sky)] text-[var(--color-brand)]">
+          <UserRound width={16} height={16} />
+        </span>
+        <div>
+          <p className="text-[13.8px] font-bold text-[var(--color-ink)]">Rahul Sharma, 42</p>
+          <span className="rounded-full bg-[var(--color-sky)] px-2 py-0.5 text-[9px] font-semibold text-[var(--color-brand)]">
+            Follow-up Patient
+          </span>
+        </div>
+      </div>
+      <div className="mt-2.5 flex flex-col gap-2">
+        <BriefRow icon={FileText} label="Chief Complaint" value="Persistent abdominal discomfort" />
+        <BriefRow icon={Clock} label="Duration" value="3 weeks" />
+        <BriefRow icon={FileText} label="Previous Treatment" value="Yes, on medication" />
+        <BriefRow icon={FileText} label="Uploaded Reports" value="2 lab reports, 1 ultrasound" />
+        <BriefRow icon={Brain} label="AI Analysis" value="Likely GI infection / IBS (to be reviewed)" accent="var(--color-teal)" />
+        <BriefRow icon={FileText} label="Recommended Tests" value="Stool test, CBC, LFT (suggested)" />
+        <BriefRow icon={Alert} label="Alert" value="No immediate emergency signs" accent="var(--color-wa)" />
       </div>
     </div>
   )
@@ -308,23 +324,28 @@ function Hero() {
   const dispatch = useDispatch<AppDispatch>()
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-[var(--color-hero)] to-white">
-      <div className="mx-auto grid max-w-[1180px] items-center gap-10 px-5 py-14 lg:grid-cols-[1fr_1.05fr] lg:py-16">
+      <div className="mx-auto grid max-w-none items-center gap-8 px-5 py-6 lg:grid-cols-[0.9fr_1.3fr] lg:py-8">
         <div>
           <SectionEyebrow>An Intelligent Healthcare Ecosystem</SectionEyebrow>
-          <h1 className="mt-5 font-display text-[40px] font-extrabold leading-[1.08] tracking-tight text-[var(--color-ink)] sm:text-[52px]">
-            Doctor se milne se pehle,{' '}
-            <span className="text-[var(--color-teal)]">AI aapki problem samajh chuka hoga.</span>
+          <h1 className="mt-5 font-display text-[38px] font-extrabold leading-[1.12] tracking-tight text-[var(--color-ink)] sm:text-[50px]">
+            Doctor se milne se pehle,
+            <br />
+            <span className="landing-gradient-text bg-gradient-to-r from-[var(--color-brand)] to-[var(--color-teal)] bg-clip-text text-transparent">
+              AI aapki problem
+            </span>
+            <br />
+            samajh chuka hoga.
           </h1>
-          <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-[var(--color-body)]">
+          <p className="mt-5 max-w-xl text-[17.3px] leading-relaxed text-[var(--color-body)]">
             AI UPCHAR patient aur doctor ke beech ek intelligent bridge hai. Appointment se lekar
             symptoms, medical history, reports aur follow-up tak — sab kuch AI samajhta hai, organize
             karta hai aur doctor ke liye taiyar karta hai.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
-            <button onClick={() => dispatch(openAppointmentDialog())} className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-5 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-[var(--color-teal-deep)]">
+            <button onClick={() => dispatch(openAppointmentDialog())} className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-5 py-3 text-[16px] font-semibold text-white shadow-md transition hover:bg-[var(--color-teal-deep)]">
               <Calendar width={17} height={17} /> Book an Appointment
             </button>
-            <button className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-sky-line)] bg-white px-5 py-3 text-sm font-semibold text-[var(--color-ink)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)]">
+            <button className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-sky-line)] bg-white px-5 py-3 text-[16px] font-semibold text-[var(--color-ink)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)]">
               For Doctors &amp; Clinics <ArrowRight width={16} height={16} />
             </button>
           </div>
@@ -337,91 +358,136 @@ function Hero() {
                 >
                   <Icon width={20} height={20} />
                 </span>
-                <span className="text-[11px] font-semibold text-[var(--color-ink-soft)]">{label}</span>
+                <span className="text-[12.7px] font-semibold text-[var(--color-ink-soft)]">{label}</span>
               </div>
             ))}
           </div>
         </div>
 
         <div className="relative">
-          <Hand className="absolute -top-6 right-2 z-20 hidden max-w-[160px] rotate-[-4deg] text-right text-xl md:block">
+          <Hand className="absolute -top-3 right-0 z-40 hidden max-w-[180px] rotate-[-3deg] text-right text-[20.5px] leading-tight lg:block">
             Doctor gets complete context before the consultation.
+            <svg width="70" height="34" viewBox="0 0 70 34" className="ml-auto mt-1 block text-[var(--color-teal-deep)]">
+              <path d="M4 4c22 2 40 10 44 26" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M40 26l8 6 2-10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </Hand>
 
-          <div className="relative flex items-end justify-center gap-3">
-            <div className="relative z-10 w-[210px] shrink-0 rounded-[2rem] border-[6px] border-[var(--color-ink)] bg-white shadow-2xl sm:w-[230px]">
-              <div className="rounded-t-[1.6rem] bg-white px-3 pb-2 pt-3">
-                <div className="flex items-center gap-2 border-b border-[var(--color-sky-line)] pb-2">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br from-[var(--color-teal)] to-[var(--color-brand)] text-white">
-                    <Heart width={11} height={11} />
-                  </span>
-                  <span className="font-display text-xs font-bold text-[var(--color-ink)]">AI UPCHAR</span>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 px-3 pb-3">
-                <ChatBubble from="ai">
-                  Namaste! Main aapki swasthya samasya ko samajhne me aapki madad karunga.
-                </ChatBubble>
-                <ChatBubble from="user">
-                  Mere pet me dard hai aur loose motion ho raha hai 20 din se.
-                </ChatBubble>
-                <ChatBubble from="ai">Yeh problem kab se ho rahi hai?</ChatBubble>
-                <ChatBubble from="user">Laghbhag 20 din se.</ChatBubble>
-                <ChatBubble from="ai">Ek din me approximately kitni baar loose motion hota hai?</ChatBubble>
-                <div className="flex items-center gap-1 pl-1 pt-0.5">
-                  <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[var(--color-brand)]" style={{ animationDelay: '0s' }} />
-                  <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[var(--color-brand)]" style={{ animationDelay: '.2s' }} />
-                  <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[var(--color-brand)]" style={{ animationDelay: '.4s' }} />
-                </div>
-                <div className="mt-1 flex items-center gap-2 rounded-full border border-[var(--color-sky-line)] px-3 py-1.5">
-                  <span className="text-[10px] text-[var(--color-body)]">Type your answer…</span>
-                  <span className="ml-auto grid h-5 w-5 place-items-center rounded-full bg-[var(--color-brand)] text-white">
-                    <ArrowRight width={11} height={11} />
-                  </span>
-                </div>
-              </div>
-              <span className="absolute -left-16 top-24 hidden w-32 rotate-[-3deg] rounded-xl bg-white px-2 py-1.5 text-[9px] text-[var(--color-ink-soft)] shadow-md ring-1 ring-[var(--color-sky-line)] sm:block">
-                AI is asking the right questions…
-              </span>
-            </div>
-
-            <div className="relative z-20 -ml-6 w-[250px] rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-[var(--color-sky-line)]">
-              <div className="flex items-center justify-between border-b border-[var(--color-sky-line)] pb-2">
-                <p className="font-display text-[13px] font-bold text-[var(--color-ink)]">
-                  AI Pre-Visit Clinical Brief
-                </p>
-                <X width={14} height={14} className="text-[var(--color-body)]" />
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--color-sky)] text-[var(--color-brand)]">
-                  <UserRound width={16} height={16} />
-                </span>
-                <div>
-                  <p className="text-xs font-bold text-[var(--color-ink)]">Rahul Sharma, 42</p>
-                  <span className="rounded-full bg-[var(--color-sky)] px-2 py-0.5 text-[9px] font-semibold text-[var(--color-brand)]">
-                    Follow-up Patient
-                  </span>
-                </div>
-              </div>
-              <div className="mt-3 flex flex-col gap-2.5">
-                <BriefRow icon={FileText} label="Chief Complaint" value="Persistent abdominal discomfort" />
-                <BriefRow icon={Clock} label="Duration" value="3 weeks" />
-                <BriefRow icon={FileText} label="Previous Treatment" value="Yes, on medication" />
-                <BriefRow icon={FileText} label="Uploaded Reports" value="2 lab reports, 1 ultrasound" />
-                <BriefRow icon={Brain} label="AI Analysis" value="Likely GI infection / IBS (to be reviewed)" accent="var(--color-teal)" />
-                <BriefRow icon={FileText} label="Recommended Tests" value="Stool test, CBC, LFT (suggested)" />
-                <BriefRow icon={Alert} label="Alert" value="No immediate emergency signs" accent="var(--color-wa)" />
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 ml-auto w-[62%] overflow-hidden rounded-2xl bg-[var(--color-sky)] shadow-lg">
+          {/* Desktop / tablet collage — built from scratch */}
+          <div className="relative mx-auto hidden aspect-[1.42/1] w-full md:block">
+            {/* Patient photo */}
+            <img
+              src={IMG.patientHero}
+              alt="Patient chatting with AI UPCHAR on her phone"
+              className="absolute bottom-0 left-0 z-20 h-[82%] w-[30%] rounded-[1.75rem] bg-[var(--color-sky)] object-cover object-top shadow-xl"
+              loading="lazy"
+            />
+            {/* Doctor photo */}
             <img
               src={IMG.doctorLaptop}
               alt="Doctor reviewing an AI pre-visit clinical brief on a laptop"
-              className="h-40 w-full object-cover"
+              className="absolute bottom-[6%] right-0 z-10 h-[62%] w-[25%] rounded-2xl bg-[var(--color-sky)] object-cover shadow-xl"
               loading="lazy"
             />
+
+            {/* Phone — large, full conversation inside */}
+            <div className="absolute left-[22%] top-[1%] z-10 flex h-[97%] w-[28%] flex-col overflow-hidden rounded-[1.8rem] border-[5px] border-[var(--color-ink)] bg-white shadow-2xl">
+              <div className="flex items-center justify-between px-3 pt-1.5 text-[7px] font-semibold text-[var(--color-ink)]">
+                <span>9:01</span>
+                <span className="flex gap-0.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-ink)]" />
+                  <span className="h-1.5 w-2.5 rounded-sm bg-[var(--color-ink)]" />
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 border-b border-[var(--color-sky-line)] px-3 py-1.5">
+                <ArrowRight width={11} height={11} className="rotate-180 text-[var(--color-body)]" />
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-gradient-to-br from-[var(--color-teal)] to-[var(--color-brand)] text-white">
+                  <Heart width={10} height={10} />
+                </span>
+                <span className="font-display text-[11.5px] font-bold text-[var(--color-ink)]">AI UPCHAR</span>
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5 overflow-hidden bg-[var(--color-hero)]/40 p-2.5">
+                <div className="flex items-start gap-1">
+                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[var(--color-teal)] text-white"><Brain width={9} height={9} /></span>
+                  <div className="max-w-[86%] rounded-2xl rounded-tl-sm bg-white px-2.5 py-1.5 text-[8.5px] leading-snug text-[var(--color-ink)] shadow-sm">
+                    Namaste! Main aapki swasthya samasya ko samajhne me aapki madad karunga.
+                  </div>
+                </div>
+                <div className="flex items-start gap-1">
+                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[var(--color-teal)] text-white"><Brain width={9} height={9} /></span>
+                  <div className="max-w-[86%] rounded-2xl rounded-tl-sm bg-white px-2.5 py-1.5 text-[8.5px] leading-snug text-[var(--color-ink)] shadow-sm">
+                    Yeh problem kab se ho rahi hai?
+                  </div>
+                </div>
+                <div className="max-w-[80%] self-end rounded-2xl rounded-tr-sm bg-[var(--color-brand)] px-2.5 py-1.5 text-[8.5px] leading-snug text-white shadow-sm">
+                  Laghbhag 20 din se.
+                </div>
+                <div className="flex items-start gap-1">
+                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[var(--color-teal)] text-white"><Brain width={9} height={9} /></span>
+                  <div className="max-w-[86%] rounded-2xl rounded-tl-sm bg-white px-2.5 py-1.5 text-[8.5px] leading-snug text-[var(--color-ink)] shadow-sm">
+                    Ek din me approximately kitni baar loose motion hota hai?
+                  </div>
+                </div>
+              </div>
+              <div className="m-2 flex items-center gap-1.5 rounded-full border border-[var(--color-sky-line)] px-2.5 py-1.5">
+                <span className="text-[8px] text-[var(--color-body)]">Type your answer…</span>
+                <span className="ml-auto grid h-4 w-4 place-items-center rounded-full bg-[var(--color-brand)] text-white">
+                  <ArrowRight width={9} height={9} />
+                </span>
+              </div>
+            </div>
+
+            {/* Floating patient bubble */}
+            <div className="absolute left-[16%] top-[13%] z-40 w-[19%] rotate-[-5deg]">
+              <div className="rounded-2xl rounded-br-sm bg-white px-2.5 py-1.5 text-[9px] leading-snug text-[var(--color-ink)] shadow-lg ring-1 ring-[var(--color-sky-line)]">
+                Mere pet me dard hai aur loose motion ho raha hai 20 din se.
+              </div>
+            </div>
+
+            {/* "AI is asking" note */}
+            <span className="absolute bottom-[8%] left-[20%] z-40 w-[19%] rotate-[-2deg] rounded-xl bg-white px-2.5 py-1.5 text-[9px] leading-tight text-[var(--color-ink-soft)] shadow-lg ring-1 ring-[var(--color-sky-line)]">
+              AI is asking the right questions…
+            </span>
+
+            {/* Dashed connector to brief */}
+            <div className="absolute left-[50%] top-[47%] z-40 flex items-center">
+              <span className="h-px w-7 border-t-2 border-dashed border-[var(--color-brand)]" />
+              <ArrowRight width={13} height={13} className="text-[var(--color-brand)]" />
+            </div>
+
+            {/* Clinical brief */}
+            <ClinicalBrief className="absolute left-[52%] top-[2%] z-30 w-[29%]" />
+          </div>
+
+          {/* Mobile stack */}
+          <div className="flex flex-col gap-4 md:hidden">
+            <Hand className="block text-right text-[18.4px]">
+              Doctor gets complete context before the consultation.
+            </Hand>
+            <div className="grid grid-cols-2 gap-3">
+              <img
+                src={IMG.patientHero}
+                alt="Patient chatting with AI UPCHAR on her phone"
+                className="h-44 w-full rounded-2xl bg-[var(--color-sky)] object-cover object-top"
+                loading="lazy"
+              />
+              <img
+                src={IMG.doctorLaptop}
+                alt="Doctor reviewing an AI pre-visit clinical brief on a laptop"
+                className="h-44 w-full rounded-2xl bg-[var(--color-sky)] object-cover"
+                loading="lazy"
+              />
+            </div>
+            <div className="rounded-2xl border border-[var(--color-sky-line)] bg-white p-3 shadow-md">
+              <div className="flex flex-col gap-2">
+                <ChatBubble from="ai">Namaste! Main aapki swasthya samasya ko samajhne me aapki madad karunga.</ChatBubble>
+                <ChatBubble from="user">Mere pet me dard hai aur loose motion ho raha hai 20 din se.</ChatBubble>
+                <ChatBubble from="ai">Yeh problem kab se ho rahi hai?</ChatBubble>
+                <ChatBubble from="user">Laghbhag 20 din se.</ChatBubble>
+                <ChatBubble from="ai">Ek din me approximately kitni baar loose motion hota hai?</ChatBubble>
+              </div>
+            </div>
+            <ClinicalBrief />
           </div>
         </div>
       </div>
@@ -440,14 +506,14 @@ const BENEFITS = [
 
 function Benefits() {
   return (
-    <section className="border-y border-[var(--color-sky-line)]/60 bg-white">
-      <div className="mx-auto grid max-w-[1180px] gap-6 px-5 py-8 sm:grid-cols-3 lg:grid-cols-5">
+    <section className="border-y border-[var(--color-sky-line)]/60 bg-gradient-to-b from-white to-[var(--color-mint)]/25">
+      <div className="mx-auto flex max-w-none flex-wrap items-center justify-between gap-x-6 gap-y-6 px-5 py-5">
         {BENEFITS.map(({ icon: Icon, label }) => (
-          <div key={label} className="flex items-center gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--color-sky)] text-[var(--color-brand)]">
-              <Icon width={20} height={20} />
+          <div key={label} className="flex flex-1 items-center gap-3 basis-[45%] sm:basis-[30%] lg:basis-0">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[var(--color-sky)] text-[var(--color-brand)]">
+              <Icon width={22} height={22} strokeWidth={2.3} />
             </span>
-            <span className="whitespace-pre-line text-[13px] font-semibold leading-tight text-[var(--color-ink)]">
+            <span className="whitespace-pre text-[14.4px] font-bold leading-tight text-[var(--color-ink)]">
               {label}
             </span>
           </div>
@@ -514,26 +580,30 @@ const PROBLEM_CARDS: ProblemCard[] = [
 
 function ProblemSolution() {
   return (
-    <section className="bg-[var(--color-mint)]/40">
-      <div className="mx-auto grid max-w-[1180px] gap-8 px-5 py-16 lg:grid-cols-[0.8fr_2fr]">
-        <h2 className="font-display text-[30px] font-extrabold leading-tight text-[var(--color-ink)]">
+    <section className="bg-white px-5 py-5">
+      <div className="mx-auto grid max-w-none items-start gap-8 rounded-3xl bg-[var(--color-mint)]/35 p-7 ring-1 ring-[var(--color-mint-line)]/60 lg:grid-cols-[0.85fr_2.15fr] lg:p-9">
+        <h2 className="font-display text-[30px] font-extrabold leading-[1.2] text-[var(--color-ink)]">
           Healthcare mein problem sirf treatment ki nahi, access aur information ki bhi hai.
         </h2>
-        <div className="grid gap-5 md:grid-cols-3">
+        <div className="grid items-stretch gap-4 md:grid-cols-3">
           {PROBLEM_CARDS.map((c) => (
-            <div key={c.title} className="rounded-2xl border p-5" style={{ background: c.bg, borderColor: c.line }}>
-              <div className="mb-4 flex items-center gap-2.5">
-                <span className="grid h-8 w-8 place-items-center rounded-lg bg-white" style={{ color: c.accent }}>
+            <div
+              key={c.title}
+              className="flex flex-col rounded-2xl border p-4 shadow-sm"
+              style={{ background: c.bg, borderColor: c.line }}
+            >
+              <div className="mb-3 flex items-center gap-2.5">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white shadow-sm" style={{ color: c.accent }}>
                   <c.icon width={17} height={17} />
                 </span>
-                <h3 className="font-display text-[15px] font-bold" style={{ color: c.accent }}>
+                <h3 className="font-display text-[16px] font-bold leading-tight" style={{ color: c.accent }}>
                   {c.title}
                 </h3>
               </div>
-              <ul className="flex flex-col gap-2.5">
+              <ul className="flex flex-col gap-2">
                 {c.items.map((it) => (
-                  <li key={it} className="flex gap-2 text-[13px] leading-snug text-[var(--color-ink-soft)]">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: c.accent }} />
+                  <li key={it} className="flex gap-2 text-[14.4px] leading-snug text-[var(--color-ink-soft)]">
+                    <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: c.accent }} />
                     {it}
                   </li>
                 ))}
@@ -548,50 +618,54 @@ function ProblemSolution() {
 
 /* ------------------------------- How It Works ------------------------------ */
 const STEPS = [
-  { icon: UserRound, title: 'Patient', sub: 'Website / App\nWhatsApp / Voice Call', teal: false },
+  { icon: UserRound, title: 'Patient', sub: 'Website / App\nWhatsApp / Voice Call', teal: true },
   { icon: Calendar, title: 'Book Appointment', sub: 'AI starts conversation immediately', teal: false },
   { icon: Chat, title: 'Adaptive AI Conversation', sub: 'Symptoms, history, previous treatment', teal: true },
   { icon: FileText, title: 'Upload Reports', sub: 'Prescriptions, lab tests, scans, etc.', teal: false },
-  { icon: Brain, title: 'AI Analysis & Patient Context', sub: 'Findings, suggestions, risk assessment', teal: true },
+  { icon: Brain, title: 'AI Analysis & Patient Context', sub: 'Findings, suggestions, risk assessment', teal: false },
   { icon: FileText, title: 'Pre-Visit Brief for Doctor', sub: 'Structured & actionable', teal: false },
   { icon: Stethoscope, title: 'Doctor Consultation', sub: 'Doctor reviews, decides & treats', teal: true },
-  { icon: Calendar, title: 'Follow-up Care', sub: 'Continuous health journey', teal: false },
+  { icon: Calendar, title: 'Follow-up Care', sub: 'Continuous health journey', teal: true },
 ]
 
 function HowItWorks() {
   return (
     <section className="bg-white">
-      <div className="mx-auto max-w-[1180px] px-5 py-16">
-        <h2 className="font-display text-[30px] font-extrabold text-[var(--color-ink)]">How AI UPCHAR Works</h2>
-        <p className="mt-2 text-[15px] text-[var(--color-body)]">
-          A complete journey from your first question to better treatment.
-        </p>
-        <Hand className="mt-4 block text-right text-xl md:float-right md:-mt-8 md:max-w-[220px]">
-          One Patient. One Healthcare Context. Across All Channels.
-        </Hand>
+      <div className="mx-auto max-w-none px-5 py-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-display text-[32px] font-extrabold text-[var(--color-ink)]">How AI UPCHAR Works</h2>
+            <p className="mt-1.5 text-[17.3px] text-[var(--color-body)]">
+              A complete journey from your first question to better treatment.
+            </p>
+          </div>
+          <Hand className="max-w-[230px] text-right text-[20.5px]">
+            One Patient. One Healthcare Context. Across All Channels.
+          </Hand>
+        </div>
 
-        <div className="mt-10 flex flex-wrap items-start justify-between gap-y-8">
+        <div className="mt-8 flex items-start justify-between gap-1 overflow-x-auto pb-2 lg:overflow-visible">
           {STEPS.map(({ icon: Icon, title, sub, teal }, i) => (
-            <div key={title} className="flex items-start">
-              <div className="flex w-[120px] flex-col items-center text-center">
+            <div key={title} className="flex shrink-0 items-start lg:shrink lg:flex-1">
+              <div className="flex w-[112px] flex-col items-center text-center lg:w-full">
                 <span
-                  className={`grid h-14 w-14 place-items-center rounded-full ${
+                  className={`grid h-16 w-16 place-items-center rounded-full ${
                     teal
                       ? 'bg-[var(--color-mint)] text-[var(--color-teal-deep)]'
                       : 'bg-[var(--color-sky)] text-[var(--color-brand)]'
                   }`}
                 >
-                  <Icon width={24} height={24} />
+                  <Icon width={30} height={30} strokeWidth={2.4} />
                 </span>
-                <p className="mt-3 font-display text-[13px] font-bold leading-tight text-[var(--color-ink)]">
+                <p className="mt-3 font-display text-[14.4px] font-bold leading-tight text-[var(--color-ink)]">
                   {title}
                 </p>
-                <p className="mt-1 whitespace-pre-line text-[11px] leading-tight text-[var(--color-body)]">
+                <p className="mt-1 whitespace-pre-line text-[12px] leading-tight text-[var(--color-body)]">
                   {sub}
                 </p>
               </div>
               {i < STEPS.length - 1 && (
-                <ArrowRight width={18} height={18} className="mt-5 hidden shrink-0 text-[var(--color-sky-line)] xl:block" />
+                <ArrowRight width={16} height={16} className="mt-5 shrink-0 text-[var(--color-brand)]/45" />
               )}
             </div>
           ))}
@@ -620,17 +694,17 @@ const DOCTOR_POINTS = [
   'Better organized workflow',
 ]
 const CONNECT = [
-  { icon: Globe, title: 'Website', sub: 'Book and interact online', color: 'var(--color-brand)' },
-  { icon: Phone, title: 'Mobile App', sub: 'Appointments, history, reports and more', color: 'var(--color-brand)' },
-  { icon: Whatsapp, title: 'WhatsApp', sub: 'Chat naturally with AI', color: 'var(--color-wa)' },
-  { icon: PhoneCall, title: 'Voice Call', sub: 'Talk to AI, create your appointment', color: 'var(--color-brand)' },
+  { icon: Globe, title: 'Website', sub: 'Book and interact online', color: 'var(--color-brand)', solid: false },
+  { icon: Phone, title: 'Mobile App', sub: 'Appointments, history, reports and more', color: 'var(--color-brand)', solid: false },
+  { icon: Whatsapp, title: 'WhatsApp', sub: 'Chat naturally with AI', color: 'var(--color-wa)', solid: true },
+  { icon: PhoneCall, title: 'Voice Call', sub: 'Talk to AI, create your appointment', color: 'var(--color-brand)', solid: true },
 ]
 
 function CheckItem({ children }: { children: ReactNode }) {
   return (
-    <li className="flex gap-2.5 text-[13px] leading-snug text-[var(--color-ink-soft)]">
-      <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[var(--color-mint)] text-[var(--color-teal-deep)]">
-        <Check width={11} height={11} />
+    <li className="flex gap-2 text-[14.4px] leading-snug text-[var(--color-ink-soft)]">
+      <span className="mt-0.5 grid h-[17px] w-[17px] shrink-0 place-items-center rounded-full bg-[var(--color-wa)] text-white shadow-sm">
+        <Check width={11} height={11} strokeWidth={3} />
       </span>
       {children}
     </li>
@@ -639,73 +713,85 @@ function CheckItem({ children }: { children: ReactNode }) {
 
 function AudienceSection() {
   return (
-    <section className="bg-[var(--color-hero)]/50">
-      <div className="mx-auto grid max-w-[1180px] gap-6 px-5 py-16 lg:grid-cols-3">
-        <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[var(--color-sky-line)]">
-          <div className="grid grid-cols-[110px_1fr] gap-4 p-5">
+    <section className="bg-white">
+      <div className="mx-auto grid max-w-none items-start gap-6 px-5 py-5 lg:grid-cols-3">
+        {/* For Patients */}
+        <div className="flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--color-sky)] to-white shadow-sm ring-1 ring-[var(--color-sky-line)]/70">
+          <div className="grid flex-1 grid-cols-[30%_1fr]">
             <img
               src={IMG.patientSection}
               alt="Patient chatting with AI UPCHAR on her phone"
-              className="h-full w-full rounded-xl bg-[var(--color-rose)] object-cover"
+              className="h-full w-full bg-[var(--color-rose)] object-cover object-top"
               loading="lazy"
             />
-            <div>
-              <h3 className="font-display text-lg font-bold text-[var(--color-ink)]">For Patients</h3>
-              <ul className="mt-3 flex flex-col gap-2">
+            <div className="p-4">
+              <h3 className="font-display text-[20.5px] font-bold text-[var(--color-ink)]">For Patients</h3>
+              <ul className="mt-2.5 flex flex-col gap-1.5">
                 {PATIENT_POINTS.map((p) => (
                   <CheckItem key={p}>{p}</CheckItem>
                 ))}
               </ul>
+              <blockquote className="mt-3 rounded-xl bg-white/70 p-3 text-[13.2px] italic leading-snug text-[var(--color-ink-soft)] ring-1 ring-[var(--color-sky-line)]/60">
+                “Pehli baar laga ki doctor ke paas jaane se pehle hi kisi ne meri problem achhe se samajh li.”
+                <span className="mt-1.5 block not-italic font-semibold text-[var(--color-ink)]">— Priya S., Patient</span>
+              </blockquote>
             </div>
           </div>
-          <blockquote className="mx-5 mb-5 rounded-xl bg-[var(--color-rose)]/60 p-4 text-[12.5px] italic leading-snug text-[var(--color-ink-soft)]">
-            “Pehli baar laga ki doctor ke paas jaane se pehle hi kisi ne meri problem achhe se samajh li.”
-            <span className="mt-2 block not-italic font-semibold text-[var(--color-ink)]">— Priya S., Patient</span>
-          </blockquote>
         </div>
 
-        <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-[var(--color-sky-line)]">
-          <div className="grid grid-cols-[110px_1fr] gap-4 p-5">
+        {/* For Doctors */}
+        <div className="flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--color-sky)] to-white shadow-sm ring-1 ring-[var(--color-sky-line)]/70">
+          <div className="grid flex-1 grid-cols-[30%_1fr]">
             <img
               src={IMG.doctorPortrait}
               alt="Doctor using AI UPCHAR clinical briefs"
-              className="h-full w-full rounded-xl bg-[var(--color-sky)] object-cover"
+              className="h-full w-full bg-[var(--color-sky)] object-cover object-top"
               loading="lazy"
             />
-            <div>
-              <h3 className="font-display text-lg font-bold text-[var(--color-ink)]">For Doctors</h3>
-              <ul className="mt-3 flex flex-col gap-2">
+            <div className="p-4">
+              <h3 className="font-display text-[20.5px] font-bold text-[var(--color-ink)]">For Doctors</h3>
+              <ul className="mt-2.5 flex flex-col gap-1.5">
                 {DOCTOR_POINTS.map((p) => (
                   <CheckItem key={p}>{p}</CheckItem>
                 ))}
               </ul>
+              <blockquote className="mt-3 rounded-xl bg-white/70 p-3 text-[13.2px] italic leading-snug text-[var(--color-ink-soft)] ring-1 ring-[var(--color-sky-line)]/60">
+                “Ab consultation ke waqt main zero se shuru nahi karta. AI UPCHAR mujhe already patient ki poori story de deta hai.”
+                <span className="mt-1.5 block not-italic font-semibold text-[var(--color-ink)]">— Dr. Amit Verma, General Physician</span>
+              </blockquote>
             </div>
           </div>
-          <blockquote className="mx-5 mb-5 rounded-xl bg-[var(--color-sky)]/70 p-4 text-[12.5px] italic leading-snug text-[var(--color-ink-soft)]">
-            “Ab consultation ke waqt main zero se shuru nahi karta. AI UPCHAR mujhe already patient ki poori story de deta hai.”
-            <span className="mt-2 block not-italic font-semibold text-[var(--color-ink)]">— Dr. Amit Verma, General Physician</span>
-          </blockquote>
         </div>
 
-        <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-[var(--color-sky-line)]">
-          <h3 className="font-display text-lg font-bold text-[var(--color-ink)]">Multiple Ways to Connect</h3>
-          <p className="mt-1 text-[13px] text-[var(--color-body)]">
+        {/* Multiple Ways to Connect */}
+        <div className="flex flex-col rounded-2xl bg-gradient-to-br from-[var(--color-sky)] to-white p-5 shadow-sm ring-1 ring-[var(--color-sky-line)]/70">
+          <h3 className="font-display text-[19.5px] font-bold text-[var(--color-ink)]">Multiple Ways to Connect</h3>
+          <p className="mt-1 text-[13.8px] text-[var(--color-body)]">
             Healthcare shouldn&apos;t require learning a new app.
           </p>
-          <div className="mt-5 flex flex-col gap-4">
-            {CONNECT.map(({ icon: Icon, title, sub, color }) => (
-              <div key={title} className="flex items-start gap-3">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--color-sky)]" style={{ color }}>
-                  <Icon width={19} height={19} />
+          <div className="mt-5 flex flex-col gap-5">
+            {CONNECT.map(({ icon: Icon, title, sub, color, solid }) => (
+              <div key={title} className="flex items-center gap-4">
+                <span
+                  className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-full shadow-sm"
+                  style={
+                    solid
+                      ? { background: color, color: 'white' }
+                      : { background: `color-mix(in srgb, ${color} 15%, white)`, color }
+                  }
+                >
+                  <Icon width={28} height={28} strokeWidth={2.6} />
                 </span>
                 <div>
-                  <p className="text-sm font-bold text-[var(--color-ink)]">{title}</p>
-                  <p className="text-[12px] text-[var(--color-body)]">{sub}</p>
+                  <p className="text-[17.3px] font-bold leading-tight text-[var(--color-ink)]">{title}</p>
+                  <p className="text-[14.4px] leading-tight text-[var(--color-body)]">{sub}</p>
                 </div>
               </div>
             ))}
           </div>
-          <Hand className="mt-6 block text-lg">Same AI. Same Patient Context. Across all platforms.</Hand>
+          <Hand className="mt-6 block -rotate-6 text-center text-[23px] font-bold !text-[#1d6fff]">
+            Same AI. Same Patient Context. Across all platforms.
+          </Hand>
         </div>
       </div>
     </section>
@@ -740,26 +826,26 @@ const INSIGHTS = [
 function DetailCards() {
   return (
     <section className="bg-white">
-      <div className="mx-auto grid max-w-[1180px] gap-6 px-5 pb-16 lg:grid-cols-2">
+      <div className="mx-auto grid max-w-none gap-6 px-5 pb-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-[var(--color-sky-line)] p-6">
-          <h3 className="font-display text-base font-bold text-[var(--color-brand)]">
+          <h3 className="font-display text-[18.4px] font-bold text-[var(--color-brand)]">
             Real Example: AI Conversation for a New Patient
           </h3>
-          <div className="mt-4 grid gap-5 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
+          <div className="mt-4 grid gap-6 sm:grid-cols-2">
+            <div className="flex flex-col justify-center gap-4">
               {CONV.map((c, i) => {
                 const isAi = c.from === 'ai'
                 return (
-                  <div key={i} className={`flex items-end gap-1.5 ${isAi ? '' : 'flex-row-reverse'}`}>
+                  <div key={i} className={`flex items-end gap-2 ${isAi ? '' : 'flex-row-reverse'}`}>
                     <span
-                      className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-white ${
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-white ${
                         isAi ? 'bg-[var(--color-teal)]' : 'bg-[var(--color-brand)]'
                       }`}
                     >
-                      {isAi ? <Brain width={12} height={12} /> : <UserRound width={12} height={12} />}
+                      {isAi ? <Brain width={16} height={16} /> : <UserRound width={16} height={16} />}
                     </span>
                     <span
-                      className={`max-w-[85%] rounded-2xl px-3 py-1.5 text-[11px] leading-snug ${
+                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[14.9px] leading-snug ${
                         isAi
                           ? 'rounded-bl-sm bg-[var(--color-mint)] text-[var(--color-ink)]'
                           : 'rounded-br-sm bg-[var(--color-sky)] text-[var(--color-ink)]'
@@ -770,13 +856,13 @@ function DetailCards() {
                   </div>
                 )
               })}
-              <div className="flex gap-1 pl-8 pt-1">
-                <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[var(--color-teal)]" />
-                <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[var(--color-teal)]" style={{ animationDelay: '.2s' }} />
-                <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[var(--color-teal)]" style={{ animationDelay: '.4s' }} />
+              <div className="flex gap-1 pl-10 pt-1">
+                <span className="typing-dot h-2 w-2 rounded-full bg-[var(--color-teal)]" />
+                <span className="typing-dot h-2 w-2 rounded-full bg-[var(--color-teal)]" style={{ animationDelay: '.2s' }} />
+                <span className="typing-dot h-2 w-2 rounded-full bg-[var(--color-teal)]" style={{ animationDelay: '.4s' }} />
               </div>
             </div>
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col justify-center gap-4">
               {CONV_POINTS.map((p) => (
                 <CheckItem key={p}>{p}</CheckItem>
               ))}
@@ -785,7 +871,7 @@ function DetailCards() {
         </div>
 
         <div className="rounded-2xl border border-[var(--color-sky-line)] p-6">
-          <h3 className="font-display text-base font-bold text-[var(--color-brand)]">
+          <h3 className="font-display text-[18.4px] font-bold text-[var(--color-brand)]">
             Your Medical Documents Become Usable Context
           </h3>
           <div className="mt-4 grid items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
@@ -793,7 +879,7 @@ function DetailCards() {
               {DOCS.map((d) => (
                 <li
                   key={d}
-                  className="flex items-center gap-2 rounded-lg bg-[var(--color-sky)]/60 px-3 py-2 text-[12px] font-medium text-[var(--color-ink)]"
+                  className="flex items-center gap-2 rounded-lg bg-[var(--color-sky)]/60 px-3 py-2 text-[13.8px] font-medium text-[var(--color-ink)]"
                 >
                   <FileText width={14} height={14} className="text-[var(--color-brand)]" />
                   {d}
@@ -804,12 +890,12 @@ function DetailCards() {
               <ArrowRight width={22} height={22} className="text-[var(--color-teal)]" />
             </div>
             <div className="rounded-xl bg-[var(--color-mint)]/70 p-3">
-              <p className="mb-2 flex items-center gap-1.5 text-[12px] font-bold text-[var(--color-teal-deep)]">
+              <p className="mb-2 flex items-center gap-1.5 text-[13.8px] font-bold text-[var(--color-teal-deep)]">
                 <Brain width={14} height={14} /> AI Analysis
               </p>
               <ul className="flex flex-col gap-1.5">
                 {INSIGHTS.map((it) => (
-                  <li key={it.label} className="flex items-center gap-1.5 text-[11px] text-[var(--color-ink-soft)]">
+                  <li key={it.label} className="flex items-center gap-1.5 text-[12.7px] text-[var(--color-ink-soft)]">
                     {it.alert ? (
                       <Alert width={12} height={12} className="text-[#e8607f]" />
                     ) : (
@@ -821,7 +907,7 @@ function DetailCards() {
               </ul>
             </div>
           </div>
-          <Hand className="mt-4 block text-right text-lg">From files to meaningful insights.</Hand>
+          <Hand className="mt-4 block text-right text-[20.5px]">From files to meaningful insights.</Hand>
         </div>
       </div>
     </section>
@@ -840,43 +926,26 @@ function CtaBand() {
         loading="lazy"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-ink)]/85 via-[var(--color-ink)]/55 to-[var(--color-brand)]/40" />
-      <div className="relative mx-auto flex max-w-[1180px] flex-col items-start gap-6 px-5 py-16 md:flex-row md:items-center md:justify-between">
+      <div className="relative mx-auto flex max-w-none flex-col items-start gap-6 px-5 py-8 md:flex-row md:items-center md:justify-between">
         <div className="max-w-xl">
-          <h2 className="font-display text-[26px] font-extrabold leading-snug text-white sm:text-[30px]">
+          <h2 className="font-display text-[30px] font-extrabold leading-snug text-white sm:text-[34.5px]">
             From “Mujhe doctor ko dikhana hai” to “Doctor already understands my case.”
           </h2>
-          <p className="mt-3 text-[15px] text-white/85">AI UPCHAR connects the entire journey.</p>
+          <p className="mt-3 text-[17.3px] text-white/85">AI UPCHAR connects the entire journey.</p>
         </div>
         <div className="flex flex-col items-start gap-4">
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => dispatch(openAppointmentDialog())} className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-[var(--color-teal-deep)]">
+            <button onClick={() => dispatch(openAppointmentDialog())} className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-teal)] px-5 py-3 text-[16px] font-semibold text-white shadow-lg transition hover:bg-[var(--color-teal-deep)]">
               <Calendar width={16} height={16} /> Book an Appointment <ArrowRight width={15} height={15} />
             </button>
-            <button className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/40 backdrop-blur-sm transition hover:bg-white/20">
+            <button className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-5 py-3 text-[16px] font-semibold text-white ring-1 ring-white/40 backdrop-blur-sm transition hover:bg-white/20">
               <Play width={13} height={13} /> Watch Demo
             </button>
           </div>
-          <Hand className="text-2xl text-white">Better Conversations Healthier Lives</Hand>
+          <Hand className="text-[27.6px] text-white">Better Conversations Healthier Lives</Hand>
         </div>
       </div>
     </section>
-  )
-}
-
-/* --------------------------------- Footer ---------------------------------- */
-function Footer() {
-  return (
-    <footer className="bg-[var(--color-ink)] text-white/70">
-      <div className="mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-4 px-5 py-8 sm:flex-row">
-        <Logo />
-        <p className="text-xs">© 2026 AI UPCHAR — Better Conversations. Healthier Lives.</p>
-        <div className="flex gap-5 text-xs">
-          <a href="#" className="transition hover:text-white">Privacy</a>
-          <a href="#" className="transition hover:text-white">Terms</a>
-          <a href="#" className="transition hover:text-white">Contact</a>
-        </div>
-      </div>
-    </footer>
   )
 }
 
@@ -884,16 +953,31 @@ function AppointmentDialog() {
   const dispatch = useDispatch<AppDispatch>()
   const open = useSelector((state: RootState) => state.landing.appointmentDialogOpen)
   if (!open) return null
+
   return (
-    <div className="fixed inset-0 z-[60] grid place-items-center bg-[var(--color-ink)]/40 px-5 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Book an appointment">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div><h2 className="font-display text-xl font-bold text-[var(--color-ink)]">Book an Appointment</h2><p className="mt-1 text-sm text-[var(--color-body)]">Our intelligent intake will guide you through the next steps.</p></div>
-          <button onClick={() => dispatch(closeAppointmentDialog())} className="rounded-lg p-2 text-[var(--color-ink-soft)] hover:bg-[var(--color-sky)]" aria-label="Close appointment dialog"><X width={18} height={18} /></button>
-        </div>
-        <button onClick={() => dispatch(closeAppointmentDialog())} className="mt-5 w-full rounded-xl bg-[var(--color-teal)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--color-teal-deep)]">Start patient intake</button>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[var(--color-ink)]/45 px-3 py-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Book an appointment">
+      <div className="relative flex max-h-[96vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <button onClick={() => dispatch(closeAppointmentDialog())} className="absolute right-3 top-3 z-10 rounded-lg bg-white/90 p-2 text-[var(--color-ink-soft)] shadow-sm hover:bg-[var(--color-sky)]" aria-label="Close appointment dialog"><X width={18} height={18} /></button>
+        <PatientIntakeChat variant="landing" />
       </div>
     </div>
+  )
+}
+
+/* --------------------------------- Footer ---------------------------------- */
+function Footer() {
+  return (
+    <footer className="bg-[var(--color-ink)] text-white/70">
+      <div className="mx-auto flex max-w-none flex-col items-center justify-between gap-4 px-5 py-8 sm:flex-row">
+        <Logo />
+        <p className="text-[13.8px]">© 2026 AI UPCHAR — Better Conversations. Healthier Lives.</p>
+        <div className="flex gap-5 text-[13.8px]">
+          <a href="#" className="transition hover:text-white">Privacy</a>
+          <a href="#" className="transition hover:text-white">Terms</a>
+          <a href="#" className="transition hover:text-white">Contact</a>
+        </div>
+      </div>
+    </footer>
   )
 }
 

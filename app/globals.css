@@ -4,6 +4,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The imported landing stylesheet is layered; this unlayered rule keeps the
+   hero gradient text above the host app's Tailwind utility reset. */
+.landing-gradient-text {
+  background-image: linear-gradient(to right, var(--color-brand), var(--color-teal));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 html {
   scroll-behavior: smooth;
 }

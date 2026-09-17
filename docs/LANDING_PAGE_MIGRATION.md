@@ -17,3 +17,7 @@ The landing page uses the repository's existing Redux store. Its `landing` slice
 ## Verification
 
 Verify the root page renders the landing UI, the header demo button opens the request dialog, the appointment dialog still opens, and `/demo` remains available after the migration. Keep generated `tsconfig.tsbuildinfo` and `test-results/` files out of commits.
+
+## Home appointment chat
+
+The new landing page's `Book an Appointment` buttons open the existing `PatientIntakeChat` on the same screen inside a modal. The existing adaptive reasoning, semantic consistency checks, phone lookup, edit/replay, attachments, follow-up/new-patient branch, safety handling, and final report flow are reused. The chat receives a `landing` visual variant so its patient/bot bubbles and role icons match the landing-page conversation example without changing the `/demo` chat variant.

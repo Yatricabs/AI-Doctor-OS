@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, Pencil, Send, X } from "lucide-react";
+import { Bot, Paperclip, Pencil, Send, UserRound, X } from "lucide-react";
 import { askAIForJSON } from "@/lib/puter-ai";
 import { detectRedFlags } from "@/lib/red-flag-keywords";
 import { useSubmitPatientIntakeMutation } from "@/lib/apiSlice";
@@ -23,7 +23,8 @@ type IntakeStep =
 const GREETING = "Namaste! 👋 Main aapka AI UPCHAR assistant hoon. Appointment book karne aur doctor ke liye aapki jaankari taiyaar karne ke liye main kuch sawaal poochunga.\n\nAap naye patient hain ya pehle bhi yahan aa chuke hain?";
 const emptyAnswers = { isReturning: "", phone: "", name: "", age: "", sex: "", location: "", preferredDate: "", preferredTime: "", chiefComplaint: "", duration: "", priorConsultation: "", priorReports: "" };
 
-export default function PatientIntakeChat({ onComplete }: { onComplete?: (result: { patient: Patient; appointment: Appointment; urgent: boolean }) => void }) {
+export default function PatientIntakeChat({ onComplete, variant = "default" }: { onComplete?: (result: { patient: Patient; appointment: Appointment; urgent: boolean }) => void; variant?: "default" | "landing" }) {
+  const landingChat = variant === "landing";
   const [submitIntake] = useSubmitPatientIntakeMutation();
   const [step, setStep] = useState<IntakeStep>("existing-or-new");
   const [thread, setThread] = useState<{ role: "bot" | "patient"; content: string }[]>([{ role: "bot", content: GREETING }]);
@@ -366,22 +367,24 @@ export default function PatientIntakeChat({ onComplete }: { onComplete?: (result
   }
 
   return (
-    <div className="flex h-[calc(100dvh-270px)] min-h-[360px] max-h-[720px] flex-col overflow-hidden rounded-2xl border" style={{ borderColor: tone.border, background: tone.card }}>
+    <div className={`flex h-[calc(100dvh-270px)] min-h-[360px] max-h-[720px] flex-col overflow-hidden rounded-2xl border ${landingChat ? "landing-chatbox" : ""}`} style={{ borderColor: tone.border, background: tone.card }}>
       <div className="flex items-center justify-between border-b px-6 py-4" style={{ borderColor: "#edf1ee" }}>
         <span className="text-sm font-bold" style={{ color: tone.ink }}>AI UPCHAR Assistant — New Patient Intake</span>
         <button onClick={reset} className="text-xs font-bold hover:underline" style={{ color: tone.primary }}>Start new intake</button>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5">
         {thread.map((turn, index) => (
-          <div key={index} className={`flex ${turn.role === "patient" ? "justify-end" : "justify-start"}`}>
+          <div key={index} className={`flex items-end gap-2 ${turn.role === "patient" ? "justify-end" : "justify-start"}`}>
+            {landingChat && turn.role === "bot" && <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0e9d94] text-white"><Bot className="h-5 w-5" /></span>}
             <div className="group relative max-w-[85%]">
-              <div className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${turn.role === "patient" ? "rounded-br-sm text-white" : "rounded-bl-sm"}`} style={turn.role === "patient" ? { background: tone.primary } : { background: "#f3f4fa", color: "#3d4459" }}>
+              <div className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${turn.role === "patient" ? "rounded-br-sm" : "rounded-bl-sm"} ${landingChat ? (turn.role === "patient" ? "bg-[#e7f0fc] text-[#173a5e]" : "bg-[#eaf7f3] text-[#173f3c]") : turn.role === "patient" ? "text-white" : ""}`} style={landingChat ? undefined : turn.role === "patient" ? { background: tone.primary } : { background: "#f3f4fa", color: "#3d4459" }}>
                 {turn.content}
               </div>
               {turn.role === "patient" && <button type="button" onClick={() => { const cleanValue = turn.content.replace(/\n\[Attached file: .*\]$/, ""); const answerStep = stepForEditedAnswer(cleanValue); setEditingReturnStep(step); if (answerStep) { setStep(answerStep); setEditingStep(answerStep); } setEditingIndex(index); setEditingOriginal(cleanValue); setDraft(cleanValue); }} className="absolute bottom-1 right-2 flex items-center gap-1 rounded bg-black/10 px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-black/20" aria-label="Edit message"><Pencil className="h-3 w-3" /> Edit</button>}
               {turn.role === "bot" && turn.content.includes("prescription upload") && <div className="mt-2 flex flex-wrap gap-2"><label htmlFor="patient-report-attachment" className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]" style={{ borderColor: "#b9dfd1" }}><Paperclip className="h-3.5 w-3.5" />Attach prescription</label><button type="button" onClick={() => void submit("Nahi hai / abhi available nahi hai")} className="rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]" style={{ borderColor: "#b9dfd1" }}>Nahi hai / abhi available nahi hai</button></div>}
               {turn.role === "bot" && turn.content.includes("Koi test report ya scan") && <div className="mt-2 flex flex-wrap gap-2"><label htmlFor="patient-report-attachment" className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]" style={{ borderColor: "#b9dfd1" }}><Paperclip className="h-3.5 w-3.5" />Attach report</label><button type="button" onClick={() => void submit("Nahi hai / abhi available nahi hai")} className="rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]" style={{ borderColor: "#b9dfd1" }}>Nahi hai / abhi available nahi hai</button></div>}
             </div>
+            {landingChat && turn.role === "patient" && <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#246edb] text-white"><UserRound className="h-5 w-5" /></span>}
           </div>
         ))}
 
