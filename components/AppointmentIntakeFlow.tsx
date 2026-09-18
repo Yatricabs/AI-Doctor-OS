@@ -2,13 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Paperclip, Pencil, Send, X } from "lucide-react";
-import { assessAppointmentAnswer, nextAppointmentQuestion, type SemanticFact } from "@/lib/appointmentIntakeReasoning";
+import { assessAppointmentAnswer, nextAppointmentQuestion, extractSemanticFacts, explicitSexCorrection, type QaTurn, type SemanticFact } from "@/lib/appointmentIntakeReasoning";
+import { recordIntakeDecision } from "@/lib/appointmentIntakeDebug";
+import { resolveClinicalContext } from "@/lib/clinicalPathways";
+import { serverAiAnalyzeImage } from "@/lib/serverAiClient";
 
 type Field = "patientType" | "phone" | "name" | "age" | "sex" | "location" | "preferredDate" | "preferredTime" | "chiefComplaint" | "duration" | "severity" | "associatedSymptoms" | "priorConsultation" | "priorReports" | "clarification" | "done";
 type Answers = Partial<Record<Exclude<Field, "clarification" | "done">, string>>;
 type Turn = { role: "bot" | "patient"; text: string; field?: Field };
-type QaTurn = { question: string; answer: string; key: string };
 type MatchedPatient = { id: string; name: string; phone?: string };
+type PreviousContext = { patientId: string; pastSummary: string; hasHistory: boolean };
+type DocumentEvidence = { id: string; name: string; type: string; size: number; file: File; turnIndex: number; extractedSummary?: string };
+type PendingAssessment = { status: "NEEDS_CLARIFICATION" | "SAFETY_CONCERN"; sourceAnswer: string };
+const clinicalFields = new Set<Field>(["chiefComplaint", "duration", "severity", "associatedSymptoms", "priorConsultation", "priorReports"]);
 
 const greeting = "Namaste! 👋 Main aapka AI UPCHAR assistant hoon. Appointment book karne aur doctor ke liye aapki jaankari taiyaar karne ke liye main kuch sawaal poochunga.";
 const questions: Partial<Record<Field, string>> = {
@@ -28,13 +34,17 @@ export default function AppointmentIntakeFlow() {
   const [semanticFacts, setSemanticFacts] = useState<SemanticFact[]>([]);
   const [draft, setDraft] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [documents, setDocuments] = useState<DocumentEvidence[]>([]);
   const [lookup, setLookup] = useState<{ loading: boolean; patient: MatchedPatient | null }>({ loading: false, patient: null });
+  const [previousContext, setPreviousContext] = useState<PreviousContext | null>(null);
+  const [pendingAssessment, setPendingAssessment] = useState<PendingAssessment | null>(null);
   const [useExisting, setUseExisting] = useState(false);
   const [editing, setEditing] = useState<{ turn: number; field: Field; returnStep: Field } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const phoneRequest = useRef(0);
+  const sessionId = useRef(`intake-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [turns, step]);
 
@@ -52,48 +62,100 @@ export default function AppointmentIntakeFlow() {
   function patient(text: string, field: Field) { setTurns((current) => [...current, { role: "patient", text, field }]); }
   function ask(field: Field, text = questions[field]) { bot(text ?? "", field); setStep(field); }
 
-  async function askClinical(contextAnswers: Answers, contextLog: QaTurn[]) {
+  async function askClinical(contextAnswers: Answers, contextLog: QaTurn[], contextFacts = semanticFacts) {
     if (contextAnswers.priorReports) { await finish(contextAnswers, contextLog); return; }
-    const covered = [
-      ...(contextAnswers.duration ? ["duration"] : []),
-      ...contextLog.map((entry) => entry.key),
-      ...(contextAnswers.priorConsultation ? ["priorConsultation"] : []),
-    ];
-    const next = await nextAppointmentQuestion({ answers: contextAnswers, qaLog: contextLog, semanticFacts }, covered);
+    const next = await nextAppointmentQuestion({
+      answers: contextAnswers,
+      qaLog: contextLog,
+      semanticFacts: contextFacts,
+      previousPatientContext: previousContext?.pastSummary ?? "",
+      documents: documents.map(({ name, type, size }) => ({ name, type, size, source: "PATIENT" })),
+      clinicalPathway: contextAnswers.chiefComplaint ? resolveClinicalContext(contextAnswers.chiefComplaint, contextAnswers.duration ?? "") : null,
+      previousAnswers: turns.filter((turn) => turn.role === "patient").map((turn) => turn.text),
+    }, contextLog.map((entry) => entry.key));
+    recordIntakeDecision(sessionId.current, {
+      selectedAction: next.action,
+      candidateActions: next.candidateActions,
+      reasonCode: next.reasonCode,
+      confidence: next.confidence,
+      coveredInformation: contextLog.map((entry) => entry.key),
+      source: "validated-next-action",
+      step: step,
+    });
     bot(next.question, next.key);
     setStep(next.key);
   }
 
-  async function evaluateComplaint(value: string, updated: Answers) {
-    const assessment = await assessAppointmentAnswer({ latestAnswer: value, answers: updated, semanticFacts, previousAnswers: turns.filter((turn) => turn.role === "patient").map((turn) => turn.text), qaLog });
-    setSemanticFacts((current) => [...current, ...assessment.facts]);
-    if (assessment.outcome !== "CONTINUE") {
+  async function evaluateClinicalAnswer(value: string, updated: Answers, contextLog: QaTurn[], contextFacts: SemanticFact[], priorAnswers: string[]) {
+    const assessment = await assessAppointmentAnswer({
+      latestAnswer: value,
+      answers: updated,
+      semanticFacts: contextFacts,
+      previousAnswers: priorAnswers,
+      qaLog: contextLog,
+      previousPatientContext: previousContext?.pastSummary ?? "",
+      documents: documents.map(({ name, type, size }) => ({ name, type, size, source: "PATIENT" })),
+      clinicalPathway: updated.chiefComplaint ? resolveClinicalContext(updated.chiefComplaint, updated.duration ?? "") : null,
+    });
+    const nextFacts = [...contextFacts, ...assessment.facts];
+    setSemanticFacts(nextFacts);
+    recordIntakeDecision(sessionId.current, {
+      extractedFactKinds: assessment.facts.map((fact) => fact.kind),
+      changedFactKeys: assessment.facts.map((fact) => fact.conceptKey ?? fact.value),
+      contradictions: assessment.contradictions.map((item) => item.code),
+      safetyFlags: assessment.safetyFlags.map((item) => item.code),
+      selectedAction: assessment.status === "NEEDS_CLARIFICATION" ? "CLARIFY_CONTRADICTION" : assessment.status === "SAFETY_CONCERN" ? "SAFETY_ESCALATION" : "CONTINUE_APPOINTMENT",
+      reasonCode: assessment.reasonCodes.join(","),
+      confidence: assessment.facts.some((fact) => fact.confidence === "HIGH") ? "HIGH" : "MEDIUM",
+      source: assessment.source,
+      step,
+    });
+    if (assessment.status !== "CONSISTENT") {
+      setPendingAssessment({ status: assessment.status, sourceAnswer: value });
       bot(assessment.question, "clarification");
       setStep("clarification");
       return;
     }
-    await askClinical(updated, qaLog);
+    setPendingAssessment(null);
+    await askClinical(updated, contextLog, nextFacts);
   }
 
   async function continueWith(value: string, field = step) {
     const withFile = file ? `${value}${value ? "\n" : ""}[Attached file: ${file.name}]` : value;
     if (!withFile.trim() || busy) return;
+    const attachedFile = file;
+    if (attachedFile) setDocuments((current) => [...current, { id: `${Date.now()}-${attachedFile.name}`, name: attachedFile.name, type: attachedFile.type, size: attachedFile.size, file: attachedFile, turnIndex: editing?.turn ?? turns.length }]);
     setError(""); setDraft(""); setFile(null);
     if (editing) {
       const position = orderedFields.indexOf(editing.field);
       const reset: Answers = { ...answers, [editing.field]: withFile };
       orderedFields.slice(position + 1).forEach((key) => delete reset[key as keyof Answers]);
-      setAnswers(reset); setQaLog([]); setSemanticFacts([]); setUseExisting(false);
-      setTurns((current) => [...current.slice(0, editing.turn), { role: "patient", text: withFile, field: editing.field }]);
+      const beforeEdit = turns.slice(0, editing.turn);
+      const replayAnswers = beforeEdit.filter((turn) => turn.role === "patient" && turn.field && clinicalFields.has(turn.field)).map((turn) => turn.text);
+      const replayFacts = replayAnswers.flatMap((answer) => extractSemanticFacts(answer));
+      const replayLog: QaTurn[] = beforeEdit
+        .filter((turn) => turn.role === "patient" && turn.field && clinicalFields.has(turn.field) && turn.field !== "chiefComplaint")
+        .map((turn) => ({ question: "Clinical question", answer: turn.text, key: turn.field as string }));
+      const nextTurns = [...beforeEdit, { role: "patient" as const, text: withFile, field: editing.field }];
+      setAnswers(reset); setQaLog(replayLog); setSemanticFacts(replayFacts); setPendingAssessment(null); setUseExisting(false);
+      setDocuments((current) => current.filter((document) => document.turnIndex <= editing.turn));
+      setTurns(nextTurns);
       setEditing(null);
-      if (editing.field === "chiefComplaint") { setBusy(true); await evaluateComplaint(withFile, reset); setBusy(false); return; }
+      if (clinicalFields.has(editing.field)) {
+        setBusy(true);
+        const currentLog = editing.field === "chiefComplaint" ? replayLog : [...replayLog, { question: "Clinical question", answer: withFile, key: editing.field }];
+        await evaluateClinicalAnswer(withFile, reset, currentLog, replayFacts, replayAnswers);
+        setBusy(false);
+        return;
+      }
       if (editing.field === "patientType") { ask("phone"); return; }
       const nextField = orderedFields[position + 1] ?? "done";
       ask(nextField); return;
     }
     patient(withFile, field);
-    const updated = { ...answers, [field]: withFile };
+    const updated: Answers = field === "clarification" ? { ...answers } : { ...answers, [field]: withFile };
     setAnswers(updated);
+    if (!clinicalFields.has(field) && field !== "clarification") recordIntakeDecision(sessionId.current, { selectedAction: "CONTINUE_APPOINTMENT", reasonCode: `${field.toUpperCase()}_ACCEPTED`, confidence: "HIGH", source: "deterministic-admin-transition", step: field });
     if (field === "patientType") { ask("phone"); return; }
     if (field === "phone") { ask("name"); return; }
     if (field === "name") { ask("age"); return; }
@@ -102,41 +164,81 @@ export default function AppointmentIntakeFlow() {
     if (field === "location") { ask("preferredDate"); return; }
     if (field === "preferredDate") { ask("preferredTime"); return; }
     if (field === "preferredTime") { ask("chiefComplaint"); return; }
-    if (field === "chiefComplaint") { setBusy(true); await evaluateComplaint(withFile, updated); setBusy(false); return; }
+    if (clinicalFields.has(field)) {
+      const priorAnswers = turns.filter((turn) => turn.role === "patient").map((turn) => turn.text);
+      const nextLog = field === "chiefComplaint" ? qaLog : [...qaLog, { question: turns[turns.length - 1]?.text ?? "Clinical question", answer: withFile, key: field }];
+      setBusy(true); await evaluateClinicalAnswer(withFile, updated, nextLog, semanticFacts, priorAnswers); setBusy(false); return;
+    }
     if (field === "clarification") {
-      // The clarification is new clinical evidence.  Re-assess it in the full
-      // accumulated context rather than replaying only the original complaint.
+      const correction = explicitSexCorrection(withFile);
       setBusy(true);
-      const assessment = await assessAppointmentAnswer({
-        latestAnswer: withFile,
-        answers: updated,
-        semanticFacts,
-        previousAnswers: turns.filter((turn) => turn.role === "patient").map((turn) => turn.text),
-        qaLog,
-        clarificationFor: updated.chiefComplaint,
-      });
-      setSemanticFacts((current) => [...current, ...assessment.facts]);
-      if (assessment.outcome !== "CONTINUE") {
-        bot(assessment.question, "clarification");
-        setStep("clarification");
+      if (pendingAssessment?.status === "NEEDS_CLARIFICATION" && /^(nahi|nahin|no|nope)\b/i.test(withFile.trim())) {
+        const restated = { ...answers };
+        ["chiefComplaint", "duration", "severity", "associatedSymptoms", "priorConsultation", "priorReports"].forEach((key) => delete restated[key as keyof Answers]);
+        setAnswers(restated); setQaLog([]); setSemanticFacts([]); setPendingAssessment(null);
+        bot("Theek hai. Main aapka SEX answer nahi badal raha. Kripya apni asli takleef ya symptom ko dobara spasht tareeke se batayein.", "chiefComplaint");
+        setStep("chiefComplaint");
+        setBusy(false);
+        return;
+      }
+      if (correction) {
+        const complaint = answers.chiefComplaint ?? "";
+        const corrected: Answers = { ...answers, sex: correction, chiefComplaint: complaint };
+        ["duration", "severity", "associatedSymptoms", "priorConsultation", "priorReports"].forEach((key) => delete corrected[key as keyof Answers]);
+        setAnswers(corrected); setQaLog([]); setSemanticFacts([]);
+        setPendingAssessment(null);
+        if (complaint) await evaluateClinicalAnswer(complaint, corrected, [], [], []);
+        else { ask("location"); }
       } else {
-        await askClinical(updated, qaLog);
+        const priorAnswers = turns.filter((turn) => turn.role === "patient").map((turn) => turn.text);
+        await evaluateClinicalAnswer(withFile, updated, qaLog, semanticFacts, priorAnswers);
       }
       setBusy(false);
       return;
     }
-    const entry: QaTurn = { question: turns[turns.length - 1]?.text ?? "Clinical question", answer: withFile, key: field };
-    const nextLog = [...qaLog, entry];
-    setQaLog(nextLog);
-    setBusy(true); await askClinical(updated, nextLog); setBusy(false);
   }
 
   async function finish(finalAnswers: Answers, finalLog: QaTurn[]) {
     setBusy(true); setStep("done");
     try {
-      const response = await fetch("/api/appointment-intake", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...finalAnswers, qaLog: finalLog, useExisting, preVisitReport: { problemSummary: finalAnswers.chiefComplaint, fullHistory: [finalAnswers.chiefComplaint, finalAnswers.duration, ...finalLog.map((entry) => `${entry.question}: ${entry.answer}`)].filter(Boolean).join(" "), urgency: "OPD" } }) });
+      const response = await fetch("/api/appointment-intake", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        ...finalAnswers,
+        qaLog: finalLog,
+        useExisting,
+        semanticFacts,
+        previousPatientContext: previousContext,
+        documents: documents.map(({ id, name, type, size }) => ({ id, name, type, size, source: "PATIENT" })),
+        preVisitReport: {
+          problemSummary: finalAnswers.chiefComplaint,
+          fullHistory: [finalAnswers.chiefComplaint, finalAnswers.duration, ...finalLog.map((entry) => `${entry.question}: ${entry.answer}`)].filter(Boolean).join(" "),
+          urgency: "OPD",
+          semanticFacts,
+          documents: documents.map(({ name, type, size }) => ({ name, type, size, source: "PATIENT" })),
+          previousPatientContext: previousContext?.pastSummary ?? "",
+          doctorReviewBoundary: "AI-generated considerations; clinician approval required.",
+        },
+      }) });
       const payload = await response.json();
       if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message ?? "Appointment could not be saved.");
+      const savedPatientId = payload.data?.patient?.id;
+      if (savedPatientId && documents.length) {
+        void Promise.all(documents.map(async (document) => {
+          const form = new FormData();
+          form.append("file", document.file);
+          form.append("patientId", savedPatientId);
+          form.append("title", document.name);
+          form.append("type", /prescription|parchi|rx/i.test(document.name) ? "Prescription" : "Lab report");
+          const uploaded = await fetch("/api/reports/upload", { method: "POST", body: form }).then((item) => item.json()).catch(() => null);
+          const reportId = uploaded?.data?.report?.id;
+          if (reportId && /^image\//i.test(document.type)) {
+            const findings = await Promise.race([
+              serverAiAnalyzeImage(document.file, "Extract only clearly visible, patient-reported or document-derived clinical facts from this prescription/report. Return concise JSON with documentType, findings, dates, medicines, tests and uncertainties. Do not diagnose or prescribe."),
+              new Promise<string>((resolve) => setTimeout(() => resolve("Document analysis timed out; clinician review required."), 8000)),
+            ]).catch(() => "Document analysis unavailable; clinician review required.");
+            await fetch("/api/reports/upload", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reportId, findings: String(findings).slice(0, 8000) }) }).catch(() => undefined);
+          }
+        })).catch(() => undefined);
+      }
       bot(`All set, ${payload.data.patient.name.split(" ")[0]} — aapka appointment ${payload.data.appointment.appointmentDate} ko ${payload.data.appointment.appointmentTime} par book ho gaya hai.`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Appointment could not be saved.");
@@ -144,12 +246,17 @@ export default function AppointmentIntakeFlow() {
     } finally { setBusy(false); }
   }
 
-  function chooseExisting(existing: boolean) {
+  async function chooseExisting(existing: boolean) {
     if (!lookup.patient) return;
     setUseExisting(existing);
     if (existing) {
       const updated = { ...answers, phone: draft, name: lookup.patient.name, patientType: "Existing patient" };
-      setAnswers(updated); patient(draft, "phone"); bot(`Theek hai, ${lookup.patient.name} ke liye follow-up appointment book karte hain.`); ask("preferredDate");
+      setAnswers(updated); patient(draft, "phone"); bot(`Theek hai, ${lookup.patient.name} ke liye follow-up appointment book karte hain.`); setPreviousContext(null); ask("preferredDate");
+      try {
+        const response = await fetch(`/api/appointments/chat?patientId=${encodeURIComponent(lookup.patient.id)}&context=1`);
+        const payload = await response.json();
+        if (response.ok && payload?.data) setPreviousContext({ patientId: lookup.patient.id, pastSummary: String(payload.data.pastSummary ?? ""), hasHistory: Boolean(payload.data.hasHistory) });
+      } catch { /* previous context is helpful, but must not block booking */ }
     } else { setLookup({ loading: false, patient: null }); bot("Theek hai, new patient ke liye nayi details lete hain."); ask("name"); }
     setDraft("");
   }
@@ -160,7 +267,7 @@ export default function AppointmentIntakeFlow() {
   }
 
   function reset() {
-    setStep("patientType"); setTurns([{ role: "bot", text: `${greeting}\n\nAap naye patient hain ya pehle bhi yahan aa chuke hain?` }]); setAnswers({}); setQaLog([]); setSemanticFacts([]); setDraft(""); setFile(null); setLookup({ loading: false, patient: null }); setEditing(null); setUseExisting(false); setError("");
+    setStep("patientType"); setTurns([{ role: "bot", text: `${greeting}\n\nAap naye patient hain ya pehle bhi yahan aa chuke hain?` }]); setAnswers({}); setQaLog([]); setSemanticFacts([]); setPendingAssessment(null); setDraft(""); setFile(null); setDocuments([]); setPreviousContext(null); setLookup({ loading: false, patient: null }); setEditing(null); setUseExisting(false); setError("");
   }
 
   const citySuggestions = step === "location" && draft.length > 1 ? localCities.filter((city) => city.toLowerCase().startsWith(draft.toLowerCase())).slice(0, 6) : [];

@@ -55,6 +55,9 @@ export async function POST(request: Request) {
   if (clash) return error("This appointment slot is already booked. Please choose another time.", 409);
 
   const qaLog = Array.isArray(body.qaLog) ? body.qaLog.slice(0, 15) : [];
+  const semanticFacts = Array.isArray(body.semanticFacts) ? body.semanticFacts.slice(0, 80) : [];
+  const documents = Array.isArray(body.documents) ? body.documents.slice(0, 20) : [];
+  const previousPatientContext = body.previousPatientContext && typeof body.previousPatientContext === "object" ? body.previousPatientContext : null;
   const report = body.preVisitReport && typeof body.preVisitReport === "object" ? body.preVisitReport as Record<string, unknown> : null;
   const urgent = /chest pain|shortness of breath|breathless|severe bleeding|unconscious|fainting|stroke|seizure/i.test([chiefComplaint, ...qaLog.map((item) => JSON.stringify(item))].join(" "));
   const appointment = {
@@ -69,7 +72,16 @@ export async function POST(request: Request) {
     status: "confirmed",
     reason: chiefComplaint,
     channel: "web",
-    notes: JSON.stringify({ duration: body.duration ?? "", priorConsultation: body.priorConsultation ?? "", priorReports: body.priorReports ?? "", qaLog }),
+    notes: JSON.stringify({
+      duration: body.duration ?? "",
+      priorConsultation: body.priorConsultation ?? "",
+      priorReports: body.priorReports ?? "",
+      qaLog,
+      semanticFacts,
+      documents,
+      previousPatientContext,
+      aiLabel: "AI_GENERATED_CONSIDERATIONS_ONLY",
+    }),
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
