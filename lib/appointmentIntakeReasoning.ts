@@ -4,6 +4,7 @@ import {
   detectAppointmentSafetyFlags,
   extractSemanticFacts,
   explicitSexCorrection,
+  extractClinicalContext,
   type AppointmentContext,
   type ContextAssessment,
   type SemanticFact,
@@ -21,7 +22,7 @@ export type SemanticAssessment = ContextAssessment & { source: "DETERMINISTIC" |
 
 export type QaTurn = { question: string; answer: string; key: string };
 
-const factKinds = new Set(["ANATOMY_REFERENCE", "BODY_LOCATION", "SYMPTOM", "SYMPTOM_CHARACTERISTIC", "MEDICATION_CLAIM", "DIAGNOSIS_CLAIM", "TREATMENT_CLAIM", "HISTORY_CLAIM", "REPRODUCTIVE_CLAIM"]);
+const factKinds = new Set(["ANATOMY_REFERENCE", "BODY_LOCATION", "SYMPTOM", "SYMPTOM_CHARACTERISTIC", "MEDICATION_CLAIM", "DIAGNOSIS_CLAIM", "TREATMENT_CLAIM", "HISTORY_CLAIM", "REPRODUCTIVE_CLAIM", "TEMPORAL_REFERENCE", "TRIGGER_REFERENCE", "PROBLEM_REFERENCE"]);
 const outcomes = new Set(["CONSISTENT", "NEEDS_CLARIFICATION", "SAFETY_CONCERN"]);
 
 function validSemantic(value: unknown): value is Omit<SemanticAssessment, "source"> {
@@ -70,9 +71,9 @@ export async function assessAppointmentAnswer(context: Record<string, unknown>):
   const model = await askIntakeJson<Partial<SemanticAssessment>>([
     {
       role: "system",
-      content: "You are a clinical intake reasoning boundary, not a diagnostician. Extract only clinically meaningful facts from the latest answer: anatomy/body site, symptoms, symptom characteristics, medications, diagnoses, treatments, history and reproductive claims. Compare them with SEX, previous answers, prior appointment context, documents and already extracted facts. Return exactly one JSON object with status CONSISTENT|NEEDS_CLARIFICATION|SAFETY_CONCERN, facts [{kind: ANATOMY_REFERENCE|BODY_LOCATION|SYMPTOM|SYMPTOM_CHARACTERISTIC|MEDICATION_CLAIM|DIAGNOSIS_CLAIM|TREATMENT_CLAIM|HISTORY_CLAIM|REPRODUCTIVE_CLAIM,value,conceptKey,polarity:PRESENT|DENIED|UNCERTAIN,confidence:LOW|MEDIUM|HIGH,evidence}], explanation, question, contradictions [{code,current,previous,explanation,confidence}], safetyFlags [{code,evidence,severity}], reasonCodes. Never change structured patient answers. If uncertain, ask clarification. Do not ask a routine question when a material mismatch or safety concern exists.",
+      content: "You are a clinical intake reasoning boundary, not a diagnostician. Understand any patient statement, not only a fixed disease list. Separate multiple active problems, extract anatomy/body site, symptoms, severity, time/duration, triggers, associated symptoms, medications, patient-reported diagnoses (never confirmed diagnoses), treatments and history. Compare them with SEX, age, previous answers, prior appointment context, documents and already extracted facts. Return exactly one JSON object with status CONSISTENT|NEEDS_CLARIFICATION|SAFETY_CONCERN, facts [{kind: ANATOMY_REFERENCE|BODY_LOCATION|SYMPTOM|SYMPTOM_CHARACTERISTIC|MEDICATION_CLAIM|DIAGNOSIS_CLAIM|TREATMENT_CLAIM|HISTORY_CLAIM|REPRODUCTIVE_CLAIM|TEMPORAL_REFERENCE|TRIGGER_REFERENCE|PROBLEM_REFERENCE,value,conceptKey,normalizedConcept,problemId,polarity:PRESENT|DENIED|UNCERTAIN,confidence:LOW|MEDIUM|HIGH,evidence}], explanation, question, contradictions [{code,current,previous,explanation,confidence}], safetyFlags [{code,evidence,severity}], reasonCodes. Never change structured patient answers. If uncertain, ask respectful clarification. Do not ask a routine question when a material mismatch or safety concern exists.",
     },
-    { role: "user", content: JSON.stringify(context) },
+    { role: "user", content: JSON.stringify({ ...context, clinicalContextRepresentation: deterministic.representation ?? extractClinicalContext(String(context.latestAnswer ?? "")) }) },
   ]);
 
   if (!validSemantic(model)) return { ...deterministic, source: "DETERMINISTIC_FALLBACK" };

@@ -413,7 +413,7 @@ export type WorkflowMetric = {
   createdAt: string;
 };
 
-export type InventoryCategory = "medicine" | "test" | "scan";
+export type InventoryCategory = "medicine" | "test" | "scan" | "procedure";
 
 export type InventoryItem = {
   id: string;
@@ -445,7 +445,7 @@ export type StockTransaction = {
   createdAt: string;
 };
 
-export type BillItemType = "appointment" | "medicine" | "test" | "scan";
+export type BillItemType = "appointment" | "medicine" | "test" | "scan" | "procedure";
 
 export type BillItem = {
   id: string;

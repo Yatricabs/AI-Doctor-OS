@@ -3,7 +3,7 @@
 // and the item's stock_qty stay consistent (spec §22).
 import { generateId, insert, nowIso, query, queryOne, type InventoryItem, type StockTxnType } from "./demo";
 
-export const INVENTORY_CATEGORIES = ["medicine", "test", "scan"] as const;
+export const INVENTORY_CATEGORIES = ["medicine", "test", "scan", "procedure"] as const;
 
 export function isInventoryCategory(v: unknown): v is (typeof INVENTORY_CATEGORIES)[number] {
   return typeof v === "string" && (INVENTORY_CATEGORIES as readonly string[]).includes(v);

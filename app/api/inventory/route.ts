@@ -1,4 +1,4 @@
-// Inventory of medicines / tests / scans (INR).
+// Inventory of medicines / tests / scans / procedures (INR).
 //   GET    ?category=&lowStock=1  -> list active items (+ low-stock flag)
 //   POST   {name,category,unit?,price,stockQty?,lowStockThreshold?} -> add item
 //   PATCH  {id, ...fields}        -> update price/stock/details
@@ -76,7 +76,7 @@ export const POST = safeRoute(async (request: Request) => {
   const name = requiredString(body.name, "name", 160);
   const category = body.category;
   if (!name) return error("name is required.");
-  if (!isInventoryCategory(category)) return error("category must be medicine, test or scan.");
+  if (!isInventoryCategory(category)) return error("category must be medicine, test, scan or procedure.");
 
   const price = Number(body.price);
   if (!Number.isFinite(price) || price < 0) return error("price must be a non-negative number.");

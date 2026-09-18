@@ -1,145 +1,107 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CalendarDays, IndianRupee, Loader2, Users, Clock3, ArrowUpRight } from "lucide-react";
+import { useEffect, useState, type ComponentType } from "react";
+import { CalendarClock, IndianRupee, Loader2, PackageSearch, Users } from "lucide-react";
 import { apiGet } from "./api";
-import { formatINR, humanize } from "@/lib/format";
+import { formatINR } from "@/lib/format";
 
-type Appt = { id: string; patientId: string; patientName?: string; visitType: string; appointmentTime: string; appointmentDate: string; status: string; reason?: string };
-type QueueEntry = { id: string; patientName?: string; tokenNumber?: string; status: string; priority: string };
-type FollowUp = { id: string; title: string; dueDate: string; priority: string; patientId: string };
-type RevenueSummary = { today: { total: number; bills: number }; allTime: { total: number; bills: number }; breakdown: Record<string, number> };
+type Appointment = { id: string; visitType: string; reason?: string; appointmentDate: string };
+type InventoryItem = { id: string; name: string; unit?: string; stockQty: number; lowStock: boolean; tracksStock: boolean };
+type InboxItem = { id: string; title: string; detail: string; status: string };
+type RevenueSummary = { today: { total: number; bills: number }; breakdown: Record<string, number> };
+type DashboardData = { appointments: Appointment[]; patientTotal: number; inventory: InventoryItem[]; revenue: RevenueSummary | null; alerts: InboxItem[] };
 
-const FOLLOWUP_TYPES = new Set(["follow_up", "report_review", "wellness"]);
+const FOLLOW_UP_TYPES = new Set(["follow_up", "report_review", "wellness"]);
+const emergencyTerms = /chest pain|shortness of breath|breathless|severe bleeding|unconscious|fainting|stroke|seizure/i;
 
+// ZIP-dashboard structure, powered by the GitHub checkout's existing APIs.
 export default function DashboardScreen({ onGoto }: { onGoto: (nav: string, patientId?: string) => void }) {
-  const [appts, setAppts] = useState<Appt[]>([]);
-  const [queue, setQueue] = useState<{ entries: QueueEntry[]; waiting: number; urgent: number } | null>(null);
-  const [followUps, setFollowUps] = useState<FollowUp[]>([]);
-  const [revenue, setRevenue] = useState<RevenueSummary | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       setLoading(true); setError("");
       try {
         const today = new Date().toISOString().slice(0, 10);
-        const [a, q, rev] = await Promise.all([
-          apiGet<{ appointments: Appt[] }>(`/api/appointments?date=${today}`).catch(() => ({ appointments: [] as Appt[] })),
-          apiGet<{ queue: { entries: QueueEntry[]; waiting: number; urgent: number } }>("/api/queue").catch(() => ({ queue: { entries: [], waiting: 0, urgent: 0 } })),
+        const [appointments, patients, inventory, revenue, inbox] = await Promise.all([
+          apiGet<{ appointments: Appointment[] }>(`/api/appointments?date=${today}`).catch(() => ({ appointments: [] })),
+          apiGet<{ patients: unknown[]; total: number }>("/api/patients").catch(() => ({ patients: [], total: 0 })),
+          apiGet<{ items: InventoryItem[] }>("/api/inventory").catch(() => ({ items: [] })),
           apiGet<RevenueSummary>("/api/billing?summary=1").catch(() => null),
+          apiGet<{ items: InboxItem[] }>("/api/inbox").catch(() => ({ items: [] })),
         ]);
-        // Follow-ups due (best effort).
-        const fu = await apiGet<{ followUps?: FollowUp[]; overdueFollowUps?: FollowUp[] }>("/api/follow-ups")
-          .catch((): { followUps?: FollowUp[]; overdueFollowUps?: FollowUp[] } => ({}));
         if (cancelled) return;
-        setAppts(a.appointments);
-        setQueue(q.queue);
-        setRevenue(rev);
-        setFollowUps(fu.followUps ?? fu.overdueFollowUps ?? []);
-      } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : "Could not load dashboard."); }
-      finally { if (!cancelled) setLoading(false); }
+        setData({
+          appointments: appointments.appointments,
+          patientTotal: patients.total,
+          inventory: inventory.items,
+          revenue,
+          alerts: inbox.items.filter((item) => item.status === "open"),
+        });
+      } catch (caught) {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : "Could not load the dashboard.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
 
-  const total = appts.length;
-  const followCount = appts.filter((a) => FOLLOWUP_TYPES.has(a.visitType)).length;
-  const newCount = total - followCount;
+  const appointments = data?.appointments ?? [];
+  const followUps = appointments.filter((appointment) => FOLLOW_UP_TYPES.has(appointment.visitType));
+  const newPatients = appointments.length - followUps.length;
+  const urgent = appointments.filter((appointment) => emergencyTerms.test(appointment.reason ?? ""));
+  const estimatedMinutes = newPatients * 20 + followUps.length * 10;
+  const lowStock = (data?.inventory ?? []).filter((item) => item.tracksStock && item.lowStock);
+  const hours = Math.floor(estimatedMinutes / 60);
+  const minutes = estimatedMinutes % 60;
 
-  const today = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  return <div className="mx-auto max-w-[1280px] px-4 pb-12 pt-6 sm:px-5 md:px-10 md:pt-8">
+    <header>
+      <h1 className="text-2xl font-bold tracking-tight text-[#173f3c]">Dashboard</h1>
+      <p className="mt-1 text-sm text-[#78908a]">Today&apos;s schedule, revenue, and what needs attention.</p>
+    </header>
 
-  return (
-    <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-6 sm:px-6 md:px-10 md:pt-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#78908a]">Live clinic · {today}</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#173f3c]">Dashboard</h1>
+    {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div>}
+
+    {loading ? <div className="mt-8 flex items-center gap-2 text-sm text-[#5a967e]"><Loader2 className="h-4 w-4 animate-spin" /> Loading today&apos;s overview…</div> : <>
+      <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard icon={CalendarClock} label="Appointments today" value={String(appointments.length)} detail={`${newPatients} new · ${followUps.length} follow-up`} onClick={() => onGoto("Appointments")} />
+        <StatCard icon={CalendarClock} label="Estimated clinic time" value={`${hours}h ${minutes}m`} detail={urgent.length > 0 ? `${urgent.length} urgent case(s) today` : "No urgent cases flagged"} variant={urgent.length > 0 ? "danger" : undefined} />
+        <StatCard icon={IndianRupee} label="Revenue today" value={formatINR(data?.revenue?.today.total ?? 0)} detail={Object.entries(data?.revenue?.breakdown ?? {}).filter(([, amount]) => amount > 0).map(([type, amount]) => `${type}: ${formatINR(amount)}`).join(" · ") || "No transactions yet"} onClick={() => onGoto("Billing")} />
+        <StatCard icon={Users} label="Total patients on file" value={String(data?.patientTotal ?? 0)} detail="Across all visit types" onClick={() => onGoto("Patients")} />
+      </section>
+
+      <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-[#e1e9e5] bg-white p-5">
+          <div className="flex items-center justify-between"><h2 className="text-sm font-bold text-[#173f3c]">Today&apos;s schedule breakdown</h2><button onClick={() => onGoto("Appointments")} className="text-xs font-bold text-[#07947f] hover:underline">Open schedule →</button></div>
+          <div className="mt-4 space-y-3">
+            <BreakdownBar label="New patients" value={newPatients} total={appointments.length} color="#6682a5" />
+            <BreakdownBar label="Follow-ups" value={followUps.length} total={appointments.length} color="#a17a2d" />
+            <BreakdownBar label="Urgent priority" value={urgent.length} total={appointments.length} color="#b3544a" />
+          </div>
+          <p className="mt-4 text-xs text-[#78908a]">New visits estimated ~20 min, follow-ups ~10 min — illustrative averages, not a fixed rule.</p>
         </div>
-        <button onClick={() => onGoto("Appointments")} className="flex items-center gap-2 rounded-xl bg-[#07947f] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#066d66]">
-          <CalendarDays className="h-4 w-4" /> Appointments
-        </button>
-      </div>
 
-      {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div>}
+        <div className="rounded-2xl border border-[#e1e9e5] bg-white p-5">
+          <div className="flex items-center justify-between"><h2 className="flex items-center gap-2 text-sm font-bold text-[#173f3c]"><PackageSearch className="h-4 w-4" /> Inventory needing attention</h2><button onClick={() => onGoto("Inventory")} className="text-xs font-bold text-[#07947f] hover:underline">Open inventory →</button></div>
+          {lowStock.length === 0 ? <p className="mt-4 text-sm text-[#4f9d78]">All medicines are stocked above their minimum level.</p> : <div className="mt-4 space-y-2">{lowStock.slice(0, 4).map((item) => <div key={item.id} className="flex items-center justify-between rounded-lg bg-[#f7faf8] px-3 py-2 text-sm"><span className="text-[#173f3c]">{item.name}</span><span className="rounded-full bg-[#f6efdd] px-2 py-0.5 text-[10px] font-bold uppercase text-[#a17a2d]">Low stock · {item.stockQty} {item.unit ?? "unit"}(s)</span></div>)}{lowStock.length > 4 && <p className="text-xs text-[#78908a]">+{lowStock.length - 4} more</p>}</div>}
+        </div>
+      </section>
 
-      {loading ? (
-        <div className="mt-8 flex items-center gap-2 text-sm text-[#5a967e]"><Loader2 className="h-4 w-4 animate-spin" /> Loading dashboard…</div>
-      ) : (
-        <>
-          {/* Stat cards */}
-          <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard label="Appointments today" value={String(total).padStart(2, "0")} detail={`${newCount} new · ${followCount} follow-up`} icon={CalendarDays} tone="bg-[#eef7f2] text-[#4f9d78]" onClick={() => onGoto("Appointments")} />
-            <StatCard label="In queue" value={String(queue?.waiting ?? 0).padStart(2, "0")} detail={`${queue?.urgent ?? 0} urgent`} icon={Users} tone="bg-[#edf2f8] text-[#6682a5]" />
-            <StatCard label="Today's revenue" value={formatINR(revenue?.today.total ?? 0)} detail={`${revenue?.today.bills ?? 0} bill(s)`} icon={IndianRupee} tone="bg-[#f6f0e9] text-[#bd865b]" onClick={() => onGoto("Billing")} />
-            <StatCard label="Total earnings" value={formatINR(revenue?.allTime.total ?? 0)} detail="All-time" icon={IndianRupee} tone="bg-[#f4eef7] text-[#9773a4]" onClick={() => onGoto("Billing")} />
-          </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            {/* Today's schedule */}
-            <div className="rounded-2xl border border-[#e1e9e5] bg-white p-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold uppercase tracking-wide text-[#5a967e]">Today&apos;s schedule</h2>
-                <button onClick={() => onGoto("Appointments")} className="flex items-center gap-1 text-xs font-semibold text-[#56896d] hover:underline">View all <ArrowUpRight className="h-3 w-3" /></button>
-              </div>
-              <div className="mt-3 space-y-2">
-                {appts.slice(0, 6).map((a) => (
-                  <button key={a.id} onClick={() => onGoto("Patients", a.patientId)} className="flex w-full items-center gap-3 rounded-lg border border-[#eef4f1] px-3 py-2 text-left hover:bg-[#f7faf8]">
-                    <Clock3 className="h-4 w-4 shrink-0 text-[#9db3aa]" />
-                    <span className="w-14 shrink-0 text-xs font-semibold text-[#5f7c70]">{a.appointmentTime}</span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#24443f]">{a.patientName ?? a.patientId}</span>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${FOLLOWUP_TYPES.has(a.visitType) ? "bg-[#f4eef7] text-[#9773a4]" : "bg-[#edf2f8] text-[#6682a5]"}`}>{FOLLOWUP_TYPES.has(a.visitType) ? "Follow-up" : "New"}</span>
-                  </button>
-                ))}
-                {appts.length === 0 && <p className="py-6 text-center text-sm text-[#9db3aa]">No appointments today.</p>}
-              </div>
-            </div>
-
-            {/* Revenue breakdown + follow-ups */}
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-[#e1e9e5] bg-white p-5">
-                <h2 className="text-sm font-bold uppercase tracking-wide text-[#5a967e]">Revenue breakdown</h2>
-                <div className="mt-3 space-y-2">
-                  {[["appointment", "Consultation"], ["medicine", "Medicines"], ["test", "Tests"], ["scan", "Scans"]].map(([k, label]) => (
-                    <div key={k} className="flex items-center justify-between text-sm">
-                      <span className="text-[#5f7c70]">{label}</span>
-                      <span className="font-semibold text-[#24443f]">{formatINR(revenue?.breakdown[k] ?? 0)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[#e1e9e5] bg-white p-5">
-                <h2 className="text-sm font-bold uppercase tracking-wide text-[#5a967e]">Follow-ups due</h2>
-                <div className="mt-3 space-y-2">
-                  {followUps.slice(0, 4).map((f) => (
-                    <button key={f.id} onClick={() => onGoto("Patients", f.patientId)} className="flex w-full items-center justify-between rounded-lg border border-[#eef4f1] px-3 py-2 text-left hover:bg-[#f7faf8]">
-                      <span className="min-w-0 truncate text-sm text-[#24443f]">{f.title}</span>
-                      <span className="shrink-0 text-[11px] text-[#8a9e98]">{f.dueDate}</span>
-                    </button>
-                  ))}
-                  {followUps.length === 0 && <p className="py-4 text-center text-sm text-[#9db3aa]">No follow-ups due.</p>}
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
+      {(data?.alerts.length ?? 0) > 0 && <section className="mt-6 rounded-2xl border border-[#e1e9e5] bg-white p-5"><h2 className="text-sm font-bold text-[#173f3c]">Needs attention ({data?.alerts.length})</h2><div className="mt-3 space-y-2">{data?.alerts.slice(0, 5).map((item) => <div key={item.id} className="rounded-lg bg-[#fdeceb] px-3 py-2 text-sm"><p className="font-semibold text-[#b3544a]">{item.title}</p><p className="mt-0.5 text-xs text-[#5f7c70]">{item.detail}</p></div>)}</div></section>}
+    </>}
+  </div>;
 }
 
-function StatCard({ label, value, detail, icon: Icon, tone, onClick }: { label: string; value: string; detail: string; icon: React.ComponentType<{ className?: string }>; tone: string; onClick?: () => void }) {
-  return (
-    <button onClick={onClick} disabled={!onClick} className="rounded-2xl border border-[#e1e9e5] bg-white p-4 text-left disabled:cursor-default enabled:hover:border-[#c2ddd5]">
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-semibold text-[#6d827c]">{label}</p>
-        <span className={`rounded-lg p-1.5 ${tone}`}><Icon className="h-4 w-4" /></span>
-      </div>
-      <p className="mt-3 text-2xl font-bold text-[#173f3c]">{value}</p>
-      <p className="mt-1 text-[11px] text-[#77908a]">{detail}</p>
-    </button>
-  );
+function StatCard({ icon: Icon, label, value, detail, onClick, variant }: { icon: ComponentType<{ className?: string }>; label: string; value: string; detail: string; onClick?: () => void; variant?: "danger" }) {
+  return <button onClick={onClick} disabled={!onClick} className="rounded-2xl border border-[#e1e9e5] bg-white p-5 text-left transition enabled:hover:border-[#c2ddd5] disabled:cursor-default"><div className="flex items-start justify-between"><p className="text-xs font-semibold text-[#78908a]">{label}</p><span className="rounded-lg bg-[#edf7f2] p-2 text-[#4f9d78]"><Icon className="h-4 w-4" /></span></div><p className={`mt-3 text-2xl font-bold ${variant === "danger" ? "text-[#b3544a]" : "text-[#173f3c]"}`}>{value}</p><p className="mt-1 text-xs text-[#78908a]">{detail}</p></button>;
+}
+
+function BreakdownBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+  return <div><div className="flex items-center justify-between text-xs"><span className="text-[#5f7c70]">{label}</span><span className="font-bold text-[#173f3c]">{value}</span></div><div className="mt-1 h-2 overflow-hidden rounded-full bg-[#f7faf8]"><div className="h-full rounded-full" style={{ width: `${percentage}%`, background: color }} /></div></div>;
 }

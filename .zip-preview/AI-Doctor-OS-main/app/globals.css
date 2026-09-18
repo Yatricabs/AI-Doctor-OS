@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #080d14;
+  overflow-x: hidden;
+}
+
+/* Keep typed form values readable on the light clinical workspace surfaces. */
+input,
+textarea,
+select {
+  color: #244642;
+  caret-color: #07947f;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a39f;
+  opacity: 1;
+}

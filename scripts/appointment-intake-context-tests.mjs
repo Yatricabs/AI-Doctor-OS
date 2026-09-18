@@ -3,6 +3,7 @@ import {
   assessAppointmentContext,
   explicitSexCorrection,
   extractSemanticFacts,
+  extractClinicalContext,
 } from "../lib/appointmentContextConsistency.ts";
 
 const results = [];
@@ -27,6 +28,13 @@ check("Man plus penile discharge is a different anatomy context", () => {
   assert.equal(result.status, "CONSISTENT");
   assert.ok(result.facts.some((item) => item.conceptKey === "anatomy:penile"));
   assert.ok(!result.facts.some((item) => item.conceptKey === "anatomy:vaginal"));
+});
+
+check("Male plus breast symptom remains a valid complaint context", () => {
+  const result = assessAppointmentContext({ sex: "Male", latestAnswer: "Mere breast mein bahut dard aur tanav hai", previousAnswers: [] });
+  assert.equal(result.status, "CONSISTENT");
+  assert.equal(result.contradictions.length, 0);
+  assert.ok(result.facts.some((item) => item.conceptKey === "anatomy:breast"));
 });
 
 check("Opposite medication claims are held for clarification", () => {
@@ -69,6 +77,45 @@ check("Fact extraction keeps provenance and does not diagnose", () => {
   assert.ok(facts.some((item) => item.kind === "MEDICATION_CLAIM" && item.source === "PATIENT"));
   assert.ok(facts.some((item) => item.conceptKey === "site:left"));
   assert.ok(!facts.some((item) => item.kind === "DIAGNOSIS_CLAIM" && /diagnosis/i.test(item.value)));
+});
+
+check("Multiple problems remain separate", () => {
+  const context = extractClinicalContext("Mere chest me pain hai aur mujhe diabetes hai aur kal se urine me burning ho rahi hai");
+  assert.ok(context.problems.length >= 3);
+  assert.ok(context.facts.some((item) => item.conceptKey === "site:chest"));
+  assert.ok(context.facts.some((item) => item.conceptKey === "site:urinary"));
+});
+
+check("Temporal and trigger context is not lost", () => {
+  const context = extractClinicalContext("Mujhe 5 din se headache hai, raat me zyada badhta hai aur vomiting bhi hoti hai");
+  assert.ok(context.temporalFacts.some((item) => item.conceptKey === "temporal:duration"));
+  assert.ok(context.facts.some((item) => item.conceptKey === "symptom:vomiting"));
+});
+
+check("Patient reported diagnosis is not confirmed diagnosis", () => {
+  const facts = extractSemanticFacts("Meri kidney me infection hai");
+  assert.ok(facts.some((item) => item.conceptKey === "diagnosis:patient_reported"));
+  assert.ok(!facts.some((item) => item.conceptKey === "diagnosis:confirmed"));
+});
+
+check("Unknown and cross-domain complaints are preserved as problems", () => {
+  const examples = [
+    "chest pain and saans phool rahi hai",
+    "khansi aur wheezing ho rahi hai",
+    "sir dard ke saath vomiting",
+    "pet kharab aur loose motion",
+    "peshab mein jalan",
+    "skin par rash aur itching",
+    "ghutne mein dard",
+    "sugar bahut high aa rahi hai",
+    "bukhar aur body pain",
+    "medicine lene ke baad allergy",
+  ];
+  for (const example of examples) {
+    const context = extractClinicalContext(example);
+    assert.ok(context.problems.length >= 1, example);
+    assert.ok(context.problems[0].facts.some((item) => item.kind === "PROBLEM_REFERENCE"), example);
+  }
 });
 
 console.log(JSON.stringify({ suite: "appointment-intake-context", status: "passed", total: results.length, results }, null, 2));

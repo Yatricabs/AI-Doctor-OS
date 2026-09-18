@@ -1,7 +1,7 @@
 import DoctorWorkspace from "@/components/DoctorWorkspace";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import PuterLoginGate from "@/components/PuterLoginGate";
 import WorkspaceReduxProvider from "@/components/WorkspaceReduxProvider";
+import { Suspense } from "react";
 
 export const metadata = {
   title: "AI UPCHAR Live Demo — Doctor Workspace",
@@ -11,11 +11,11 @@ export const metadata = {
 export default function DemoPage() {
   return (
     <ErrorBoundary>
-      <PuterLoginGate title="Doctor Workspace">
+      <Suspense fallback={<main className="min-h-screen bg-[#f7faf8]" />}>
         <WorkspaceReduxProvider>
           <DoctorWorkspace />
         </WorkspaceReduxProvider>
-      </PuterLoginGate>
+      </Suspense>
     </ErrorBoundary>
   );
 }

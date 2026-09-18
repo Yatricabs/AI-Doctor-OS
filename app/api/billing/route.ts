@@ -10,7 +10,7 @@ import { getInventoryItem } from "../_lib/inventory";
 
 export const dynamic = "force-dynamic";
 
-const ITEM_TYPES = ["appointment", "medicine", "test", "scan"] as const;
+const ITEM_TYPES = ["appointment", "medicine", "test", "scan", "procedure"] as const;
 function isItemType(v: unknown): v is (typeof ITEM_TYPES)[number] {
   return typeof v === "string" && (ITEM_TYPES as readonly string[]).includes(v);
 }
@@ -69,7 +69,7 @@ export const GET = safeRoute(async (request: Request) => {
     perPatient.set(key, cur);
   }
 
-  const breakdown: Record<string, number> = { appointment: 0, medicine: 0, test: 0, scan: 0 };
+  const breakdown: Record<string, number> = { appointment: 0, medicine: 0, test: 0, scan: 0, procedure: 0 };
   for (const b of withItems) for (const it of b.items) breakdown[it.itemType] = (breakdown[it.itemType] ?? 0) + it.amount;
 
   const grandTotal = withItems.reduce((s, b) => s + b.total, 0);
@@ -100,7 +100,7 @@ export const POST = safeRoute(async (request: Request) => {
   for (const raw of rawItems) {
     const r = raw as Record<string, unknown>;
     const itemType = r.itemType;
-    if (!isItemType(itemType)) return error("Each item needs a valid itemType (appointment/medicine/test/scan).");
+    if (!isItemType(itemType)) return error("Each item needs a valid itemType (appointment/medicine/test/scan/procedure).");
     const quantity = Math.max(1, Math.trunc(Number(r.quantity) || 1));
 
     let unitPrice = Number(r.unitPrice);

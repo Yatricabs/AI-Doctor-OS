@@ -6,7 +6,8 @@
 
 export type FactKind =
   | "ANATOMY_REFERENCE" | "BODY_LOCATION" | "SYMPTOM" | "SYMPTOM_CHARACTERISTIC"
-  | "MEDICATION_CLAIM" | "DIAGNOSIS_CLAIM" | "TREATMENT_CLAIM" | "HISTORY_CLAIM" | "REPRODUCTIVE_CLAIM";
+  | "MEDICATION_CLAIM" | "DIAGNOSIS_CLAIM" | "TREATMENT_CLAIM" | "HISTORY_CLAIM" | "REPRODUCTIVE_CLAIM"
+  | "TEMPORAL_REFERENCE" | "TRIGGER_REFERENCE" | "PROBLEM_REFERENCE";
 export type FactPolarity = "PRESENT" | "DENIED" | "UNCERTAIN";
 export type FactSource = "PATIENT" | "PREVIOUS_APPOINTMENT" | "DOCUMENT" | "DOCTOR" | "AI";
 
@@ -18,6 +19,22 @@ export type SemanticFact = {
   confidence: "LOW" | "MEDIUM" | "HIGH";
   evidence: string;
   source?: FactSource;
+  normalizedConcept?: string;
+  problemId?: string;
+};
+
+export type ClinicalProblem = {
+  id: string;
+  statement: string;
+  facts: SemanticFact[];
+  status: "ACTIVE" | "HISTORY" | "UNCERTAIN";
+};
+
+export type ClinicalContextRepresentation = {
+  problems: ClinicalProblem[];
+  facts: SemanticFact[];
+  temporalFacts: SemanticFact[];
+  safetyFlags: SafetyFlag[];
 };
 
 export type ContextContradiction = {
@@ -43,6 +60,7 @@ export type ContextAssessment = {
   contradictions: ContextContradiction[];
   safetyFlags: SafetyFlag[];
   reasonCodes: string[];
+  representation?: ClinicalContextRepresentation;
 };
 
 export type AppointmentContext = {
@@ -58,6 +76,7 @@ export type AppointmentContext = {
 const anatomyPatterns: Array<[RegExp, string, string]> = [
   [/\b(vagina|vaginal|योनि|योनी)\b/i, "vaginal anatomy", "anatomy:vaginal"],
   [/\b(uterus|womb|गर्भाशय)\b/i, "uterine anatomy", "anatomy:uterine"],
+  [/\b(breast|breasts|stan|स्तन|छाती के स्तन)\b/i, "breast anatomy", "anatomy:breast"],
   [/\b(penis|penile|लिंग)\b/i, "penile anatomy", "anatomy:penile"],
   [/\b(testicle|testis|अंडकोष)\b/i, "testicular anatomy", "anatomy:testicular"],
   [/\b(prostate|प्रोस्टेट)\b/i, "prostate anatomy", "anatomy:prostate"],
@@ -92,7 +111,40 @@ function polarityFor(text: string): FactPolarity {
 }
 
 function fact(kind: FactKind, value: string, conceptKey: string, evidence: string, polarity: FactPolarity, confidence: SemanticFact["confidence"] = "MEDIUM"): SemanticFact {
-  return { kind, value, conceptKey, evidence, polarity, confidence, source: "PATIENT" };
+  return { kind, value, conceptKey, normalizedConcept: conceptKey, evidence, polarity, confidence, source: "PATIENT" };
+}
+
+const temporalPatterns: Array<[RegExp, string]> = [
+  [/\b(since yesterday|kal se|yesterday se)\b/i, "temporal:since_yesterday"],
+  [/\b(?:(?:for|pichle|last)\s+)?([0-9]+)\s*(day|days|din|week|weeks|hafte|month|months|mahine)\s*(se|ago|pehle)?\b/i, "temporal:duration"],
+  [/\b(every morning|har subah|daily|roz|baar baar|recurring|recurrent)\b/i, "temporal:recurring"],
+  [/\b(after eating|khane ke baad|during exercise|chalne par|mehnat par|before sleep|sone se pehle)\b/i, "trigger:context"],
+  [/\b(once last month|pichle mahine ek baar|ek baar hua tha)\b/i, "temporal:previous_episode"],
+];
+
+function splitProblems(text: string): string[] {
+  return text.split(/\s+(?:aur|also|and|with|saath mein|mujhe)\s+/i).map((item) => item.trim()).filter((item) => item.length > 3);
+}
+
+/** General-purpose, non-diagnostic representation used by both AI and fallback paths. */
+export function extractClinicalContext(text: string, source: FactSource = "PATIENT"): ClinicalContextRepresentation {
+  const value = text.trim();
+  const facts = extractSemanticFacts(value, source);
+  temporalPatterns.forEach(([pattern, conceptKey]) => {
+    const match = value.match(pattern);
+    if (match) facts.push({ ...fact(conceptKey.startsWith("trigger:") ? "TRIGGER_REFERENCE" : "TEMPORAL_REFERENCE", match[0], conceptKey, value, "PRESENT", "HIGH"), source });
+  });
+  const problems = splitProblems(value).map((statement, index) => ({
+    id: `problem-${index + 1}`,
+    statement,
+    facts: [
+      { ...fact("PROBLEM_REFERENCE", statement, `problem:${index + 1}`, statement, polarityFor(statement), "MEDIUM"), source },
+      ...extractSemanticFacts(statement, source),
+    ],
+    status: /maybe|shayad|possibly|ho sakta/i.test(statement) ? "UNCERTAIN" as const : "ACTIVE" as const,
+  }));
+  if (!problems.length && value) problems.push({ id: "problem-1", statement: value, facts, status: "ACTIVE" });
+  return { problems, facts, temporalFacts: facts.filter((item) => item.kind === "TEMPORAL_REFERENCE" || item.kind === "TRIGGER_REFERENCE"), safetyFlags: safetyFlags(value) };
 }
 
 /** Extract only concepts that can change consistency, safety, or question choice. */
@@ -105,6 +157,7 @@ export function extractSemanticFacts(text: string, source: FactSource = "PATIENT
   locationPatterns.forEach(([pattern, label, key]) => { if (pattern.test(value)) result.push(fact("BODY_LOCATION", label, key, value, polarity)); });
   symptomPatterns.forEach(([pattern, label, key]) => { if (pattern.test(value)) result.push(fact(key === "symptom:menstrual" ? "REPRODUCTIVE_CLAIM" : "SYMPTOM", label, key, value, polarity, "HIGH")); });
   if (/\b(1\s*(to|-|से)\s*10|[0-9]+\s*(\/10|out of 10)|mild|moderate|severe|bahut tez|बहुत तेज)\b/i.test(value)) result.push(fact("SYMPTOM_CHARACTERISTIC", "severity described", "character:severity", value, polarity));
+  if (/\b(patient|mujhe|mere|meri)\b.*\b(infection|cancer|diabetes|migraine|asthma|problem|bimari)\b/i.test(value)) result.push(fact("DIAGNOSIS_CLAIM", "patient-reported diagnosis", "diagnosis:patient_reported", value, polarity, "MEDIUM"));
   if (/\b(antibiotic|antibiotics|medicine|medicines|medication|dawa|दवा|tablet|capsule|syrup)\b/i.test(value)) result.push(fact("MEDICATION_CLAIM", polarity === "DENIED" ? "no current medication" : "medication use", "history:medication", value, polarity, "HIGH"));
   if (/\b(diabetes|bp|blood pressure|asthma|allergy|allergic|मधुमेह|एलर्जी)\b/i.test(value)) result.push(fact("DIAGNOSIS_CLAIM", "medical condition or allergy mentioned", "history:diagnosis", value, polarity));
   if (/\b(doctor|treatment|treated|operation|surgery|prescription|antibiotic|antibiotics|dawa li|medicine li|ilaaj li|doctor ko dikhaya|इलाज|डॉक्टर)\b/i.test(value)) result.push(fact("TREATMENT_CLAIM", "prior consultation or treatment mentioned", "history:treatment", value, polarity));
@@ -112,7 +165,12 @@ export function extractSemanticFacts(text: string, source: FactSource = "PATIENT
   return result.map((item) => ({ ...item, source }));
 }
 
-function hasSex(sex: string | undefined, value: string) { return new RegExp(`\\b${value}\\b`, "i").test(sex ?? ""); }
+function hasSex(sex: string | undefined, value: string) {
+  const normalized = (sex ?? "").trim().toLowerCase();
+  if (value === "man") return /^(man|male|पुरुष|आदमी)$/.test(normalized);
+  if (value === "woman") return /^(woman|female|महिला|औरत)$/.test(normalized);
+  return normalized === value.toLowerCase();
+}
 
 function safetyFlags(text: string): SafetyFlag[] {
   const flags: SafetyFlag[] = [];
@@ -140,14 +198,15 @@ function contradictionQuestion(contradiction: ContextContradiction, facts: Seman
 /** General cross-turn consistency check; it deliberately does not diagnose. */
 export function assessAppointmentContext(context: AppointmentContext): ContextAssessment {
   const latest = context.latestAnswer ?? context.complaint ?? "";
-  const currentFacts = extractSemanticFacts(latest);
+  const representation = extractClinicalContext(latest);
+  const currentFacts = representation.facts;
   const earlierFacts = uniqueFacts([
     ...(context.semanticFacts ?? []),
     ...(context.previousAnswers ?? []).flatMap((answer) => extractSemanticFacts(answer)),
     ...extractSemanticFacts(context.previousPatientContext ?? "", "PREVIOUS_APPOINTMENT"),
   ]);
   const flags = safetyFlags([latest, context.complaint ?? ""].join(" "));
-  if (flags.length) return { status: "SAFETY_CONCERN", needsClarification: false, explanation: "A safety-relevant symptom was reported and must be reviewed before routine questioning.", question: "Yeh symptom safety ke liye important ho sakta hai. Kripya batayein: abhi saans ki dikkat, behoshi, bahut tez dard ya zyada bleeding to nahi hai? Agar hai, to turant emergency medical help lein.", facts: currentFacts, contradictions: [], safetyFlags: flags, reasonCodes: ["SAFETY_GATE"] };
+  if (flags.length) return { status: "SAFETY_CONCERN", needsClarification: false, explanation: "A safety-relevant symptom was reported and must be reviewed before routine questioning.", question: "Yeh symptom safety ke liye important ho sakta hai. Kripya batayein: abhi saans ki dikkat, behoshi, bahut tez dard ya zyada bleeding to nahi hai? Agar hai, to turant emergency medical help lein.", facts: currentFacts, contradictions: [], safetyFlags: flags, reasonCodes: ["SAFETY_GATE"], representation: { ...representation, safetyFlags: flags } };
 
   const contradictions: ContextContradiction[] = [];
   if (hasSex(context.sex, "man")) {
@@ -164,8 +223,8 @@ export function assessAppointmentContext(context: AppointmentContext): ContextAs
   const currentSide = currentFacts.find((item) => item.conceptKey === "site:left" || item.conceptKey === "site:right");
   const previousSide = earlierFacts.find((item) => item.conceptKey === "site:left" || item.conceptKey === "site:right");
   if (currentSide && previousSide && currentSide.conceptKey !== previousSide.conceptKey) contradictions.push({ code: "CHANGED_BODY_SITE", current: currentSide.value, previous: previousSide.value, explanation: "The reported side/location changed and needs confirmation rather than being silently overwritten.", confidence: "MEDIUM" });
-  if (contradictions.length) return { status: "NEEDS_CLARIFICATION", needsClarification: true, explanation: contradictions[0].explanation, question: contradictionQuestion(contradictions[0], currentFacts), facts: currentFacts, contradictions, safetyFlags: [], reasonCodes: contradictions.map((item) => item.code) };
-  return { status: "CONSISTENT", needsClarification: false, explanation: "No material cross-turn contradiction was found by deterministic context checks.", question: "", facts: currentFacts, contradictions: [], safetyFlags: [], reasonCodes: ["CONTEXT_CONSISTENT"] };
+  if (contradictions.length) return { status: "NEEDS_CLARIFICATION", needsClarification: true, explanation: contradictions[0].explanation, question: contradictionQuestion(contradictions[0], currentFacts), facts: currentFacts, contradictions, safetyFlags: [], reasonCodes: contradictions.map((item) => item.code), representation };
+  return { status: "CONSISTENT", needsClarification: false, explanation: "No material cross-turn contradiction was found by deterministic context checks.", question: "", facts: currentFacts, contradictions: [], safetyFlags: [], reasonCodes: ["CONTEXT_CONSISTENT"], representation };
 }
 
 /** A correction is accepted only when the patient explicitly states it. */

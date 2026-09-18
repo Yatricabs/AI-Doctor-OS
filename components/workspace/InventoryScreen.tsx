@@ -5,7 +5,7 @@ import { AlertTriangle, Loader2, Package, Pencil, Plus, PackagePlus, Sparkles, T
 import { apiGet, apiSend } from "./api";
 import { formatINR } from "@/lib/format";
 
-type Category = "medicine" | "test" | "scan";
+type Category = "medicine" | "test" | "scan" | "procedure";
 type Item = {
   id: string;
   name: string;
@@ -24,6 +24,7 @@ const CATS: { key: Category | "all"; label: string }[] = [
   { key: "medicine", label: "Medicines" },
   { key: "test", label: "Tests" },
   { key: "scan", label: "Scans" },
+  { key: "procedure", label: "Procedures" },
 ];
 
 const EMPTY = { name: "", category: "medicine" as Category, unit: "", price: "", purchasePrice: "", stockQty: "", lowStockThreshold: "10" };
@@ -134,7 +135,7 @@ export default function InventoryScreen() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#173f3c]">Inventory</h1>
-          <p className="mt-1 text-sm text-[#78908a]">Medicines, tests and scans with prices (INR) and stock.</p>
+          <p className="mt-1 text-sm text-[#78908a]">Medicines, tests, scans and procedures with prices (INR) and stock.</p>
         </div>
         <div className="flex items-center gap-2">
           {items.length === 0 && (
@@ -229,6 +230,7 @@ export default function InventoryScreen() {
                     <option value="medicine">Medicine</option>
                     <option value="test">Test</option>
                     <option value="scan">Scan</option>
+                    <option value="procedure">Procedure</option>
                   </select>
                 </Field>
               )}

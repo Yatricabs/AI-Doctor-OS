@@ -4,9 +4,9 @@ import { configureStore, createSlice, type PayloadAction } from "@reduxjs/toolki
  * The only client state shared by doctor-workspace screens. Server records and
  * workflow-local forms intentionally stay outside Redux (see docs/redux-state-audit.md).
  */
-export type WorkspaceNav = "Dashboard" | "Appointments" | "Patients" | "Inventory" | "Billing";
+export type WorkspaceNav = "Dashboard" | "Appointments" | "Patients" | "Reports & Documents" | "Inventory" | "Billing" | "Analytics" | "Settings";
 
-export const WORKSPACE_NAV: readonly WorkspaceNav[] = ["Dashboard", "Appointments", "Patients", "Inventory", "Billing"];
+export const WORKSPACE_NAV: readonly WorkspaceNav[] = ["Dashboard", "Appointments", "Patients", "Reports & Documents", "Inventory", "Billing", "Analytics", "Settings"];
 
 type WorkspaceState = {
   activeNav: WorkspaceNav;
