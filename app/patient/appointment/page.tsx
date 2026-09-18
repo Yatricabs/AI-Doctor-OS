@@ -10,7 +10,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CalendarCheck2, CheckCircle2, FileText, Loader2, Paperclip, Send, Stethoscope } from "lucide-react";
-import { aiChat, aiAnalyzeFile, aiChatStream, MODELS, puterUpload, PuterUnavailableError } from "@/lib/puterClient";
+import { MODELS } from "@/lib/puterClient";
+import { serverAiAnalyzeImage, serverAiChat, serverAiChatStream } from "@/lib/serverAiClient";
 import {
   buildAdaptiveQuestionMessages,
   buildPreVisitReportMessages,
@@ -39,7 +40,7 @@ import {
   type ClinicalPathway,
   type HistoryDimension,
 } from "@/lib/clinicalPathways";
-import PuterLoginGate from "@/components/PuterLoginGate";
+import { assessAppointmentContext } from "@/lib/appointmentContextConsistency";
 
 type Turn = { role: "assistant" | "user"; content: string };
 type Phase = "chat" | "finalizing" | "done";
@@ -67,20 +68,11 @@ function kindFromFile(name: string, mime: string): ReportKind {
   return "Lab report";
 }
 
-// Page: gate on a Puter (User-Pays) sign-in first, so AI is connected up front
-// and questions/research run seamlessly (no mid-flow popup). If AI can't load,
-// the gate lets the patient continue and the flow still works on base questions.
+// The appointment flow uses the server-side OpenAI boundary. The existing
+// Puter.js client remains available for compatibility and attachment vision,
+// but no Puter login is required for the conversational appointment flow.
 export default function AppointmentFlowPage() {
-  return (
-    <PuterLoginGate
-      title="Book an appointment"
-      description="Connect AI to book your appointment and let it prepare your details for the doctor. A sign-in window opens once, then it's remembered on this device. You can also continue without AI."
-      ctaLabel="Connect AI & start"
-      allowSkipAlways
-    >
-      <AppointmentFlow />
-    </PuterLoginGate>
-  );
+  return <AppointmentFlow />;
 }
 
 function AppointmentFlow() {
@@ -114,6 +106,7 @@ function AppointmentFlow() {
   const questionPlanRef = useRef("");      // research-informed plan of what to ask
   const researchRef = useRef("");          // cached web research (reused at finalize)
   const processingRef = useRef(false);     // hard lock to prevent double-submits
+  const clarificationRef = useRef(false); // complaint context must be clarified before duration
   const turnsRef = useRef<Turn[]>([]);     // mirror of `turns` for async save
   const pastVisitsRef = useRef("");        // AI context: summary of previous visits
   // Keep one resolved context for routing, adaptive coverage, snapshots, and
@@ -162,7 +155,7 @@ function AppointmentFlow() {
     try {
       // Race the AI against a timeout so a slow/absent AI never blocks the flow.
       const out = await Promise.race([
-        aiChat(
+        serverAiChat(
           [
             { role: "system", content: `You are a warm medical appointment assistant talking to a patient, one question at a time in ${langTxt}. Reword the given question into ONE short friendly question (max ~25 words). You may start with a 2-3 word acknowledgement of their last answer. Output ONLY the question. No lists, no diagnosis, no preamble.` },
             { role: "user", content: `${last ? `Patient's last answer: "${last}"\n` : ""}Question to ask: ${fallback}\nIntent: ${step.intent}` },
@@ -252,6 +245,26 @@ function AppointmentFlow() {
       setTurns((p) => [...p, { role: "user", content: answer }]);
       setInput(""); setOptions([]); setBusy(true); setError("");
 
+      // A clarification answer resolves the ambiguity without replacing the
+      // authoritative SEX or complaint answer, then resumes the script.
+      if (clarificationRef.current) {
+        clarificationRef.current = false;
+        const clarificationSteps = script();
+        let nextIndex = stepRef.current + 1;
+        while (clarificationSteps[nextIndex] && clarificationSteps[nextIndex].skip?.(answersRef.current)) nextIndex += 1;
+        stepRef.current = nextIndex;
+        if (clarificationSteps[nextIndex]) {
+          const q = await phrase(clarificationSteps[nextIndex], answer);
+          logQuestion(clarificationSteps[nextIndex].key, q);
+          setTurns((p) => [...p, { role: "assistant", content: q }]);
+          setOptions(clarificationSteps[nextIndex].options ?? []);
+          setBusy(false);
+          return;
+        }
+        await beginDeepPhase(answersRef.current);
+        return;
+      }
+
       // ── If we're in the dynamic AI deep-questioning phase, route the answer
       //    there instead of the fixed script. ──
       if (inDeepPhaseRef.current) {
@@ -272,6 +285,18 @@ function AppointmentFlow() {
       if (cur.key === "identity") setIsReturning(/before|visited|purana|pehle/i.test(answer));
       answersRef.current = next;
       setAnswers(next);
+
+      // This gate runs before the fixed complaint → duration transition.
+      // It never rewrites structured context; it pauses for clarification.
+      if (cur.key === "complaint") {
+        const assessment = assessAppointmentContext({ sex: next.sex, complaint: answer, previousAnswers: Object.values(next) });
+        if (assessment.needsClarification) {
+          clarificationRef.current = true;
+          setTurns((p) => [...p, { role: "assistant", content: assessment.question }]);
+          setBusy(false);
+          return;
+        }
+      }
 
       // As soon as we know the complaint: (1) match a curated clinical pathway
       // to frame safe, consistent questioning, and (2) research (in background)
@@ -354,7 +379,7 @@ function AppointmentFlow() {
   async function buildResearchPlan(a: Answers) {
     if (questionPlanRef.current) return;
     try {
-      const plan = await aiChat(
+      const plan = await serverAiChat(
         [{ role: "user", content: buildQuestionPlanPrompt(snapshotFrom(a)) }],
         { model: MODELS.research, maxTokens: 500 }
       );
@@ -382,7 +407,7 @@ function AppointmentFlow() {
     const mustContinue = !coverage.complete;
     try {
       const out = await Promise.race([
-        aiChat(
+        serverAiChat(
           [
             {
               role: "system",
@@ -577,7 +602,7 @@ function AppointmentFlow() {
     try {
       setFinalizeMsg("Researching your condition on the web…");
       const researchPrompt = buildResearchPrompt(snapshot);
-      research = await aiChatStream(
+      research = await serverAiChatStream(
         [{ role: "user", content: researchPrompt }],
         () => { },
         { model: MODELS.research, maxTokens: 900 }
@@ -590,7 +615,7 @@ function AppointmentFlow() {
     let report;
     try {
       setFinalizeMsg("Preparing your report for the doctor…");
-      const raw = await aiChat(buildPreVisitReportMessages(snapshot, research), { model: MODELS.reasoning, temperature: 0.2, maxTokens: 1200 });
+      const raw = await serverAiChat(buildPreVisitReportMessages(snapshot, research), { model: MODELS.reasoning, temperature: 0.2, maxTokens: 1200 });
       report = parsePreVisitReport(raw, research);
       void logAiTraining({ workflow: "pre_visit_report", patientId: pid, model: MODELS.reasoning, inputContext: snapshot, aiOutput: raw, outputType: "json", source: "patient_appointment" });
     } catch {
@@ -702,17 +727,16 @@ function AppointmentFlow() {
       } catch { /* continue to analysis anyway */ }
     }
 
-    // Browser vision: GPT + Gemini.
+    // Image vision uses the server-side OpenAI boundary. PDFs are persisted for
+    // the doctor but are not sent through the old Puter browser integration.
     try {
-      const puterPath = await puterUpload(file);
       const prompt = buildReportVisionPrompt(kind);
-      const [g, m] = await Promise.allSettled([
-        aiAnalyzeFile(puterPath, prompt, { model: MODELS.visionGpt }),
-        aiAnalyzeFile(puterPath, prompt, { model: MODELS.visionGemini }),
-      ]);
+      const imageResult = file.type.startsWith("image/")
+        ? await serverAiAnalyzeImage(file, prompt)
+        : "";
       const f = mergeFindings(
-        g.status === "fulfilled" ? parseReportFindings(g.value) : null,
-        m.status === "fulfilled" ? parseReportFindings(m.value) : null,
+        imageResult ? parseReportFindings(imageResult) : null,
+        null,
       );
       if (f) {
         setFindings((prev) => [...prev, f]);
@@ -725,16 +749,14 @@ function AppointmentFlow() {
         setTurns((p) => [...p, { role: "assistant", content: line }]);
         // Adaptive follow-up.
         try {
-          const adaptive = await aiChat(buildAdaptiveQuestionMessages(f, lang), { model: MODELS.fast, temperature: 0.4, maxTokens: 80 });
+          const adaptive = await serverAiChat(buildAdaptiveQuestionMessages(f, lang), { model: MODELS.fast, temperature: 0.4, maxTokens: 80 });
           if (adaptive.trim()) setTurns((p) => [...p, { role: "assistant", content: adaptive.trim() }]);
         } catch { /* ignore */ }
       } else {
         setTurns((p) => [...p, { role: "assistant", content: lang === "english" ? "Saved for the doctor. I couldn't read it clearly — the doctor will review the original." : "Doctor ke liye save ho gaya. Main ise saaf padh nahi paaya — doctor original dekh lenge." }]);
       }
-    } catch (e) {
-      const msg = e instanceof PuterUnavailableError
-        ? (lang === "english" ? "Saved for the doctor. AI reading is unavailable right now." : "Doctor ke liye save ho gaya. AI reading abhi uplabdh nahi hai.")
-        : (lang === "english" ? "Saved for the doctor." : "Doctor ke liye save ho gaya.");
+    } catch {
+      const msg = lang === "english" ? "Saved for the doctor. AI reading is unavailable right now." : "Doctor ke liye save ho gaya. AI reading abhi uplabdh nahi hai.";
       setTurns((p) => [...p, { role: "assistant", content: msg }]);
     } finally {
       setAnalyzing(false);
