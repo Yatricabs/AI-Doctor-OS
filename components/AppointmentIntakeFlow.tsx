@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Paperclip, Pencil, Send, X } from "lucide-react";
 import { assessAppointmentAnswer, nextAppointmentQuestion, extractSemanticFacts, explicitSexCorrection, type QaTurn, type SemanticFact } from "@/lib/appointmentIntakeReasoning";
+import { extractClinicalContext } from "@/lib/appointmentContextConsistency";
+import { retrieveMedicalKnowledge } from "@/lib/medicalKnowledgeClient";
 import { recordIntakeDecision } from "@/lib/appointmentIntakeDebug";
 import { resolveClinicalContext } from "@/lib/clinicalPathways";
 import { serverAiAnalyzeImage } from "@/lib/serverAiClient";
@@ -64,6 +66,15 @@ export default function AppointmentIntakeFlow() {
 
   async function askClinical(contextAnswers: Answers, contextLog: QaTurn[], contextFacts = semanticFacts) {
     if (contextAnswers.priorReports) { await finish(contextAnswers, contextLog); return; }
+    const clinicalText = [contextAnswers.chiefComplaint, ...contextLog.map((entry) => entry.answer)].filter(Boolean).join(". ");
+    const representation = extractClinicalContext(clinicalText);
+    const retrieval = await retrieveMedicalKnowledge({
+      representation,
+      semanticFacts: contextFacts,
+      patientContext: { sex: contextAnswers.sex, ageGroup: contextAnswers.age && Number.isFinite(Number(contextAnswers.age)) ? `${Math.floor(Number(contextAnswers.age) / 10) * 10}s` : undefined },
+      safetyStatus: "CLEAR",
+      coveredInformation: contextLog.map((entry) => entry.key),
+    });
     const next = await nextAppointmentQuestion({
       answers: contextAnswers,
       qaLog: contextLog,
@@ -72,6 +83,8 @@ export default function AppointmentIntakeFlow() {
       documents: documents.map(({ name, type, size }) => ({ name, type, size, source: "PATIENT" })),
       clinicalPathway: contextAnswers.chiefComplaint ? resolveClinicalContext(contextAnswers.chiefComplaint, contextAnswers.duration ?? "") : null,
       previousAnswers: turns.filter((turn) => turn.role === "patient").map((turn) => turn.text),
+      evidenceContext: retrieval?.evidence ?? null,
+      retrievalDecision: retrieval?.decision ?? null,
     }, contextLog.map((entry) => entry.key));
     recordIntakeDecision(sessionId.current, {
       selectedAction: next.action,
@@ -81,6 +94,11 @@ export default function AppointmentIntakeFlow() {
       coveredInformation: contextLog.map((entry) => entry.key),
       source: "validated-next-action",
       step: step,
+      retrievalDecision: retrieval?.decision.decision,
+      retrievalProvider: retrieval?.evidence?.provider,
+      retrievalResultCount: retrieval?.evidence?.sources.length,
+      retrievalCacheHit: retrieval?.evidence?.cacheHit,
+      retrievalLatencyMs: retrieval?.latencyMs,
     });
     bot(next.question, next.key);
     setStep(next.key);

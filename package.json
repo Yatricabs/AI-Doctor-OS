@@ -12,7 +12,8 @@
     "test:clinical-report-renderer:semantic": "node scripts/clinical-report-renderer-semantic-state-tests.mjs",
     "test:appointment-adaptive-interview": "node --experimental-strip-types scripts/appointment-adaptive-interview-tests.mjs",
     "test:appointment-intake-context": "node --experimental-strip-types scripts/appointment-intake-context-tests.mjs",
-    "test:appointment-intake-browser": "node scripts/appointment-intake-browser-tests.mjs"
+    "test:appointment-intake-browser": "node scripts/appointment-intake-browser-tests.mjs",
+    "test:medical-knowledge-retrieval": "node --experimental-strip-types scripts/medical-knowledge-retrieval-tests.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.2.7",

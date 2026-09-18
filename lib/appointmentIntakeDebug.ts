@@ -12,6 +12,11 @@ export type IntakeDebugDetails = {
   confidence?: string;
   source?: string;
   step?: string;
+  retrievalDecision?: string;
+  retrievalProvider?: string;
+  retrievalResultCount?: number;
+  retrievalCacheHit?: boolean;
+  retrievalLatencyMs?: number;
 };
 
 export function recordIntakeDecision(sessionId: string, details: IntakeDebugDetails) {

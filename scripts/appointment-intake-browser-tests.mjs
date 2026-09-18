@@ -60,6 +60,33 @@ async function runCase(name, sex, complaint, expected) {
   return { name, status: "passed" };
 }
 
+async function runRetrievalCase(name, complaint, expectedDecision, { fail = false } = {}) {
+  const page = await browser.newPage();
+  page.setDefaultTimeout(8000);
+  const requests = [];
+  await installDeterministicAi(page);
+  await page.route("**/api/medical-knowledge/retrieve", async (route) => {
+    const body = JSON.parse(route.request().postData() || "{}");
+    requests.push(body);
+    if (fail) { await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "provider unavailable" }) }); return; }
+    const isSimple = /headache/i.test(complaint);
+    const decision = isSimple ? "NO_RETRIEVAL_NEEDED" : expectedDecision;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      data: { decision: { decision, reasonCodes: [isSimple ? "CONTEXT_ALREADY_SUFFICIENT" : "TEST_CONTEXT"], confidence: "HIGH" }, latencyMs: 4,
+        evidence: isSimple ? null : { contextKey: "browser-test", decision, provider: "browser-mock-trusted", relevantConcepts: ["context only"], potentiallyRelevantConsiderations: ["evidence must not become a patient fact"], missingInformationSuggestedByEvidence: ["relevant history"], sources: [{ id: "s1", title: "Trusted test source", source: "who.int", url: "https://www.who.int/", sourceType: "GUIDELINE", retrievedAt: new Date().toISOString(), relevance: "HIGH", summary: "Browser fixture" }], retrievedAt: new Date().toISOString(), cacheHit: false } }
+    }) });
+  });
+  await reachComplaint(page, "Man");
+  await send(page, complaint);
+  await page.waitForTimeout(500);
+  const text = await page.locator("main").nth(1).innerText();
+  assert.ok(requests.length >= 1, `${name}: retrieval decision endpoint was not called`);
+  assert.match(text, /teevrata|kab se|lakshan|doctor|prescription/i, `${name}: interview did not continue safely`);
+  assert.doesNotMatch(text, /context only|evidence must not become/i, `${name}: evidence leaked into patient facts/UI`);
+  await page.close();
+  return { name, status: "passed", retrievalRequests: requests.length, expectedDecision, failureFallback: fail };
+}
+
 async function runExplicitCorrection() {
   const page = await browser.newPage();
   page.setDefaultTimeout(8000);
@@ -99,6 +126,10 @@ results.push(await runCase(
   "Mere vagina se white discharge ho raha hai",
   { mustContain: "sex mein.*Man|vaginal|reproductive", mustNotContain: "Yeh takleef aapko kab se hai" },
 ));
+results.push(await runRetrievalCase("Phase 3B A: simple headache avoids unnecessary evidence", "Mujhe 5 din se headache hai", "NO_RETRIEVAL_NEEDED"));
+results.push(await runRetrievalCase("Phase 3B C: medicine-associated itching creates retrieval context", "Doctor ne mujhe ye medicine di thi aur uske baad itching ho rahi hai", "RETRIEVAL_REQUIRED_FOR_CONTEXT"));
+results.push(await runRetrievalCase("Phase 3B D: unusual term remains retrievable", "Mujhe ankylosing spondylitis hai", "RETRIEVAL_REQUIRED_FOR_CONTEXT"));
+results.push(await runRetrievalCase("Phase 3B provider failure: interview continues", "Mujhe ankylosing spondylitis hai", "RETRIEVAL_REQUIRED_FOR_CONTEXT", { fail: true }));
 results.push(await runExplicitCorrection());
 results.push(await runNegativeClarification());
 results.push(await runCase(
