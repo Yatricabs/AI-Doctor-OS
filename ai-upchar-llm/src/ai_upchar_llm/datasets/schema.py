@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-TaskType = Literal["clinical_knowledge", "semantic_extraction", "patient_context_reasoning", "next_best_question", "safety_prioritization", "clarification", "multiple_problem_reasoning", "medication_adverse_effect", "patient_reported_diagnosis", "clinical_summarization", "evidence_interpretation", "preference"]
+TaskType = Literal["clinical_knowledge", "semantic_extraction", "patient_context_reasoning", "temporal_reasoning", "next_best_question", "safety_prioritization", "clarification", "multiple_problem_reasoning", "medication_adverse_effect", "patient_reported_diagnosis", "clinical_summarization", "evidence_interpretation", "preference"]
 
 
 @dataclass(frozen=True)
