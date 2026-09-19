@@ -19,8 +19,10 @@ CONTRACT_REQUIRED_KEYS = ("semantic_interpretation", "recommended_action")
 # still judges the raw generation strictly.
 INFERENCE_USER_MESSAGE = (
     "Mujhe 5 din se headache hai. "
-    "Return ONLY the AI UPCHAR clinical reasoning JSON object with no explanatory "
-    "prose and no markdown code fences."
+    "Return ONLY one JSON object using exactly the AI UPCHAR clinical reasoning "
+    "schema with these top-level keys: semantic_interpretation, recommended_action, "
+    "next_best_question, missing_information, clinical_considerations, confidence. "
+    "Do not add or rename keys. No explanatory prose and no markdown code fences."
 )
 INFERENCE_MAX_NEW_TOKENS = 512
 

@@ -58,6 +58,24 @@ def test_inference_message_is_json_only_instruction():
     assert "no markdown" in lowered
 
 
+def test_inference_message_names_required_contract_keys():
+    # The prompt must explicitly name the required contract keys so a weakly
+    # trained model is steered toward the AI UPCHAR schema. The evaluator is
+    # unchanged; this only makes the request specific.
+    for key in CONTRACT_REQUIRED_KEYS:
+        assert key in INFERENCE_USER_MESSAGE, f"required key missing from prompt: {key}"
+    # The prompt names the complete current SFT top-level schema (six keys).
+    for key in (
+        "semantic_interpretation",
+        "recommended_action",
+        "next_best_question",
+        "missing_information",
+        "clinical_considerations",
+        "confidence",
+    ):
+        assert key in INFERENCE_USER_MESSAGE, f"SFT schema key missing from prompt: {key}"
+
+
 def test_generation_budget_is_increased():
     assert INFERENCE_MAX_NEW_TOKENS == 512
 
