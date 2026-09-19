@@ -1,0 +1,5 @@
+extends: base.yaml
+model:
+  name: Qwen/Qwen3-8B-Base
+training:
+  output_dir: artifacts/ai-upchar-med-qwen3-8b-v0.1.0
