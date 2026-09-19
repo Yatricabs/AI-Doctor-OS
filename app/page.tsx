@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { useDispatch, useSelector } from 'react-redux'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import type { AppDispatch, RootState } from '@/lib/store'
@@ -195,9 +196,8 @@ function Header() {
               key={n}
               href={`#${n.toLowerCase().replaceAll(' ', '-')}`}
               onClick={() => { dispatch(setActiveSection(n)); setMobileOpen(false) }}
-              className={`relative text-[16px] font-medium transition-colors hover:text-[var(--color-brand)] ${
-                i === 0 ? 'text-[var(--color-ink)]' : 'text-[var(--color-ink-soft)]'
-              }`}
+              className={`relative text-[16px] font-medium transition-colors hover:text-[var(--color-brand)] ${i === 0 ? 'text-[var(--color-ink)]' : 'text-[var(--color-ink-soft)]'
+                }`}
             >
               {n}
               {i === 0 && (
@@ -245,11 +245,10 @@ function ChatBubble({ from, children }: { from: 'ai' | 'user'; children: ReactNo
   return (
     <div className={`flex ${isAi ? 'justify-start' : 'justify-end'}`}>
       <div
-        className={`max-w-[80%] rounded-2xl px-3 py-2 text-[12.7px] leading-snug ${
-          isAi
-            ? 'rounded-tl-sm bg-[var(--color-sky)] text-[var(--color-ink)]'
-            : 'rounded-tr-sm bg-[var(--color-brand)] text-white'
-        }`}
+        className={`max-w-[80%] rounded-2xl px-3 py-2 text-[12.7px] leading-snug ${isAi
+          ? 'rounded-tl-sm bg-[var(--color-sky)] text-[var(--color-ink)]'
+          : 'rounded-tr-sm bg-[var(--color-brand)] text-white'
+          }`}
       >
         {children}
       </div>
@@ -375,19 +374,25 @@ function Hero() {
           {/* Desktop / tablet collage — built from scratch */}
           <div className="relative mx-auto hidden aspect-[1.42/1] w-full md:block">
             {/* Patient photo */}
-            <img
-              src={IMG.patientHero}
-              alt="Patient chatting with AI UPCHAR on her phone"
-              className="absolute bottom-0 left-0 z-20 h-[82%] w-[30%] rounded-[1.75rem] bg-[var(--color-sky)] object-cover object-top shadow-xl"
-              loading="lazy"
-            />
+            <div className="absolute bottom-0 left-0 z-20 h-[82%] w-[30%] overflow-hidden rounded-[1.75rem] bg-[var(--color-sky)] shadow-xl">
+              <Image
+                src={IMG.patientHero}
+                alt="Patient chatting with AI UPCHAR on her phone"
+                fill
+                sizes="30vw"
+                className="object-cover object-top"
+              />
+            </div>
             {/* Doctor photo */}
-            <img
-              src={IMG.doctorLaptop}
-              alt="Doctor reviewing an AI pre-visit clinical brief on a laptop"
-              className="absolute bottom-[6%] right-0 z-10 h-[62%] w-[25%] rounded-2xl bg-[var(--color-sky)] object-cover shadow-xl"
-              loading="lazy"
-            />
+            <div className="absolute bottom-[6%] right-0 z-10 h-[62%] w-[25%] overflow-hidden rounded-2xl bg-[var(--color-sky)] shadow-xl">
+              <Image
+                src={IMG.doctorLaptop}
+                alt="Doctor reviewing an AI pre-visit clinical brief on a laptop"
+                fill
+                sizes="25vw"
+                className="object-cover"
+              />
+            </div>
 
             {/* Phone — large, full conversation inside */}
             <div className="absolute left-[22%] top-[1%] z-10 flex h-[97%] w-[28%] flex-col overflow-hidden rounded-[1.8rem] border-[5px] border-[var(--color-ink)] bg-white shadow-2xl">
@@ -464,18 +469,24 @@ function Hero() {
               Doctor gets complete context before the consultation.
             </Hand>
             <div className="grid grid-cols-2 gap-3">
-              <img
-                src={IMG.patientHero}
-                alt="Patient chatting with AI UPCHAR on her phone"
-                className="h-44 w-full rounded-2xl bg-[var(--color-sky)] object-cover object-top"
-                loading="lazy"
-              />
-              <img
-                src={IMG.doctorLaptop}
-                alt="Doctor reviewing an AI pre-visit clinical brief on a laptop"
-                className="h-44 w-full rounded-2xl bg-[var(--color-sky)] object-cover"
-                loading="lazy"
-              />
+              <div className="relative h-44 w-full overflow-hidden rounded-2xl bg-[var(--color-sky)]">
+                <Image
+                  src={IMG.patientHero}
+                  alt="Patient chatting with AI UPCHAR on her phone"
+                  fill
+                  sizes="50vw"
+                  className="object-cover object-top"
+                />
+              </div>
+              <div className="relative h-44 w-full overflow-hidden rounded-2xl bg-[var(--color-sky)]">
+                <Image
+                  src={IMG.doctorLaptop}
+                  alt="Doctor reviewing an AI pre-visit clinical brief on a laptop"
+                  fill
+                  sizes="50vw"
+                  className="object-cover"
+                />
+              </div>
             </div>
             <div className="rounded-2xl border border-[var(--color-sky-line)] bg-white p-3 shadow-md">
               <div className="flex flex-col gap-2">
@@ -648,11 +659,10 @@ function HowItWorks() {
             <div key={title} className="flex shrink-0 items-start lg:shrink lg:flex-1">
               <div className="flex w-[112px] flex-col items-center text-center lg:w-full">
                 <span
-                  className={`grid h-16 w-16 place-items-center rounded-full ${
-                    teal
-                      ? 'bg-[var(--color-mint)] text-[var(--color-teal-deep)]'
-                      : 'bg-[var(--color-sky)] text-[var(--color-brand)]'
-                  }`}
+                  className={`grid h-16 w-16 place-items-center rounded-full ${teal
+                    ? 'bg-[var(--color-mint)] text-[var(--color-teal-deep)]'
+                    : 'bg-[var(--color-sky)] text-[var(--color-brand)]'
+                    }`}
                 >
                   <Icon width={30} height={30} strokeWidth={2.4} />
                 </span>
@@ -717,12 +727,15 @@ function AudienceSection() {
         {/* For Patients */}
         <div className="flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--color-sky)] to-white shadow-sm ring-1 ring-[var(--color-sky-line)]/70">
           <div className="grid flex-1 grid-cols-[30%_1fr]">
-            <img
-              src={IMG.patientSection}
-              alt="Patient chatting with AI UPCHAR on her phone"
-              className="h-full w-full bg-[var(--color-rose)] object-cover object-top"
-              loading="lazy"
-            />
+            <div className="relative h-full w-full overflow-hidden bg-[var(--color-rose)]">
+              <Image
+                src={IMG.patientSection}
+                alt="Patient chatting with AI UPCHAR on her phone"
+                fill
+                sizes="(min-width: 1024px) 10vw, 30vw"
+                className="object-cover object-top"
+              />
+            </div>
             <div className="p-4">
               <h3 className="font-display text-[20.5px] font-bold text-[var(--color-ink)]">For Patients</h3>
               <ul className="mt-2.5 flex flex-col gap-1.5">
@@ -741,12 +754,15 @@ function AudienceSection() {
         {/* For Doctors */}
         <div className="flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--color-sky)] to-white shadow-sm ring-1 ring-[var(--color-sky-line)]/70">
           <div className="grid flex-1 grid-cols-[30%_1fr]">
-            <img
-              src={IMG.doctorPortrait}
-              alt="Doctor using AI UPCHAR clinical briefs"
-              className="h-full w-full bg-[var(--color-sky)] object-cover object-top"
-              loading="lazy"
-            />
+            <div className="relative h-full w-full overflow-hidden bg-[var(--color-sky)]">
+              <Image
+                src={IMG.doctorPortrait}
+                alt="Doctor using AI UPCHAR clinical briefs"
+                fill
+                sizes="(min-width: 1024px) 10vw, 30vw"
+                className="object-cover object-top"
+              />
+            </div>
             <div className="p-4">
               <h3 className="font-display text-[20.5px] font-bold text-[var(--color-ink)]">For Doctors</h3>
               <ul className="mt-2.5 flex flex-col gap-1.5">
@@ -839,18 +855,16 @@ function DetailCards() {
                 return (
                   <div key={i} className={`flex items-end gap-2 ${isAi ? '' : 'flex-row-reverse'}`}>
                     <span
-                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-white ${
-                        isAi ? 'bg-[var(--color-teal)]' : 'bg-[var(--color-brand)]'
-                      }`}
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-white ${isAi ? 'bg-[var(--color-teal)]' : 'bg-[var(--color-brand)]'
+                        }`}
                     >
                       {isAi ? <Brain width={16} height={16} /> : <UserRound width={16} height={16} />}
                     </span>
                     <span
-                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[14.9px] leading-snug ${
-                        isAi
-                          ? 'rounded-bl-sm bg-[var(--color-mint)] text-[var(--color-ink)]'
-                          : 'rounded-br-sm bg-[var(--color-sky)] text-[var(--color-ink)]'
-                      }`}
+                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[14.9px] leading-snug ${isAi
+                        ? 'rounded-bl-sm bg-[var(--color-mint)] text-[var(--color-ink)]'
+                        : 'rounded-br-sm bg-[var(--color-sky)] text-[var(--color-ink)]'
+                        }`}
                     >
                       {c.text}
                     </span>
@@ -920,11 +934,12 @@ function CtaBand() {
   const dispatch = useDispatch<AppDispatch>()
   return (
     <section className="relative overflow-hidden">
-      <img
+      <Image
         src={IMG.familyMountain}
         alt="A family looking out over mountains at sunset"
-        className="absolute inset-0 h-full w-full bg-[var(--color-ink)] object-cover"
-        loading="lazy"
+        fill
+        sizes="100vw"
+        className="bg-[var(--color-ink)] object-cover"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-ink)]/85 via-[var(--color-ink)]/55 to-[var(--color-brand)]/40" />
       <div className="relative mx-auto flex max-w-none flex-col items-start gap-6 px-5 py-8 md:flex-row md:items-center md:justify-between">
