@@ -11,6 +11,30 @@ from pathlib import Path
 # is used ONLY to judge Gate B; it never rewrites or repairs model output.
 CONTRACT_REQUIRED_KEYS = ("semantic_interpretation", "recommended_action")
 
+# Behavioral validation is only fair when inference is formatted the same way
+# training was. The SFT dataset is conversational ([{"role": "user"}, {"role":
+# "assistant"}]) and SFTTrainer applies the model's chat template, so inference
+# must build the same chat-formatted prompt and prime the assistant turn. The
+# instruction asks for the contract JSON only; the evaluator is unchanged and
+# still judges the raw generation strictly.
+INFERENCE_USER_MESSAGE = (
+    "Mujhe 5 din se headache hai. "
+    "Return ONLY the AI UPCHAR clinical reasoning JSON object with no explanatory "
+    "prose and no markdown code fences."
+)
+INFERENCE_MAX_NEW_TOKENS = 512
+
+
+def build_inference_prompt(tokenizer) -> str:
+    """Format the inference prompt with the tokenizer's chat template so it
+    matches how SFTTrainer formatted the conversational training data, and prime
+    the assistant turn with add_generation_prompt=True. This does not alter or
+    relax Gate B; it only makes the generation format consistent with training."""
+    messages = [{"role": "user", "content": INFERENCE_USER_MESSAGE}]
+    return tokenizer.apply_chat_template(
+        messages, add_generation_prompt=True, tokenize=False
+    )
+
 
 def _strip_json_markdown_fence(text: str) -> str:
     """Remove a single surrounding ```json ... ``` (or ``` ... ```) fence if the
@@ -126,9 +150,9 @@ def run_real_qlora_validation(config: dict) -> dict:
     base = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=os.environ.get("TRANSFORMERS_CACHE"), quantization_config=quantization, device_map="auto")
     reloaded = PeftModel.from_pretrained(base, output_dir)
     gate_a["adapter_reloaded"] = True
-    prompt = "Mujhe 5 din se headache hai. Return the AI UPCHAR clinical reasoning JSON contract."
+    prompt = build_inference_prompt(tokenizer)
     inputs = tokenizer(prompt, return_tensors="pt").to(reloaded.device)
-    generated = tokenizer.decode(reloaded.generate(**inputs, max_new_tokens=128, do_sample=False)[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+    generated = tokenizer.decode(reloaded.generate(**inputs, max_new_tokens=INFERENCE_MAX_NEW_TOKENS, do_sample=False)[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
     gate_a["inference_executed"] = bool(generated)
 
     gate_a["status"] = "SUCCESS" if (
