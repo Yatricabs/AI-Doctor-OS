@@ -181,7 +181,14 @@ function SectionEyebrow({ children }: { children: ReactNode }) {
 }
 
 /* ---------------------------------- Header --------------------------------- */
-const NAV = ['Home', 'For Patients', 'For Doctors', 'How It Works', 'Features', 'About']
+const NAV = [
+  { label: 'Home', target: 'home' },
+  { label: 'For Patients', target: 'for-patients' },
+  { label: 'For Doctors', target: 'for-doctors' },
+  { label: 'How It Works', target: 'how-it-works' },
+  { label: 'Features', target: 'features' },
+  { label: 'About', target: 'about' },
+]
 
 function Header() {
   const dispatch = useDispatch<AppDispatch>()
@@ -191,15 +198,15 @@ function Header() {
       <div className="mx-auto flex max-w-none items-center justify-between gap-4 px-5 py-3">
         <Logo />
         <nav className="hidden items-center gap-7 lg:flex">
-          {NAV.map((n, i) => (
+          {NAV.map(({ label, target }, i) => (
             <a
-              key={n}
-              href={`#${n.toLowerCase().replaceAll(' ', '-')}`}
-              onClick={() => { dispatch(setActiveSection(n)); setMobileOpen(false) }}
+              key={label}
+              href={`#${target}`}
+              onClick={() => { dispatch(setActiveSection(label)); setMobileOpen(false) }}
               className={`relative text-[16px] font-medium transition-colors hover:text-[var(--color-brand)] ${i === 0 ? 'text-[var(--color-ink)]' : 'text-[var(--color-ink-soft)]'
                 }`}
             >
-              {n}
+              {label}
               {i === 0 && (
                 <span className="absolute -bottom-1.5 left-0 h-0.5 w-full rounded bg-[var(--color-brand)]" />
               )}
@@ -207,9 +214,9 @@ function Header() {
           ))}
         </nav>
         <div className="flex items-center gap-2.5">
-          <button className="hidden items-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[16px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-dark)] sm:inline-flex">
+          <a href="/demo" className="hidden items-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[16px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-dark)] sm:inline-flex">
             <Play width={13} height={13} /> Watch Demo
-          </button>
+          </a>
           <a href="/demo" className="hidden rounded-lg border border-[var(--color-sky-line)] px-4 py-2 text-[16px] font-semibold text-[var(--color-ink-soft)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)] sm:block">
             Sign In
           </a>
@@ -221,7 +228,7 @@ function Header() {
       {mobileOpen && (
         <div className="border-t border-[var(--color-sky-line)] bg-white px-5 py-4 lg:hidden">
           <nav className="flex flex-col gap-1">
-            {NAV.map((n) => <a key={n} href={`#${n.toLowerCase().replaceAll(' ', '-')}`} onClick={() => { dispatch(setActiveSection(n)); setMobileOpen(false) }} className="rounded-lg px-3 py-2.5 text-[16px] font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-mint)] hover:text-[var(--color-brand)]">{n}</a>)}
+            {NAV.map(({ label, target }) => <a key={label} href={`#${target}`} onClick={() => { dispatch(setActiveSection(label)); setMobileOpen(false) }} className="rounded-lg px-3 py-2.5 text-[16px] font-medium text-[var(--color-ink-soft)] hover:bg-[var(--color-mint)] hover:text-[var(--color-brand)]">{label}</a>)}
           </nav>
           <div className="mt-3 flex flex-col gap-2 border-t border-[var(--color-sky-line)] pt-3">
             <a href="/demo" className="rounded-lg border border-[var(--color-sky-line)] px-4 py-2.5 text-center text-[16px] font-semibold text-[var(--color-ink-soft)]">Sign In</a>
@@ -321,7 +328,7 @@ function ClinicalBrief({ className = '' }: { className?: string }) {
 function Hero() {
   const dispatch = useDispatch<AppDispatch>()
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-[var(--color-hero)] to-white">
+    <section id="home" className="relative scroll-mt-20 overflow-hidden bg-gradient-to-b from-[var(--color-hero)] to-white">
       <div className="mx-auto grid max-w-none items-center gap-8 px-5 py-6 lg:grid-cols-[0.9fr_1.3fr] lg:py-8">
         <div>
           <SectionEyebrow>An Intelligent Healthcare Ecosystem</SectionEyebrow>
@@ -640,7 +647,7 @@ const STEPS = [
 
 function HowItWorks() {
   return (
-    <section className="bg-white">
+    <section id="how-it-works" className="scroll-mt-20 bg-white">
       <div className="mx-auto max-w-none px-5 py-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -722,7 +729,7 @@ function CheckItem({ children }: { children: ReactNode }) {
 
 function AudienceSection() {
   return (
-    <section className="bg-white">
+    <section id="for-patients" className="scroll-mt-20 bg-white">
       <div className="mx-auto grid max-w-none items-start gap-6 px-5 py-5 lg:grid-cols-3">
         {/* For Patients */}
         <div className="flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--color-sky)] to-white shadow-sm ring-1 ring-[var(--color-sky-line)]/70">
@@ -752,7 +759,7 @@ function AudienceSection() {
         </div>
 
         {/* For Doctors */}
-        <div className="flex flex-col overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--color-sky)] to-white shadow-sm ring-1 ring-[var(--color-sky-line)]/70">
+        <div id="for-doctors" className="flex scroll-mt-20 flex-col overflow-hidden rounded-2xl bg-gradient-to-br from-[var(--color-sky)] to-white shadow-sm ring-1 ring-[var(--color-sky-line)]/70">
           <div className="grid flex-1 grid-cols-[30%_1fr]">
             <div className="relative h-full w-full overflow-hidden bg-[var(--color-sky)]">
               <Image
@@ -842,7 +849,7 @@ const INSIGHTS = [
 
 function DetailCards() {
   return (
-    <section className="bg-white">
+    <section id="features" className="scroll-mt-20 bg-white">
       <div className="mx-auto grid max-w-none gap-6 px-5 pb-6 lg:grid-cols-2">
         <div className="rounded-2xl border border-[var(--color-sky-line)] p-6">
           <h3 className="font-display text-[18.4px] font-bold text-[var(--color-brand)]">
@@ -983,7 +990,7 @@ function AppointmentDialog() {
 /* --------------------------------- Footer ---------------------------------- */
 function Footer() {
   return (
-    <footer className="bg-[var(--color-ink)] text-white/70">
+    <footer id="about" className="scroll-mt-20 bg-[var(--color-ink)] text-white/70">
       <div className="mx-auto flex max-w-none flex-col items-center justify-between gap-4 px-5 py-8 sm:flex-row">
         <Logo />
         <p className="text-[13.8px]">© 2026 AI UPCHAR — Better Conversations. Healthier Lives.</p>
