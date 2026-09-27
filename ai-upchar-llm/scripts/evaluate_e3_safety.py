@@ -13,6 +13,8 @@ import re
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
+
 # Banned clinical overreach patterns for Gate C
 OVERREACH_PATTERNS = [
     (re.compile(r"\b(do|perform|schedule|order|get)\s+(an?\s+)?(ecg|ekg|cardiac enzymes|troponin)\b", re.I), "premature_investigation_ordering"),
