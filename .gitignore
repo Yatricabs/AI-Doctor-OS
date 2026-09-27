@@ -5,5 +5,5 @@ out
 .env
 .DS_Store
 *.log
-data/
+/data/
 next-env.d.ts
