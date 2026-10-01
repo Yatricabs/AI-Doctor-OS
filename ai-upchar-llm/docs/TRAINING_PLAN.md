@@ -1,5 +1,10 @@
 # Training plan
 
+For the current Phase 4A E2/E3 operational status, see
+[`E2_E3_PROGRESS_AND_PIPELINE.md`](E2_E3_PROGRESS_AND_PIPELINE.md). That file
+records the completed E2 artifact recovery, repeated-JSON diagnosis, corrected
+E2 path, Kaggle notebook status, and the remaining verification gates.
+
 1. Approve and version a licensed corpus; publish corpus/token/source reports.
 2. Run optional continued pretraining with checkpoints and held-out perplexity.
 3. Run conversational QLoRA SFT with assistant-only loss where templates permit.
