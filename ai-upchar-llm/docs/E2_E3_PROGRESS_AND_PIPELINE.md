@@ -176,17 +176,20 @@ As of the latest read-only Kaggle check:
 | `yatricabs/ai-upchar-e2-corrected-qlora-training` | COMPLETE | Training complete; corrected adapter & checkpoints recovered locally in `models/qwen3-4b-e2-corrected`. |
 | `yatricabs/ai-upchar-e3-targeted-clinical-safety-training` | STANDBY | Version #2 prepared with dedicated dataset source `yatricabs/ai-upchar-e3-targeted-safety-source`; standing by for GPU execution. |
 
-Important caveat:
+### Corrected E2 artifact recovery confirmation
 
-The corrected-training notebook is marked `COMPLETE`, but the latest audit found
-only a small nbconvert log via `kaggle kernels output`. It did not confirm:
+The corrected training run and output persistence have been confirmed and recovered locally:
 
-- corrected adapter archive availability,
-- corrected adapter local recovery,
-- BASE vs OLD E2 vs CORRECTED E2 single-case comparison result.
+- **Local path:** `D:\Github Repo\AIUPCHAR\models\qwen3-4b-e2-corrected\`
+  - `adapter_model.safetensors` (66,126,768 bytes)
+  - `adapter_config.json`
+  - `checkpoint-46/`, `checkpoint-92/`, `checkpoint-138/`
+  - tokenizer and chat template files
+- **Archive:** `D:\Github Repo\AIUPCHAR\kaggle-downloads\e2-corrected\extracted\qwen3-4b-e2-corrected-training-artifacts.tar.gz` (626,198,913 bytes)
+- **Manifest:** `e2_corrected_persistence_manifest.json` with SHA256: `83d85fa773a8eaa22d3680bce5e12d77954c464308c66c2808c4327eea3fbc82`
+- **Kaggle Dataset:** `yatricabs/ai-upchar-e2-corrected-qlora-artifacts`
 
-Treat corrected E2 training as **not yet verified** until those artifacts/results
-are retrieved or the notebook is fixed and rerun.
+With artifact persistence confirmed, the pending behavioral item is execution of the controlled single-case comparison (`e2-ho--001`) and the frozen six-case held-out evaluation.
 
 ## Current local repo snapshot
 
@@ -217,23 +220,19 @@ Manifest confirmed at `D:\Github Repo\AIUPCHAR\kaggle-downloads\e2-corrected\ext
 
 ### Immediate E2 verification gate
 
-Before moving forward, verify the corrected E2 training result:
+Artifact persistence and recovery are confirmed. The next behavioral verification steps are:
 
-1. Confirm whether `yatricabs/ai-upchar-e2-corrected-qlora-training` produced:
-   - `adapter_model.safetensors`
-   - `adapter_config.json`
-   - checkpoints
-   - persistence manifest
-   - corrected artifact archive
-2. If missing, fix the corrected-training notebook output persistence path.
-3. Run/re-run corrected training only after confirming the notebook will persist
-   the corrected adapter outputs.
-4. After corrected training completes, run **only one case first**:
+1. Run **only one case first** using the recovered corrected adapter:
    - `e2-ho--001`
    - BASE vs OLD E2 vs CORRECTED E2
    - `do_sample=False`
    - `max_new_tokens=128`
-5. Stop after the single-case comparison.
+2. Evaluate Gate criteria:
+   - first JSON parseable = Yes
+   - full output JSON parseable = Yes
+   - repeated JSON = No
+   - trailing content = No
+3. Stop after the single-case comparison to inspect raw output.
 
 ### E2 success gate
 
@@ -303,15 +302,7 @@ The previous failure (`AssertionError: ai-upchar-llm.tar.gz not found!`) has bee
 
 ## Recommended next action
 
-Fix and verify the corrected E2 training notebook/output persistence first.
-
-Target deliverable:
-
-```text
-artifacts/qwen3-4b-e2-corrected/
-e2_corrected_persistence_manifest.json
-qwen3-4b-e2-corrected-training-artifacts.tar.gz
-BASE vs OLD E2 vs CORRECTED E2 result for e2-ho--001
-```
-
-Only after that should the pipeline proceed to six-case held-out evaluation.
+1. Run the controlled single-case comparison for `e2-ho--001` (BASE vs OLD E2 vs CORRECTED E2) using the recovered adapter in `D:\Github Repo\AIUPCHAR\models\qwen3-4b-e2-corrected`.
+2. Confirm clean single-object JSON termination without continuation bias.
+3. Proceed to frozen six-case held-out evaluation (`e2_held_out_contract.jsonl`).
+4. Execute E3 targeted clinical safety training on Kaggle when GPU slot is open.
