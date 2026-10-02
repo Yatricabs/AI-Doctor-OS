@@ -20,6 +20,14 @@ are tracked in:
 
 - [`docs/E2_E3_PROGRESS_AND_PIPELINE.md`](docs/E2_E3_PROGRESS_AND_PIPELINE.md)
 
+## Local workspace/artifact organization
+
+The primary local working clone is `D:\Github Repo\Cursor\AI Doctor OS`.
+Large local artifacts are organized under the Git-ignored
+`local-artifacts/` folder in that repo. See:
+
+- [`docs/LOCAL_ARTIFACTS_AND_WORKSPACE.md`](docs/LOCAL_ARTIFACTS_AND_WORKSPACE.md)
+
 ## Local contract smoke test
 
 Use Python 3.11-3.13:

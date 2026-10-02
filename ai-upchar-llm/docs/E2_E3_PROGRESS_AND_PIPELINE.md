@@ -193,6 +193,20 @@ With artifact persistence confirmed, the pending behavioral item is execution of
 
 ## Current local repo snapshot
 
+The primary local repo/workspace is:
+
+```text
+D:\Github Repo\Cursor\AI Doctor OS
+```
+
+Large recovered artifacts are organized under the Git-ignored local-only folder:
+
+```text
+D:\Github Repo\Cursor\AI Doctor OS\local-artifacts
+```
+
+See `LOCAL_ARTIFACTS_AND_WORKSPACE.md` for the full local folder map.
+
 Important local E2 files:
 
 - `ai-upchar-llm/src/ai_upchar_llm/training/real_qlora.py`
@@ -205,7 +219,7 @@ Important local E2 files:
 Local corrected adapter was verified and recovered locally in the primary model repository:
 
 ```text
-D:\Github Repo\AIUPCHAR\models\qwen3-4b-e2-corrected\
+D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\models\qwen3-4b-e2-corrected\
   ├── adapter_model.safetensors (66,126,768 bytes)
   ├── adapter_config.json
   ├── checkpoint-46/
@@ -214,7 +228,7 @@ D:\Github Repo\AIUPCHAR\models\qwen3-4b-e2-corrected\
   └── tokenizer files
 ```
 
-Manifest confirmed at `D:\Github Repo\AIUPCHAR\kaggle-downloads\e2-corrected\extracted\e2_corrected_persistence_manifest.json` with SHA256: `83d85fa773a8eaa22d3680bce5e12d77954c464308c66c2808c4327eea3fbc82`.
+Manifest confirmed at `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\kaggle\downloads\e2-corrected\extracted\e2_corrected_persistence_manifest.json` with SHA256: `83d85fa773a8eaa22d3680bce5e12d77954c464308c66c2808c4327eea3fbc82`.
 
 ## What remains in the E2 pipeline
 
@@ -302,7 +316,7 @@ The previous failure (`AssertionError: ai-upchar-llm.tar.gz not found!`) has bee
 
 ## Recommended next action
 
-1. Run the controlled single-case comparison for `e2-ho--001` (BASE vs OLD E2 vs CORRECTED E2) using the recovered adapter in `D:\Github Repo\AIUPCHAR\models\qwen3-4b-e2-corrected`.
+1. Run the controlled single-case comparison for `e2-ho--001` (BASE vs OLD E2 vs CORRECTED E2) using the recovered adapter in `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\models\qwen3-4b-e2-corrected`.
 2. Confirm clean single-object JSON termination without continuation bias.
 3. Proceed to frozen six-case held-out evaluation (`e2_held_out_contract.jsonl`).
 4. Execute E3 targeted clinical safety training on Kaggle when GPU slot is open.
