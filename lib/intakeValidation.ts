@@ -87,6 +87,11 @@ const KEYBOARD_WALKS = [
   "mnbv", "nbvc", "bvcx", "vcxz",
   // 3-char high-confidence keyboard walks
   "lkj", "jkl", "qwe", "zxc", "xcv", "cvb", "vbn", "bnm", "mnb", "nbv", "bvc",
+  // Alphabet walks (forward and backward)
+  "abc", "bcd", "cde", "def", "efg", "fgh", "ghi", "hij", "ijk", "jkl", "klm", "lmn",
+  "mno", "nop", "opq", "pqr", "qrs", "rst", "stu", "tuv", "uvw", "vwx", "wxy", "xyz",
+  "zyx", "yxw", "xwv", "wvu", "vut", "uts", "tsr", "srq", "rqp", "qpo", "pon", "onm",
+  "nml", "mlk", "lkj", "kji", "jih", "ihg", "hgf", "gfe", "fed", "edc", "dcb", "cba",
 ];
 
 /**
@@ -138,9 +143,14 @@ function isNonsenseToken(rawToken: string): { isNonsense: boolean; reason?: stri
     return { isNonsense: true, reason: "Keyboard mash pattern" };
   }
 
-  // Impossible word-initial consonant cluster in Hindi/English (e.g. "lkjon", "nlkn", "kjnl")
-  if (/^(lk|nl|kj|zk|zx|qx|qk|qj|xq)/.test(token)) {
+  // Impossible word-initial consonant cluster in Hindi/English (e.g. "lkjon", "nlkn", "kjnl", "jlilkn")
+  if (/^(lk|nl|kj|zk|zx|qx|qk|qj|xq|jl|jk|kx|qz|xj|dx|fx|gx|hx|jx|lx|mx|px|rx|sx|tx|vx|wx)/.test(token)) {
     return { isNonsense: true, reason: "Impossible word-initial consonant cluster" };
+  }
+
+  // Tokens of length >= 5 with only 1 vowel (e.g. "jlilkn", "dfghk")
+  if (token.length >= 5 && vowelCount <= 1) {
+    return { isNonsense: true, reason: "Abnormally low vowel count for word length" };
   }
 
   // Tokens of length >= 4
@@ -151,8 +161,8 @@ function isNonsenseToken(rawToken: string): { isNonsense: boolean; reason?: stri
       return { isNonsense: true, reason: "Unpronounceable consonant cluster" };
     }
 
-    // For words of length >= 6, if vowel ratio is extremely low (< 15%) and length >= 6
-    if (token.length >= 6 && vowelCount / token.length < 0.15) {
+    // For words of length >= 6, if vowel ratio is extremely low (< 20%) and length >= 6
+    if (token.length >= 6 && vowelCount / token.length < 0.20) {
       return { isNonsense: true, reason: "Abnormally low vowel ratio" };
     }
 
@@ -359,8 +369,31 @@ export function validateIntakeInput(
     return { valid: true };
   }
 
-  // 6. Preferred Date / Time
-  if (step === "preferredDate" || step === "preferredTime") {
+  // 6. Preferred Date / Time validation
+  if (step === "preferredDate") {
+    const isIsoDate = /^\d{4}-\d{2}-\d{2}$/.test(trimmed);
+    const isSlashDate = /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(trimmed);
+    const hasDateWord = /\b(aaj|today|kal|tomorrow|parso|somwar|mangalwar|budhwar|guruwar|shukrawar|shaniwar|raviwar|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(trimmed);
+    if (!isIsoDate && !isSlashDate && !hasDateWord) {
+      return {
+        valid: false,
+        message: "Kripya appointment ki sahi tareekh chuniye ya likhiye (jaise: 2026-10-05 ya Kal).",
+        reason: "INVALID_DATE_FORMAT",
+      };
+    }
+    return { valid: true };
+  }
+
+  if (step === "preferredTime") {
+    const isTimeFormat = /^\d{1,2}(:\d{2})?\s*(am|pm)?$/i.test(trimmed);
+    const hasTimeWord = /\b(subah|dopahar|shaam|raat|morning|afternoon|evening|night|am|pm|baje|ghante)\b/i.test(trimmed);
+    if (!isTimeFormat && !hasTimeWord) {
+      return {
+        valid: false,
+        message: "Kripya samay spasht karein — subah, dopahar, shaam ya koi samay (jaise: Subah 10 baje).",
+        reason: "INVALID_TIME_FORMAT",
+      };
+    }
     return { valid: true };
   }
 
@@ -446,13 +479,12 @@ export function validateIntakeInput(
       // Check if a number between 1 and 10 or descriptive word exists
       const hasNumber = /\b([1-9]|10)\b/.test(trimmed);
       const hasSeverityWord = /(mild|moderate|severe|halka|halki|tez|bahut|zyada|jyada|medium)/i.test(trimmed);
-      const intell = checkIntelligibility(trimmed);
-      if (!intell.intelligible && !hasNumber && !hasSeverityWord) {
+      if (!hasNumber && !hasSeverityWord) {
         return {
           valid: false,
           message:
             "Kripya dard ya takleef ki teevrata 1 se 10 ke scale par bataiye (jaise: 5 ya 8), ya halka / tez likhein.",
-          reason: intell.reason ?? "INVALID_SEVERITY",
+          reason: "INVALID_SEVERITY",
         };
       }
       return { valid: true };

@@ -14,6 +14,7 @@ import { evaluatePatientAnswer, type ReasoningResult } from "@/lib/interview-rea
 import { decideNextBestQuestion, type ClinicalQaTurn, type NextBestDecision } from "@/lib/next-best-question";
 import { assessSemanticContext, type SemanticFact } from "@/lib/semantic-context";
 import { validateIntakeInput } from "@/lib/intakeValidation";
+import { matchPathway } from "@/lib/clinicalPathways";
 
 type IntakeStep =
   | "existing-or-new" | "phone" | "name" | "age" | "sex" | "location"
@@ -23,6 +24,41 @@ type IntakeStep =
 
 const GREETING = "Namaste! 👋 Main aapka AI UPCHAR assistant hoon. Appointment book karne aur doctor ke liye aapki jaankari taiyaar karne ke liye main kuch sawaal poochunga.\n\nAap naye patient hain ya pehle bhi yahan aa chuke hain?";
 const emptyAnswers = { isReturning: "", phone: "", name: "", age: "", sex: "", location: "", preferredDate: "", preferredTime: "", chiefComplaint: "", duration: "", priorConsultation: "", priorReports: "" };
+
+function buildDeterministicPreVisitReport(
+  a: typeof emptyAnswers,
+  log: { question: string; answer: string }[],
+  isUrgent: boolean
+): PreVisitReport {
+  const pathway = matchPathway(a.chiefComplaint);
+  const complaint = a.chiefComplaint || "General clinical intake";
+  const duration = a.duration || "Not specified";
+  const historyText = [
+    `Patient ${a.name || "Patient"} (${a.age || ""}y, ${a.sex || ""}) reports ${complaint} for ${duration}.`,
+    a.priorConsultation ? `Prior care: ${a.priorConsultation}.` : "",
+    a.priorReports ? `Prior records: ${a.priorReports}.` : "",
+    ...log.map((entry) => `${entry.question}: ${entry.answer}`),
+  ].filter(Boolean).join(" ");
+
+  const recommendedTests = pathway?.investigationConsiderations ?? ["CBC", "Routine Vitals Check"];
+
+  return {
+    problemSummary: `${complaint}${a.duration ? ` (${a.duration})` : ""}`,
+    fullHistory: historyText,
+    provisionalDiagnosis: pathway?.displayName ? `${pathway.displayName} (Provisional differential)` : `${complaint} under clinical review`,
+    furtherTestsNeeded: pathway ? `Clinician to review: ${recommendedTests.slice(0, 2).join(", ")} if indicated.` : "Clinician examination required.",
+    recommendedTests,
+    recommendedTreatment: "Symptomatic relief and definitive treatment per attending clinician evaluation.",
+    urgency: isUrgent ? "Emergency" : "OPD",
+    surgeryLikely: "Unlikely / To be determined by attending clinician",
+    aiGenerated: true,
+    chiefComplaint: complaint,
+    duration,
+    urgencyLevel: isUrgent ? "emergency" : "opd",
+    possibleConditions: pathway?.displayName ? [pathway.displayName] : [complaint],
+    specialty: pathway?.specialty ?? "General Medicine",
+  };
+}
 
 export default function PatientIntakeChat({ onComplete, variant = "default" }: { onComplete?: (result: { patient: Patient; appointment: Appointment; urgent: boolean }) => void; variant?: "default" | "landing" }) {
   const landingChat = variant === "landing";
@@ -197,7 +233,18 @@ export default function PatientIntakeChat({ onComplete, variant = "default" }: {
     if (answerStep === "location") { sayBot("Aap appointment kis din chahte hain?"); setStep("preferredDate"); return; }
     if (answerStep === "preferredDate") { sayBot("Kis samay aana chahenge — subah, dopahar ya shaam?"); setStep("preferredTime"); return; }
     if (answerStep === "preferredTime") { sayBot("Aapko mukhya roop se kya takleef hai? Aaj kis wajah se aa rahe hain?"); setStep("chiefComplaint"); return; }
-    if (["chiefComplaint", "duration", "priorConsultation", "priorReports"].includes(answerStep)) { await requestNextClinicalQuestion(nextAnswers, qaLog); return; }
+    if (answerStep === "chiefComplaint") {
+      if (!nextAnswers.duration) {
+        const durationMatch = nextAnswers.chiefComplaint.match(/\b(\d+\s*(day|days|din|hafte|week|weeks|mahine|month|ghante|hours)|kal raat se|kal se|aaj se|subah se|parso se)\b/i);
+        if (durationMatch) {
+          nextAnswers.duration = durationMatch[0];
+          setAnswers(nextAnswers);
+        }
+      }
+      await requestNextClinicalQuestion(nextAnswers, qaLog);
+      return;
+    }
+    if (["duration", "priorConsultation", "priorReports"].includes(answerStep)) { await requestNextClinicalQuestion(nextAnswers, qaLog); return; }
   }
 
   async function submit(valueOverride?: string, stepOverride?: IntakeStep) {
@@ -376,9 +423,10 @@ export default function PatientIntakeChat({ onComplete, variant = "default" }: {
       { role: "system", content: "You are drafting a structured pre-visit brief for a doctor, based on a patient intake conversation. This is decision SUPPORT only — never a final diagnosis, and the doctor makes every final call. Be conservative: if anything suggests urgency, say so. Return JSON with EXACTLY these keys: problemSummary (1-2 sentences), fullHistory (a short paragraph combining chief complaint, duration, and all Q&A), provisionalDiagnosis (most likely differential(s), clearly labeled as provisional), furtherTestsNeeded (one sentence: what's needed or say information is sufficient), recommendedTests (array of specific test/scan names, empty array if none), recommendedTreatment (one sentence, illustrative only), urgency (exactly one of \"OPD\", \"Admit for observation\", \"Emergency\"), surgeryLikely (short phrase, e.g. \"Unlikely\", \"Possible if X\", \"Not indicated\")." },
       { role: "user", content: `Name: ${a.name}, Age: ${a.age}, Sex: ${a.sex}, Location: ${a.location}\nChief complaint: ${a.chiefComplaint}\nDuration: ${a.duration}\nPrior consultation: ${a.priorConsultation}\nPrior reports: ${a.priorReports}\nFollow-up Q&A:\n${log.map((t) => `Q: ${t.question}\nA: ${t.answer}`).join("\n")}` },
     ]);
-    if (generated) setReport(generated);
+    const finalReport = generated ?? buildDeterministicPreVisitReport(a, log, urgent);
+    setReport(finalReport);
     setStep("finalizing");
-    await finalize(a, log, generated ?? undefined);
+    await finalize(a, log, finalReport);
   }
 
   async function finalize(a: typeof answers, log: { question: string; answer: string }[], rep?: PreVisitReport) {
