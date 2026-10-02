@@ -13,11 +13,12 @@ engineering status document, not a clinical-readiness sign-off.
 | --- | --- | --- |
 | Original E2 QLoRA training | Complete | 138/138 steps completed on Kaggle. |
 | Original E2 artifact persistence | Safe | Adapter/checkpoints recovered locally and uploaded as a private Kaggle Dataset. |
-| Original E2 held-out behavior | Failed strict full JSON parsing | All six held-out cases produced a valid first JSON object followed by repeated JSON/trailing content. |
+| Original E2 held-out behavior | Failed strict full JSON parsing | All six held-out cases produced a valid first JSON object followed by repeated JSON/trailing content (`JSONDecodeError: Extra data`). |
 | Root-cause investigation | Strongly supported | Repetition is adapter/training-induced EOS suppression, not missing data, missing adapter, or missing `<\|im_end\|>` labels. |
-| Minimal correction | Implemented locally | `training.append_assistant_eos: true` with corrected output directory `artifacts/qwen3-4b-e2-corrected`. |
-| Corrected E2 Kaggle notebook | Complete & Verified | Recovered locally at `D:\Github Repo\AIUPCHAR\models\qwen3-4b-e2-corrected` (66MB adapter, checkpoints 46/92/138, manifest SHA256 verified). |
-| E3 source packaging | Resolved | Uploaded `yatricabs/ai-upchar-e3-targeted-safety-source` containing `ai-upchar-llm.tar.gz` + `kagglehub` fallback added. |
+| Minimal correction | Implemented & Verified | `training.append_assistant_eos: true` with corrected output directory `artifacts/qwen3-4b-e2-corrected`. |
+| Corrected E2 single-case test | Passed (100%) | `e2-ho--001` on Kaggle (`yatricabs/ai-upchar-e2-corrected-single-case-test`): 72 tokens, clean EOS, zero repetition, valid full JSON. |
+| Corrected E2 six-case eval | Passed (6/6, 100%) | Kaggle kernel `yatricabs/ai-upchar-e2-corrected-six-case-eval`: all 6/6 cases valid JSON, 0 repeated JSON, 0 trailing content, avg 70.3 tokens. Repetition bug completely solved. |
+| E3 source packaging | Diagnosed & Fix Ready | Source dataset `yatricabs/ai-upchar-e3-targeted-safety-source` has uncompressed directory; notebook Cell 1 loader updated to support both folder and `.tar.gz`. |
 | E3 targeted safety setup | Ready for relaunch | Branch `feature/e3-targeted-clinical-safety` authored; 24 train + 12 heldout cases; config (36 steps, assistant-EOS); Gates A/B/C harness ready. |
 
 ## Completed work
@@ -165,6 +166,48 @@ CPU validation already passed for:
 - E2 training count = 122
 - held-out count = 6
 
+### 8. Controlled single-case comparison (`e2-ho--001`)
+
+Kernel: `yatricabs/ai-upchar-e2-corrected-single-case-test` (Status: `COMPLETE`).  
+Artifacts recovered at `D:\Github Repo\AIUPCHAR\kaggle-runs\e2-corrected-single-case-test\e2_corrected_single_case\`.
+
+Three-way side-by-side comparison on `e2-ho--001` (`do_sample=False`, `max_new_tokens=128`):
+
+| Condition | Tokens | First JSON | Full JSON Valid | Repeated JSON | Trailing Content | EOS Found | Error |
+|---|---:|---|---|---|---|---|---|
+| **Base Model** (`Qwen3-4B-Base`) | 115 | True | True | False | False | False | None |
+| **Old E2 Adapter** (Suppressed EOS) | 128 | True | False | True | True | False | `JSONDecodeError: Extra data` |
+| **Corrected E2 Adapter** (`append_assistant_eos: true`) | **72** | **True** | **True** | **False** | **False** | **True** | **None** |
+
+**Conclusion:** The corrected E2 adapter restored natural termination after the first JSON object. Output token count dropped from 128 (max tokens with repetition) to 72, with 100% clean JSON and zero extra data.
+
+### 9. Frozen six-case held-out contract evaluation
+
+Kernel: `yatricabs/ai-upchar-e2-corrected-six-case-eval` (Status: `COMPLETE`).  
+Artifacts recovered at `D:\Github Repo\AIUPCHAR\kaggle-runs\e2-corrected-six-case-eval\e2_corrected_six_case_eval\`.
+
+All 6 held-out cases from `e2_held_out_contract.jsonl` evaluated with strict JSON validation:
+
+| Case ID | Tokens | First JSON | Full JSON Valid | Repeated JSON | Trailing Content | EOS Detected | Max Tokens Reached | Error |
+|---|---:|---|---|---|---|---|---|---|
+| `e2-ho--001` | 72 | True | True | False | False | True | False | None |
+| `e2-ho--002` | 61 | True | True | False | False | True | False | None |
+| `e2-ho--003` | 71 | True | True | False | False | True | False | None |
+| `e2-ho--004` | 85 | True | True | False | False | True | False | None |
+| `e2-ho--005` | 65 | True | True | False | False | True | False | None |
+| `e2-ho--006` | 68 | True | True | False | False | True | False | None |
+
+**Contract Evaluation Summary:**
+- **Total Cases:** 6
+- **First JSON Parseable:** 6 / 6 (100%)
+- **Full Output JSON Parseable:** 6 / 6 (100%)
+- **Repeated JSON Detected:** 0 / 6 (0%)
+- **Trailing Content Detected:** 0 / 6 (0%)
+- **Max Tokens Reached:** 0 / 6 (0%)
+- **Average Generated Tokens:** 70.33 (min: 61, max: 85)
+
+**Definitive Verdict:** The corrected E2 adapter completely eliminated the EOS suppression bug across the entire held-out contract. Strict full-output JSON validation passed at 100%.
+
 ## Current Kaggle inventory snapshot
 
 As of the latest read-only Kaggle check:
@@ -174,7 +217,9 @@ As of the latest read-only Kaggle check:
 | `yatricabs/ai-upchar-phase-4a-e2-qlora-training` | COMPLETE | Original E2 training notebook. |
 | `yatricabs/ai-upchar-e2-inference-diagnostic` | COMPLETE | Used for E2 inference diagnostics. |
 | `yatricabs/ai-upchar-e2-corrected-qlora-training` | COMPLETE | Training complete; corrected adapter & checkpoints recovered locally in `models/qwen3-4b-e2-corrected`. |
-| `yatricabs/ai-upchar-e3-targeted-clinical-safety-training` | STANDBY | Version #2 prepared with dedicated dataset source `yatricabs/ai-upchar-e3-targeted-safety-source`; standing by for GPU execution. |
+| `yatricabs/ai-upchar-e2-corrected-single-case-test` | COMPLETE | Single-case test passed: 72 tokens, clean EOS, valid JSON. |
+| `yatricabs/ai-upchar-e2-corrected-six-case-eval` | COMPLETE | 6/6 cases passed (100% strict JSON validity, 0% repetition). |
+| `yatricabs/ai-upchar-e3-targeted-clinical-safety-training` | STANDBY | Dedicated kernel prepared; Cell 1 loader fixed for uncompressed source dataset; ready for GPU relaunch. |
 
 ### Corrected E2 artifact recovery confirmation
 
@@ -189,7 +234,7 @@ The corrected training run and output persistence have been confirmed and recove
 - **Manifest:** `e2_corrected_persistence_manifest.json` with SHA256: `83d85fa773a8eaa22d3680bce5e12d77954c464308c66c2808c4327eea3fbc82`
 - **Kaggle Dataset:** `yatricabs/ai-upchar-e2-corrected-qlora-artifacts`
 
-With artifact persistence confirmed, the pending behavioral item is execution of the controlled single-case comparison (`e2-ho--001`) and the frozen six-case held-out evaluation.
+With artifact persistence and full 6-case behavioral verification 100% confirmed, the E2 recovery and validation milestone is **COMPLETELY CLOSED & VERIFIED**.
 
 ## Current local repo snapshot
 
@@ -230,63 +275,32 @@ D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\models\qwen3-4b-e2-corrected\
 
 Manifest confirmed at `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\kaggle\downloads\e2-corrected\extracted\e2_corrected_persistence_manifest.json` with SHA256: `83d85fa773a8eaa22d3680bce5e12d77954c464308c66c2808c4327eea3fbc82`.
 
-## What remains in the E2 pipeline
+### E2 pipeline verification and closure
 
-### Immediate E2 verification gate
+### 1. Single-case verification gate (`e2-ho--001`): PASSED
+- First JSON parseable: **Yes**
+- Full output JSON parseable: **Yes**
+- Repeated JSON: **No**
+- Trailing content: **No**
+- Generated tokens: **72** (reduced from 128 in old adapter)
 
-Artifact persistence and recovery are confirmed. The next behavioral verification steps are:
+### 2. Six-case held-out evaluation gate: PASSED (6/6, 100%)
+- All six held-out cases from `e2_held_out_contract.jsonl` parsed as valid JSON without extra data.
+- Zero instances of repeated JSON or trailing content across all 6 cases.
+- Full output strict JSON parsing succeeded at 100%.
 
-1. Run **only one case first** using the recovered corrected adapter:
-   - `e2-ho--001`
-   - BASE vs OLD E2 vs CORRECTED E2
-   - `do_sample=False`
-   - `max_new_tokens=128`
-2. Evaluate Gate criteria:
-   - first JSON parseable = Yes
-   - full output JSON parseable = Yes
-   - repeated JSON = No
-   - trailing content = No
-3. Stop after the single-case comparison to inspect raw output.
+### 3. Artifact persistence gate: PASSED
+- The corrected E2 adapter and checkpoints (46, 92, 138) are archived locally in `models/qwen3-4b-e2-corrected` and persisted on Kaggle under `yatricabs/ai-upchar-e2-corrected-qlora-artifacts`.
+- Golden original E2 adapter remains completely untouched and preserved.
 
-### E2 success gate
-
-Corrected E2 is promising only if `e2-ho--001` shows:
-
-- first JSON parseable = Yes
-- full output JSON parseable = Yes
-- repeated JSON = No
-- trailing content = No
-
-`<|im_end|>` generation is not required if the output cleanly terminates as one
-valid JSON object, because the base model already demonstrated clean termination
-without visibly generating `<|im_end|>`.
-
-### Six-case evaluation gate
-
-Only after the single-case corrected result is clean:
-
-1. Run the frozen six-case held-out evaluator.
-2. Run raw-generation diagnostic for all six cases.
-3. Preserve raw outputs and strict parser results.
-4. Do not declare behavioral success unless strict full-output JSON passes.
-
-### Artifact persistence gate
-
-For any successful corrected run:
-
-- archive the full corrected artifact directory,
-- verify non-zero archive size,
-- verify archive contains final adapter and checkpoints,
-- store manifest with SHA256,
-- recover/download the archive locally,
-- keep old/golden E2 adapter untouched.
+**Conclusion:** The Phase 4A E2 repetition / EOS suppression issue is definitively resolved.
 
 ## E3 pipeline status and next work
 
-### Resolved packaging blocker
-The previous failure (`AssertionError: ai-upchar-llm.tar.gz not found!`) has been permanently resolved:
-1. Created private Kaggle dataset `yatricabs/ai-upchar-e3-targeted-safety-source` containing `ai-upchar-llm.tar.gz`.
-2. Added `kagglehub` automatic download fallback in the training notebook if `/kaggle/input` mount is delayed.
+### Diagnosed source dataset structure & loader fix
+The initial startup failure (`AssertionError: ai-upchar-llm.tar.gz not found!`) was diagnosed:
+- Kaggle dataset `yatricabs/ai-upchar-e3-targeted-safety-source` contains an uncompressed directory tree (`ai-upchar-llm/...`) rather than an archive file.
+- Notebook Cell 1 was updated to support both uncompressed directories and `.tar.gz` archives seamlessly, preventing assertion errors.
 
 ### Completed E3 preparation on `feature/e3-targeted-clinical-safety`:
 1. **Dataset Authoring & Static QA:**
@@ -301,22 +315,18 @@ The previous failure (`AssertionError: ai-upchar-llm.tar.gz not found!`) has bee
 4. **Dedicated Kernel Setup:**
    - Notebook & metadata ready at `D:\Github Repo\AIUPCHAR\kaggle-runs\e3-targeted-safety-training`.
    - Kernel ID: `yatricabs/ai-upchar-e3-targeted-clinical-safety-training`.
-   - Standing by in clean state ready for one-shot GPU relaunch.
+   - Standby state: Cell 1 updated, ready for one-shot GPU launch.
 
 ## Guardrails for the next steps
 
 - Do not overwrite the original E2 adapter or checkpoints.
-- Do not modify the frozen evaluator during E2 correction testing.
-- Do not modify the held-out dataset.
-- Do not run six-case evaluation before the corrected single-case test passes.
-- Do not commit/push until the dirty worktree is reviewed and unrelated files
-  are separated.
+- Do not modify the frozen evaluator during E2 or E3 testing.
+- Do not modify the held-out datasets.
 - Keep GPU off when doing static inspection, packaging, and documentation.
 - Report GPU ON/OFF status for every Kaggle-related step.
 
 ## Recommended next action
 
-1. Run the controlled single-case comparison for `e2-ho--001` (BASE vs OLD E2 vs CORRECTED E2) using the recovered adapter in `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\models\qwen3-4b-e2-corrected`.
-2. Confirm clean single-object JSON termination without continuation bias.
-3. Proceed to frozen six-case held-out evaluation (`e2_held_out_contract.jsonl`).
-4. Execute E3 targeted clinical safety training on Kaggle when GPU slot is open.
+1. Push the fixed E3 training notebook to `yatricabs/ai-upchar-e3-targeted-clinical-safety-training`.
+2. Launch GPU execution on Kaggle for E3 (36 training steps + Gates A/B/C automated evaluation).
+3. Persist E3 artifacts and produce side-by-side comparison report.
