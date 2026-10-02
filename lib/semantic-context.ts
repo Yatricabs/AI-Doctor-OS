@@ -1,4 +1,5 @@
-import type { ClinicalQaTurn } from "@/lib/next-best-question";
+import type { ClinicalQaTurn } from "./next-best-question.ts";
+import { checkIntelligibility } from "./intakeValidation.ts";
 
 export const SEMANTIC_FACT_KINDS = [
   "ANATOMY_REFERENCE", "BODY_LOCATION", "SYMPTOM", "SYMPTOM_CHARACTERISTIC",
@@ -42,6 +43,16 @@ const CONSISTENT: SemanticAssessment = { status: "CONSISTENT", facts: [], explan
 // diagnose or overwrite SEX, and it only blocks progression when clarification
 // is genuinely needed.
 function deterministicSemanticAssessment(context: SemanticContext): SemanticAssessment {
+  const intell = checkIntelligibility(context.latestAnswer);
+  if (!intell.intelligible && context.latestAnswer.trim().length > 0) {
+    return {
+      status: "NEEDS_CLARIFICATION",
+      facts: [],
+      explanation: `Latest answer appears unintelligible or nonsensical: ${intell.reason}`,
+      question: "Maaf kijiye, hum aapka jawab samajh nahi paaye. Kripya thoda spasht shabdon mein bataiye.",
+    };
+  }
+
   const text = context.latestAnswer.toLocaleLowerCase();
   const sex = String(context.answers.sex ?? "").trim().toLocaleLowerCase();
   const facts: SemanticFact[] = [];

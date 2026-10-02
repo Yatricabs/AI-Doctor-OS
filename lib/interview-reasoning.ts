@@ -1,5 +1,6 @@
 import { askAIForJSON } from "@/lib/puter-ai";
 import { detectRedFlags } from "@/lib/red-flag-keywords";
+import { checkIntelligibility } from "./intakeValidation.ts";
 
 export type ReasoningOutcome = "CONTINUE" | "NEEDS_CLARIFICATION" | "SAFETY_CONCERN";
 
@@ -44,6 +45,16 @@ export async function evaluatePatientAnswer(context: InterviewReasoningContext):
       interpretation: `Deterministic safety screen matched: ${redFlags.join(", ")}`,
       question: "Yeh turant dhyaan dene wali baat ho sakti hai. Kya aap abhi surakshit jagah par hain aur turant medical madad le sakte hain?",
       missingInformation: ["Immediate safety status"],
+    };
+  }
+
+  const intell = checkIntelligibility(context.latestAnswer);
+  if (!intell.intelligible && context.latestAnswer.trim().length > 0) {
+    return {
+      outcome: "NEEDS_CLARIFICATION",
+      interpretation: `Unintelligible or nonsensical patient answer: ${intell.reason}`,
+      question: "Kripya apna jawab thoda spasht shabdon mein bataiye taaki doctor ke liye sahi jaankari taiyaar ho sake.",
+      missingInformation: ["Intelligible patient statement"],
     };
   }
 
