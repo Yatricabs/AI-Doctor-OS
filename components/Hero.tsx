@@ -28,14 +28,14 @@ export default function Hero() {
   }
 
   return (
-    <section id="product" className="pt-20 pb-16 px-6 max-w-7xl mx-auto relative">
+    <section id="home" className="scroll-mt-24 pt-20 pb-16 px-6 max-w-7xl mx-auto relative">
       <div className="pointer-events-none absolute left-1/2 top-0 h-[500px] w-[min(1000px,100%)] -translate-x-1/2 rounded-full bg-gradient-to-tr from-emerald-500/20 via-teal-500/10 to-transparent blur-[140px]" />
       <div className="text-center max-w-4xl mx-auto space-y-6 relative">
         <p className="text-xs font-bold uppercase tracking-[0.24em] text-emerald-400">Website · App · WhatsApp · Voice call</p>
         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1] text-white">Every visit starts{" "}<span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">before the patient walks in</span>{" "}and the doctor knows it.</h1>
         <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto leading-relaxed">Patients book, upload reports, and describe their problem on WhatsApp, in the app, or with a phone call. AI UPCHAR turns that into a prepared, prioritized visit — for government hospitals, private hospitals, and clinics alike. AI prepares the context; the doctor reviews every decision.</p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-          <button onClick={() => scrollToSection("channels")} className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-cyan-400 hover:opacity-90 transition shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2">
+          <button onClick={() => scrollToSection("for-patients")} className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold text-slate-950 bg-gradient-to-r from-emerald-400 to-cyan-400 hover:opacity-90 transition shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2">
             <PlayCircle className="w-5 h-5" /> See how it works
           </button>
           <Link href="/for-doctors" className="w-full sm:w-auto px-8 py-4 rounded-xl font-semibold text-slate-300 bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] transition text-center">

@@ -71,7 +71,7 @@ export default function PatientChannelsSection() {
   const Icon = channel.icon;
 
   return (
-    <section id="channels" className="border-y border-white/5 bg-slate-950/60 py-24">
+    <section id="for-patients" className="scroll-mt-24 border-y border-white/5 bg-slate-950/60 py-24">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto mb-10 max-w-2xl text-center">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-400">

@@ -33,7 +33,7 @@ const steps = [
 
 export default function WorkflowSection() {
   return (
-    <section id="workflow" className="py-20 max-w-7xl mx-auto px-6">
+    <section id="how-it-works" className="scroll-mt-24 py-20 max-w-7xl mx-auto px-6">
       <div className="max-w-2xl mb-10">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-400">One connected patient journey</p>
         <h2 className="mt-3 text-3xl md:text-4xl font-extrabold text-white">From the first WhatsApp message to a decision-ready visit.</h2>

@@ -17,7 +17,7 @@ const capabilities = [
 
 export default function ProblemsSection() {
   return (
-    <section className="py-24 bg-slate-950/80 border-y border-white/5">
+    <section id="about" className="scroll-mt-24 py-24 bg-slate-950/80 border-y border-white/5">
       <div className="max-w-7xl mx-auto px-6">
         <div className="max-w-2xl mb-12"><p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-400">Why every setting needs an operating layer</p><h2 className="mt-3 text-3xl md:text-4xl font-extrabold text-white">The hard part is not storing data. It is knowing what to do next.</h2><p className="mt-4 text-slate-400 leading-relaxed">Patients wait without knowing why, and doctors lose time rebuilding context that already exists somewhere — a message, a report, a memory. AI UPCHAR turns those disconnected moments into one guided journey, from a government hospital queue to a single-doctor clinic.</p></div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">

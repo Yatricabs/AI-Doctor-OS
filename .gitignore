@@ -7,3 +7,8 @@ out
 *.log
 /data/
 next-env.d.ts
+/local-artifacts/
+*.zip
+ai-upchar-llm/kaggle/
+.freebuff/
+test-results/
