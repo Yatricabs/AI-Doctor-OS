@@ -64,10 +64,22 @@ export type Insight = { id: string; title: string; detail: string; priority: str
 export type ScribeNote = { id: string; patientId: string | null; status: string; subjective: string; objective: string; assessment: string; plan: string; disclaimer?: string };
 export type StockTransaction = { id: string; medicineId: string; medicineName: string; type: string; quantity: number; note?: string; createdAt: string };
 
+// Rich pre-visit summary payload (conversation turns + documents with AI findings).
+export type PreVisitSummary = {
+  patient: Record<string, unknown>;
+  context: { medications: Record<string, unknown>[]; allergies: Record<string, unknown>[]; conditions: Record<string, unknown>[]; followUps: Record<string, unknown>[] };
+  intake: { hasSession: boolean; completed: boolean; story: { question: string; answer: string; kind: string }[]; preVisitBrief: string };
+  aiReport: { summary: string; research: string; considerations: string[]; redFlags: string[]; structured: Record<string, unknown> | null };
+  reports: { id: string; title: string; type: string; date: string; status: string; fileName?: string; findings: Record<string, unknown> | null; fileUrl: string | null }[];
+  abnormalHighlights: string[];
+  disclaimer: string;
+};
+export type FollowUp = { id: string; patientId: string; title: string; description?: string; dueDate: string; status: string; priority: string; createdAt: string };
+
 export const api = createApi({
   reducerPath: "api",
   baseQuery,
-  tagTypes: ["Patients", "Patient360", "Appointments", "Medicines", "Services", "Billing", "Dashboard", "Reports", "Prescriptions", "Inbox", "ScribeNotes", "Insights", "Profile"],
+  tagTypes: ["Patients", "Patient360", "Appointments", "Medicines", "Services", "Billing", "Dashboard", "Reports", "Prescriptions", "Inbox", "ScribeNotes", "Insights", "Profile", "FollowUps"],
   endpoints: (builder) => ({
     // --- Patients ---
     getPatients: builder.query<{ patients: Patient[]; total: number }, { q?: string } | void>({
@@ -183,11 +195,34 @@ export const api = createApi({
     }),
     draftPrescription: builder.mutation<{ prescription: Prescription }, Record<string, unknown>>({
       query: (body) => ({ url: "/prescriptions", method: "POST", body }),
-      invalidatesTags: ["Prescriptions"],
+      invalidatesTags: ["Prescriptions", "Patient360"],
     }),
+    // The route handles lifecycle changes via POST + `action`, not PATCH.
     updatePrescription: builder.mutation<{ prescription: Prescription }, Record<string, unknown>>({
-      query: (body) => ({ url: "/prescriptions", method: "PATCH", body }),
-      invalidatesTags: ["Prescriptions"],
+      query: (body) => ({ url: "/prescriptions", method: "POST", body }),
+      invalidatesTags: ["Prescriptions", "Patient360"],
+    }),
+
+    // --- Rich pre-visit summary (conversation + documents + AI findings) ---
+    getPreVisitSummary: builder.query<PreVisitSummary, string>({
+      query: (patientId) => ({ url: "/pre-visit/summary", params: { patientId } }),
+      providesTags: (_r, _e, patientId) => [{ type: "Patient360", id: patientId }],
+    }),
+
+    // --- Follow-ups ---
+    getFollowUps: builder.query<{ followUps: FollowUp[]; total: number; overdueCount: number }, { patientId?: string } | void>({
+      query: (params) => ({ url: "/follow-ups", params: params?.patientId ? { patientId: params.patientId } : undefined }),
+      providesTags: ["FollowUps"],
+    }),
+    createFollowUp: builder.mutation<{ followUp: FollowUp }, Record<string, unknown>>({
+      query: (body) => ({ url: "/follow-ups", method: "POST", body: { action: "create", ...body } }),
+      invalidatesTags: ["FollowUps", "Patient360", "Inbox"],
+    }),
+
+    // --- Appointment status (mark completed, reschedule, etc.) ---
+    updateAppointment: builder.mutation<{ appointment: Appointment }, Record<string, unknown>>({
+      query: (body) => ({ url: "/appointments", method: "PATCH", body }),
+      invalidatesTags: ["Appointments", "Dashboard", "Patient360"],
     }),
 
     // --- AI Inbox ---
@@ -242,7 +277,8 @@ export const api = createApi({
 
 export const {
   useGetPatientsQuery, useAddPatientMutation, useGetPatient360Query,
-  useGetAppointmentsQuery, useCreateAppointmentMutation, useSubmitPatientIntakeMutation,
+  useGetAppointmentsQuery, useCreateAppointmentMutation, useSubmitPatientIntakeMutation, useUpdateAppointmentMutation,
+  useGetPreVisitSummaryQuery, useGetFollowUpsQuery, useCreateFollowUpMutation,
   useGetMedicinesQuery, useAddMedicineMutation, useUpdateMedicineMutation, useDeleteMedicineMutation,
   useGetServicesQuery, useAddServiceMutation, useUpdateServiceMutation, useDeleteServiceMutation,
   useGetBillingQuery, useAddBillingTransactionMutation,

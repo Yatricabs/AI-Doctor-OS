@@ -162,7 +162,16 @@ export default function AppointmentIntakeFlow() {
     if (field === "age") { ask("sex"); return; }
     if (field === "sex") { ask("location"); return; }
     if (field === "location") { ask("preferredDate"); return; }
-    if (field === "preferredDate") { ask("preferredTime"); return; }
+    if (field === "preferredDate") {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (withFile.trim() && withFile.trim() < todayStr) {
+        setError("Appointment date cannot be in the past. Please pick today or a later date.");
+        bot("Kripya aaj ya aage ki koi date chuniye — beeti hui date valid nahi hai.");
+        ask("preferredDate");
+        return;
+      }
+      ask("preferredTime"); return;
+    }
     if (field === "preferredTime") { ask("chiefComplaint"); return; }
     if (clinicalFields.has(field)) {
       const priorAnswers = turns.filter((turn) => turn.role === "patient").map((turn) => turn.text);
@@ -201,23 +210,25 @@ export default function AppointmentIntakeFlow() {
   async function finish(finalAnswers: Answers, finalLog: QaTurn[]) {
     setBusy(true); setStep("done");
     try {
-      const response = await fetch("/api/appointment-intake", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        ...finalAnswers,
-        qaLog: finalLog,
-        useExisting,
-        semanticFacts,
-        previousPatientContext: previousContext,
-        documents: documents.map(({ id, name, type, size }) => ({ id, name, type, size, source: "PATIENT" })),
-        preVisitReport: {
-          problemSummary: finalAnswers.chiefComplaint,
-          fullHistory: [finalAnswers.chiefComplaint, finalAnswers.duration, ...finalLog.map((entry) => `${entry.question}: ${entry.answer}`)].filter(Boolean).join(" "),
-          urgency: "OPD",
+      const response = await fetch("/api/appointment-intake", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+          ...finalAnswers,
+          qaLog: finalLog,
+          useExisting,
           semanticFacts,
-          documents: documents.map(({ name, type, size }) => ({ name, type, size, source: "PATIENT" })),
-          previousPatientContext: previousContext?.pastSummary ?? "",
-          doctorReviewBoundary: "AI-generated considerations; clinician approval required.",
-        },
-      }) });
+          previousPatientContext: previousContext,
+          documents: documents.map(({ id, name, type, size }) => ({ id, name, type, size, source: "PATIENT" })),
+          preVisitReport: {
+            problemSummary: finalAnswers.chiefComplaint,
+            fullHistory: [finalAnswers.chiefComplaint, finalAnswers.duration, ...finalLog.map((entry) => `${entry.question}: ${entry.answer}`)].filter(Boolean).join(" "),
+            urgency: "OPD",
+            semanticFacts,
+            documents: documents.map(({ name, type, size }) => ({ name, type, size, source: "PATIENT" })),
+            previousPatientContext: previousContext?.pastSummary ?? "",
+            doctorReviewBoundary: "AI-generated considerations; clinician approval required.",
+          },
+        })
+      });
       const payload = await response.json();
       if (!response.ok || !payload?.ok) throw new Error(payload?.error?.message ?? "Appointment could not be saved.");
       const savedPatientId = payload.data?.patient?.id;
@@ -282,7 +293,7 @@ export default function AppointmentIntakeFlow() {
       {busy && <div className="inline-flex rounded-2xl bg-[#f3f4fa] px-4 py-3 text-sm text-[#78908a]">Thinking…</div>}<div ref={endRef} />
     </main>
     {step !== "done" && <footer className="border-t border-[#edf1ee] bg-white p-4"><input id="appointment-intake-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />{file && <div className="mb-2 flex items-center gap-2 rounded-lg bg-[#eef7f3] px-3 py-2 text-xs text-[#317b67]"><Paperclip className="h-3 w-3" />{file.name}<button className="ml-auto" onClick={() => setFile(null)} aria-label="Remove attachment"><X className="h-3 w-3" /></button></div>}
-      <div className="flex items-end gap-2"><label htmlFor="appointment-intake-file" aria-label="Attach report or prescription" className="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-lg border border-[#dce9e3] text-[#07947f]"><Paperclip className="h-4 w-4" /></label>{step === "phone" ? <div className="flex h-11 flex-1 items-center rounded-lg border border-[#dce9e3] px-3"><span className="mr-2 font-semibold text-[#54716d]">+91</span><input aria-label="10 digit mobile number" value={draft} onChange={(event) => setDraft(event.target.value.replace(/\D/g, "").slice(0, 10))} className="min-w-0 flex-1 outline-none" inputMode="numeric" /></div> : step === "preferredDate" ? <input aria-label="Appointment date" type="date" value={draft} onChange={(event) => setDraft(event.target.value)} className="h-11 min-w-0 flex-1 rounded-lg border border-[#dce9e3] px-3" /> : step === "preferredTime" ? <input aria-label="Appointment time" type="time" value={draft} onChange={(event) => setDraft(event.target.value)} className="h-11 min-w-0 flex-1 rounded-lg border border-[#dce9e3] px-3" /> : <textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void continueWith(draft); } }} placeholder={step === "location" ? "Shahar ka naam likhein…" : "Type your answer…"} className="min-h-11 max-h-28 flex-1 resize-none rounded-lg border border-[#dce9e3] px-3 py-2.5 outline-none" />}{editing && <button onClick={() => { setDraft(""); setStep(editing.returnStep); setEditing(null); }} className="h-11 rounded-lg border border-[#dce9e3] px-3 text-sm text-[#6d827b]">Cancel</button>}<button disabled={writeDisabled || (step === "phone" ? draft.length !== 10 || lookup.loading || Boolean(lookup.patient) : !draft.trim() && !file)} onClick={() => void continueWith(draft)} className="flex h-11 items-center gap-2 rounded-lg bg-[#07947f] px-4 text-sm font-bold text-white disabled:opacity-50"><Send className="h-4 w-4" />{editing ? "Update" : "Send"}</button></div>
+      <div className="flex items-end gap-2"><label htmlFor="appointment-intake-file" aria-label="Attach report or prescription" className="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-lg border border-[#dce9e3] text-[#07947f]"><Paperclip className="h-4 w-4" /></label>{step === "phone" ? <div className="flex h-11 flex-1 items-center rounded-lg border border-[#dce9e3] px-3"><span className="mr-2 font-semibold text-[#54716d]">+91</span><input aria-label="10 digit mobile number" value={draft} onChange={(event) => setDraft(event.target.value.replace(/\D/g, "").slice(0, 10))} className="min-w-0 flex-1 outline-none" inputMode="numeric" /></div> : step === "preferredDate" ? <input aria-label="Appointment date" type="date" min={new Date().toISOString().slice(0, 10)} value={draft} onChange={(event) => setDraft(event.target.value)} className="h-11 min-w-0 flex-1 rounded-lg border border-[#dce9e3] px-3" /> : step === "preferredTime" ? <input aria-label="Appointment time" type="time" value={draft} onChange={(event) => setDraft(event.target.value)} className="h-11 min-w-0 flex-1 rounded-lg border border-[#dce9e3] px-3" /> : <textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void continueWith(draft); } }} placeholder={step === "location" ? "Shahar ka naam likhein…" : "Type your answer…"} className="min-h-11 max-h-28 flex-1 resize-none rounded-lg border border-[#dce9e3] px-3 py-2.5 outline-none" />}{editing && <button onClick={() => { setDraft(""); setStep(editing.returnStep); setEditing(null); }} className="h-11 rounded-lg border border-[#dce9e3] px-3 text-sm text-[#6d827b]">Cancel</button>}<button disabled={writeDisabled || (step === "phone" ? draft.length !== 10 || lookup.loading || Boolean(lookup.patient) : !draft.trim() && !file)} onClick={() => void continueWith(draft)} className="flex h-11 items-center gap-2 rounded-lg bg-[#07947f] px-4 text-sm font-bold text-white disabled:opacity-50"><Send className="h-4 w-4" />{editing ? "Update" : "Send"}</button></div>
       {step === "phone" && lookup.loading && <p className="mt-2 text-xs text-[#6d958b]">Checking patient record…</p>}{step === "phone" && lookup.patient && <div className="mt-2 rounded-lg border border-[#b9dfd1] bg-[#f1faf6] p-3 text-sm text-[#244642]"><b>Is number par {lookup.patient.name} ka record mila hai.</b><p className="mt-1 text-xs">Kya appointment isi patient ke liye hai?</p><div className="mt-2 flex gap-2"><button onClick={() => chooseExisting(true)} className="rounded-lg bg-[#07947f] px-3 py-2 text-xs font-bold text-white">Yes, follow-up</button><button onClick={() => chooseExisting(false)} className="rounded-lg border border-[#9ccbb8] px-3 py-2 text-xs font-bold text-[#317b67]">No, new patient</button></div></div>}{citySuggestions.length > 0 && <div className="mt-2 overflow-hidden rounded-lg border border-[#dce9e3] bg-white">{citySuggestions.map((city) => <button key={city} onClick={() => setDraft(city)} className="block w-full px-3 py-2 text-left text-sm hover:bg-[#eef7f3]">{city}</button>)}</div>}{error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </footer>}
   </div>;

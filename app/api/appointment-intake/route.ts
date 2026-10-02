@@ -1,4 +1,4 @@
-import { addPatient, error, generateId, insert, json, listPatients, nowIso, queryOne, readObject, requiredString } from "../_lib/demo";
+import { addPatient, error, generateId, insert, json, listPatients, nowIso, pastDateError, queryOne, readObject, requiredString } from "../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,8 @@ export async function POST(request: Request) {
   if (!phone || phoneKey(phone).length !== 10 || !preferredDate || !preferredTime || !chiefComplaint) {
     return error("phone, appointment date/time, and chief complaint are required.");
   }
+  const dateErr = pastDateError(preferredDate);
+  if (dateErr) return error(dateErr);
 
   const allPatients = await listPatients();
   const matchingPatient = allPatients.find((patient) => patient.phone && phoneKey(patient.phone) === phoneKey(phone));

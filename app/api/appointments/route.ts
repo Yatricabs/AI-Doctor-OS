@@ -1,4 +1,4 @@
-import { error, generateId, insert, json, nowIso, query, queryOne, readObject, requiredString, update } from "../_lib/demo";
+import { error, generateId, insert, json, nowIso, pastDateError, query, queryOne, readObject, requiredString, update } from "../_lib/demo";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +34,8 @@ export async function POST(request: Request) {
   if (!patientId) return error("patientId is required");
   if (!appointmentDate) return error("appointmentDate is required");
   if (!appointmentTime) return error("appointmentTime is required");
+  const dateErr = pastDateError(appointmentDate);
+  if (dateErr) return error(dateErr);
 
   // Check patient exists
   const patient = await queryOne<Record<string, unknown>>("SELECT * FROM patients WHERE id = ?", [patientId]);
@@ -80,7 +82,11 @@ export async function PATCH(request: Request) {
 
   const updates: Record<string, unknown> = { updatedAt: nowIso() };
   if (typeof body.status === "string") updates.status = body.status;
-  if (typeof body.appointmentDate === "string") updates.appointmentDate = body.appointmentDate;
+  if (typeof body.appointmentDate === "string") {
+    const dateErr = pastDateError(body.appointmentDate);
+    if (dateErr) return error(dateErr);
+    updates.appointmentDate = body.appointmentDate;
+  }
   if (typeof body.appointmentTime === "string") updates.appointmentTime = body.appointmentTime;
   if (typeof body.reason === "string") updates.reason = body.reason;
   if (typeof body.notes === "string") updates.notes = body.notes;

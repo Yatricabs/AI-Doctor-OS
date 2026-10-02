@@ -23,7 +23,12 @@ const VISIT_TYPES = [
   { value: "report_review", label: "Report review", desc: "Discuss lab or imaging reports" },
 ];
 
-const DATES = ["2026-09-15", "2026-09-16", "2026-09-17", "2026-09-18", "2026-09-19"];
+// Next 5 bookable days starting today — patients can never pick a past date.
+const DATES = Array.from({ length: 5 }, (_, i) => {
+  const d = new Date();
+  d.setDate(d.getDate() + i);
+  return d.toISOString().slice(0, 10);
+});
 const TIMES = ["9:00 AM", "9:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "2:00 PM", "2:30 PM", "3:00 PM"];
 
 function ageFromDob(dob?: string): string {

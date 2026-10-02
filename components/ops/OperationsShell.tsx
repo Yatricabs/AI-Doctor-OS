@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BarChart3, Boxes, CalendarClock, FileText, IndianRupee, LayoutDashboard, Settings, Stethoscope, Users } from "lucide-react";
+import { BarChart3, Bell, Boxes, CalendarClock, FileText, IndianRupee, LayoutDashboard, Search, Settings, Stethoscope, Users } from "lucide-react";
+import "@/styles/consultation.css";
 import DashboardView from "./DashboardView";
 import AppointmentsView from "./AppointmentsView";
 import PatientsView from "./PatientsView";
@@ -64,22 +65,43 @@ export default function OperationsShell() {
         <div className="mt-auto hidden px-2 text-[10px] md:block" style={{ color: tone.muted }}>Patient &amp; Operations · Demo V2</div>
       </aside>
 
-      <main className="min-w-0 flex-1 px-4 py-8 md:px-10">
-        <div className="mx-auto max-w-[1280px]">
-          <h1 className="text-2xl font-bold tracking-tight" style={{ color: tone.ink }}>{section}</h1>
-          <p className="mt-1 text-sm" style={{ color: tone.muted }}>{descriptionFor(section)}</p>
-          <div className="mt-6">
-            {section === "Dashboard" && <DashboardView navigate={navigate} />}
-            {section === "Appointments" && <AppointmentsView openPatient={openPatient} initialTab={appointmentsTab} />}
-            {section === "Patients" && <PatientsView openPatientId={openPatientId} onOpenPatient={setOpenPatientId} />}
-            {section === "Reports & Documents" && <ReportsView openPatient={openPatient} />}
-            {section === "Inventory" && <InventoryView />}
-            {section === "Billing" && <BillingView openPatient={openPatient} />}
-            {section === "Analytics" && <AnalyticsView />}
-            {section === "Settings" && <SettingsView />}
+      <div className="min-w-0 flex-1">
+        {/* Global top bar */}
+        <header className="cw-topbar">
+          <div className="cw-topbar-search">
+            <Search size={16} style={{ color: "#78908a" }} />
+            <input placeholder="Search patients, appointments, reports…" />
+            <span className="cw-kbd">Ctrl K</span>
           </div>
-        </div>
-      </main>
+          <div className="cw-topbar-right">
+            <button className="cw-bell" aria-label="Notifications"><Bell size={18} /><span className="cw-bell-badge">1</span></button>
+            <div className="cw-profile">
+              <span className="cw-profile-avatar">RK</span>
+              <span>
+                <span className="cw-profile-name" style={{ display: "block" }}>Dr. Raj Kumar</span>
+                <span className="cw-profile-role">General Physician</span>
+              </span>
+            </div>
+          </div>
+        </header>
+
+        <main className="px-4 py-8 md:px-10">
+          <div className="mx-auto max-w-[1280px]">
+            <h1 className="text-2xl font-bold tracking-tight" style={{ color: tone.ink }}>{section}</h1>
+            <p className="mt-1 text-sm" style={{ color: tone.muted }}>{descriptionFor(section)}</p>
+            <div className="mt-6">
+              {section === "Dashboard" && <DashboardView navigate={navigate} />}
+              {section === "Appointments" && <AppointmentsView openPatient={openPatient} initialTab={appointmentsTab} />}
+              {section === "Patients" && <PatientsView openPatientId={openPatientId} onOpenPatient={setOpenPatientId} />}
+              {section === "Reports & Documents" && <ReportsView openPatient={openPatient} />}
+              {section === "Inventory" && <InventoryView />}
+              {section === "Billing" && <BillingView openPatient={openPatient} />}
+              {section === "Analytics" && <AnalyticsView />}
+              {section === "Settings" && <SettingsView />}
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
