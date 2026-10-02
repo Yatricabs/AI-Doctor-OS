@@ -6,6 +6,7 @@ import { assessAppointmentAnswer, nextAppointmentQuestion, extractSemanticFacts,
 import { recordIntakeDecision } from "@/lib/appointmentIntakeDebug";
 import { resolveClinicalContext } from "@/lib/clinicalPathways";
 import { serverAiAnalyzeImage } from "@/lib/serverAiClient";
+import { validateIntakeInput } from "@/lib/intakeValidation";
 
 type Field = "patientType" | "phone" | "name" | "age" | "sex" | "location" | "preferredDate" | "preferredTime" | "chiefComplaint" | "duration" | "severity" | "associatedSymptoms" | "priorConsultation" | "priorReports" | "clarification" | "done";
 type Answers = Partial<Record<Exclude<Field, "clarification" | "done">, string>>;
@@ -123,6 +124,19 @@ export default function AppointmentIntakeFlow() {
   async function continueWith(value: string, field = step) {
     const withFile = file ? `${value}${value ? "\n" : ""}[Attached file: ${file.name}]` : value;
     if (!withFile.trim() || busy) return;
+
+    if (!file || value.trim()) {
+      const activeField = editing?.field ?? field;
+      const lastPrompt = turns[turns.length - 1]?.text;
+      const validation = validateIntakeInput(activeField, value, lastPrompt);
+      if (!validation.valid && validation.message) {
+        if (!editing) patient(withFile, field);
+        bot(validation.message, field);
+        setError(""); setDraft(""); setFile(null);
+        return;
+      }
+    }
+
     const attachedFile = file;
     if (attachedFile) setDocuments((current) => [...current, { id: `${Date.now()}-${attachedFile.name}`, name: attachedFile.name, type: attachedFile.type, size: attachedFile.size, file: attachedFile, turnIndex: editing?.turn ?? turns.length }]);
     setError(""); setDraft(""); setFile(null);

@@ -13,6 +13,7 @@ import { clearLookup, lookupPatientByPhone } from "@/lib/patientLookupSlice";
 import { evaluatePatientAnswer, type ReasoningResult } from "@/lib/interview-reasoning";
 import { decideNextBestQuestion, type ClinicalQaTurn, type NextBestDecision } from "@/lib/next-best-question";
 import { assessSemanticContext, type SemanticFact } from "@/lib/semantic-context";
+import { validateIntakeInput } from "@/lib/intakeValidation";
 
 type IntakeStep =
   | "existing-or-new" | "phone" | "name" | "age" | "sex" | "location"
@@ -213,6 +214,16 @@ export default function PatientIntakeChat({ onComplete, variant = "default" }: {
       return;
     }
     if (replayingEdit.current && replayStep.current === "chiefComplaint") {
+      const validation = validateIntakeInput("chiefComplaint", typedValue);
+      if (!validation.valid && validation.message) {
+        replayingEdit.current = false;
+        replayStep.current = null;
+        setDraft("");
+        setThread((current) => [...current, { role: "patient", content: typedValue }]);
+        sayBot(validation.message);
+        setStep("chiefComplaint");
+        return;
+      }
       replayingEdit.current = false; replayStep.current = null;
       setDraft(""); setThread((current) => [...current, { role: "patient", content: typedValue }]);
       const replayedAnswers = { ...answers, chiefComplaint: typedValue, duration: "", priorConsultation: "", priorReports: "" };
@@ -228,6 +239,14 @@ export default function PatientIntakeChat({ onComplete, variant = "default" }: {
       return;
     }
     if (activeStep === "clarification" && pendingClarification) {
+      const lastPrompt = thread[thread.length - 1]?.content;
+      const validation = validateIntakeInput("clarification", typedValue, lastPrompt);
+      if (!validation.valid && validation.message) {
+        setDraft("");
+        setThread((current) => [...current, { role: "patient", content: typedValue }]);
+        sayBot(validation.message);
+        return;
+      }
       setDraft("");
       setThread((current) => [...current, { role: "patient", content: typedValue }]);
       setStep("reasoning");
@@ -262,6 +281,23 @@ export default function PatientIntakeChat({ onComplete, variant = "default" }: {
     const value = attachment ? `${typedValue}${typedValue ? "\n" : ""}[Attached file: ${attachment.name}]` : typedValue;
     const busy: IntakeStep[] = ["reasoning", "generating-questions", "generating-report", "finalizing", "done"];
     if (!value || busy.includes(step)) return;
+
+    if (!attachment || typedValue) {
+      const lastPrompt = currentClinicalDecision?.question ?? thread[thread.length - 1]?.content;
+      const validation = validateIntakeInput(activeStep, typedValue, lastPrompt);
+      if (!validation.valid && validation.message) {
+        if (editingIndex !== null) {
+          sayBot(validation.message);
+          return;
+        }
+        setDraft("");
+        setAttachment(null);
+        setThread((current) => [...current, { role: "patient", content: value }]);
+        sayBot(validation.message);
+        return;
+      }
+    }
+
     if (editingIndex !== null && !replayingEdit.current) {
       const answerStep = editingStep ?? step;
       const editedAt = editingIndex;

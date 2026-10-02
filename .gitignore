@@ -8,3 +8,6 @@ out
 /data/
 next-env.d.ts
 /local-artifacts/
+.freebuff/
+test-results/
+dataset-metadata.json
