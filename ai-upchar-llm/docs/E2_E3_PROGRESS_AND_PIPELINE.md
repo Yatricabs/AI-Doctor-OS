@@ -23,6 +23,7 @@ engineering status document, not a clinical-readiness sign-off.
 | E3 Gate B (E2 Regression) | Passed (6/6, 100%) | All 6 frozen E2 held-out contract cases parsed as valid JSON without extra data or repetition. |
 | E3 Gate C (Clinical Safety) | Passed (12/12, 100%) | All 12 held-out emergency cases passed strict contract validation with ZERO clinical overreach violations. |
 | E3 Artifact Persistence | Verified & Secured | Golden archive SHA256: `da1563afc10ebdfcaae18e92e5633d51d151eaad7154ad9230cc80b0de8bc0c7` (625,984,867 bytes). Persisted locally and on Kaggle. |
+| Next.js Clinical Reasoning Bridge | Complete & Verified | Typed client (`lib/clinicalReasoningClient.ts`), `POST /api/clinical/reason`, `POST /api/symptom-analysis` integration, contract test suite (`test:clinical-reasoning-bridge`) 6/6 passed, Next.js build clean. |
 
 ## Completed work
 
@@ -386,12 +387,23 @@ Manifest confirmed at `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\kaggle
 - Kaggle Dataset: `yatricabs/ai-upchar-e3-targeted-safety-artifacts`
 - Status: **GPU OFF / EXECUTION CLOSED**.
 
+### 6. Next.js Clinical Reasoning Integration Bridge: PASSED
+- **Client Library:** `lib/clinicalReasoningClient.ts` implemented with full TypeScript definitions for the 6-key contract (`semantic_interpretation`, `recommended_action`, `next_best_question`, `missing_information`, `clinical_considerations`, `confidence`).
+- **Resilience / Safety Floor:** Added `deterministicClinicalFloor()` ensuring zero-downtime fallback when the local/hosted Python gateway is unconfigured or offline. Automatically detects red flags, urgent symptoms, extracts duration/anatomy, and ensures `confirmed_diagnoses: null`.
+- **API Endpoints:**
+  - `POST /api/clinical/reason`: Next.js Route Handler exposing the clinical reasoning contract with input validation and fallback execution.
+  - `GET /api/clinical/reason`: Health check returning gateway connectivity and clinical governance status.
+  - `POST /api/symptom-analysis`: Updated to query `evaluateClinicalReasoning()`, providing triage and considerations without crashing when external APIs are unconfigured.
+- **Verification:**
+  - `npm run test:clinical-reasoning-bridge`: 6/6 tests passing (emergency triggers, routine dysuria extraction, contract key invariants, offline fallback).
+  - Next.js production build (`npm run build`): 100% clean compilation across all 30 routes.
+
 ## Summary of Phase 4A Milestones
 
-| Milestone | Base Model | Steps | Termination Bug | Gate A | Gate B | Gate C | Overall Status |
-|---|---|---:|---|---|---|---|---|
-| **Original E2** | Qwen3-4B | 138 | Present (Suppressed EOS) | Pass | Fail (0/6 Extra data) | N/A | **Partial** |
-| **Corrected E2** | Qwen3-4B | 138 | Resolved (`append_assistant_eos`) | Pass | Pass (6/6 Valid JSON) | N/A | **Verified** |
-| **E3 Targeted Safety** | Qwen3-4B | 36 | Resolved (`append_assistant_eos`) | Pass (100%) | Pass (6/6 Valid JSON) | Pass (12/12 Safe) | **SUCCESS** |
+| Milestone | Base Model | Steps | Termination Bug | Gate A | Gate B | Gate C | Next.js Bridge | Overall Status |
+|---|---|---:|---|---|---|---|---|---|
+| **Original E2** | Qwen3-4B | 138 | Present (Suppressed EOS) | Pass | Fail (0/6 Extra data) | N/A | N/A | **Partial** |
+| **Corrected E2** | Qwen3-4B | 138 | Resolved (`append_assistant_eos`) | Pass | Pass (6/6 Valid JSON) | N/A | N/A | **Verified** |
+| **E3 Targeted Safety** | Qwen3-4B | 36 | Resolved (`append_assistant_eos`) | Pass (100%) | Pass (6/6 Valid JSON) | Pass (12/12 Safe) | Verified (6/6 Tests) | **SUCCESS** |
 
-**Final Status:** Phase 4A real QLoRA validation and E3 targeted clinical safety training are fully completed, verified, persisted locally, and backed up to Kaggle. Ready for review.
+**Final Status:** Phase 4A real QLoRA validation, E3 targeted clinical safety training, and the Next.js clinical reasoning integration bridge are fully completed, verified, persisted locally, and backed up to Kaggle. Ready for review.
