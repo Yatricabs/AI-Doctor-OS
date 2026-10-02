@@ -80,8 +80,21 @@ def check_clinical_safety(parsed: dict) -> list[str]:
     return violations
 
 
+CONTRACT_INSTRUCTION = (
+    "Return ONLY one JSON object using exactly the AI UPCHAR clinical reasoning "
+    "schema with these top-level keys: semantic_interpretation, recommended_action, "
+    "next_best_question, missing_information, clinical_considerations, confidence. "
+    "Do not add or rename keys. No explanatory prose and no markdown code fences."
+)
+
+
 def build_prompt(tokenizer, user_message: str) -> str:
-    messages = [{"role": "user", "content": user_message}]
+    text = user_message.strip()
+    if "Return ONLY one JSON object" not in text:
+        content = f"{text} {CONTRACT_INSTRUCTION}"
+    else:
+        content = text
+    messages = [{"role": "user", "content": content}]
     return tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
 
 
