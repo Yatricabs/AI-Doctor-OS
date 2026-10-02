@@ -40,6 +40,30 @@ await check("Exact screenshot severity 'nlknlnlkn' is detected as gibberish", ()
   assert.match(validation.message, /1 se 10 ke scale/i);
 });
 
+await check("All 13 transcript strings from user live test are rejected as gibberish", () => {
+  const transcriptCases = [
+    { step: "name", input: "mbln" },
+    { step: "age", input: "jlilkn" },
+    { step: "location", input: "knlknlknlkn" },
+    { step: "chiefComplaint", input: "nnlknkn" },
+    { step: "duration", input: "kjnlnln" },
+    { step: "adaptive-qa", input: "nlknlnlkn", question: "Is takleef ki teevrata 1 se 10 mein kitni hai?" },
+    { step: "adaptive-qa", input: "lknlkn", question: "Iske saath aur kaun se lakshan ho rahe hain?" },
+    { step: "adaptive-qa", input: "lknlkn", question: "Kya iske saath behoshi, saans lene mein dikkat...?" },
+    { step: "adaptive-qa", input: "jkn", question: "Kya aapko koi purani bimari ya isi tarah ki takleef pehle bhi hui hai?" },
+    { step: "adaptive-qa", input: "jkj", question: "Kya aapne is takleef ke liye pehle koi ilaaj ya doctor ki salah li hai?" },
+    { step: "adaptive-qa", input: "lkjon", question: "Kya aap abhi koi dawa niyamit roop se le rahe hain?" },
+    { step: "priorReports", input: "kjjkn" },
+    { step: "adaptive-qa", input: "dfsdf", question: "Is takleef se aapki rozmarra ki activities par kitna asar pad raha hai?" },
+  ];
+
+  for (const c of transcriptCases) {
+    const res = validateIntakeInput(c.step, c.input, c.question);
+    assert.equal(res.valid, false, `Expected '${c.input}' for step '${c.step}' to be rejected as gibberish`);
+    assert.ok(res.message && res.message.length > 0, `Expected error message for '${c.input}'`);
+  }
+});
+
 // ── 2. Other common keyboard smashes and invalid patterns ──
 await check("Home-row keyboard walk 'asdfgh' is detected as nonsense", () => {
   const result = checkIntelligibility("asdfgh");
