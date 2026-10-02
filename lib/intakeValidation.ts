@@ -85,10 +85,12 @@ const KEYBOARD_WALKS = [
   // Bottom row
   "zxcv", "xcvb", "cvbn", "vbnm",
   "mnbv", "nbvc", "bvcx", "vcxz",
+  // 3-char high-confidence keyboard walks
+  "lkj", "jkl", "qwe", "zxc", "xcv", "cvb", "vbn", "bnm", "mnb", "nbv", "bvc",
 ];
 
 /**
- * Check if a token contains 4+ consecutive characters from a keyboard row walk.
+ * Check if a token contains 3+ consecutive characters from a keyboard row walk.
  */
 function hasKeyboardWalk(token: string): boolean {
   const lower = token.toLowerCase();
@@ -125,19 +127,24 @@ function isNonsenseToken(rawToken: string): { isNonsense: boolean; reason?: stri
     return { isNonsense: true, reason: "Repeating pattern sequence" };
   }
 
-  // Check keyboard walks (e.g. "asdfgh", "zxcvb")
+  // Vowel analysis: any word >= 2 letters with zero vowels/y is unpronounceable gibberish
+  const vowelCount = (token.match(/[aeiouy]/g) || []).length;
+  if (vowelCount === 0) {
+    return { isNonsense: true, reason: "No vowels in word" };
+  }
+
+  // Check keyboard walks (e.g. "asdfgh", "lkjon", "zxcvb")
   if (hasKeyboardWalk(token)) {
     return { isNonsense: true, reason: "Keyboard mash pattern" };
   }
 
-  // Vowel analysis for tokens of length >= 4
-  // In English / Hinglish, vowels are a, e, i, o, u, y
-  if (token.length >= 4) {
-    const vowelCount = (token.match(/[aeiouy]/g) || []).length;
-    if (vowelCount === 0) {
-      return { isNonsense: true, reason: "No vowels in 4+ letter word" };
-    }
+  // Impossible word-initial consonant cluster in Hindi/English (e.g. "lkjon", "nlkn", "kjnl")
+  if (/^(lk|nl|kj|zk|zx|qx|qk|qj|xq)/.test(token)) {
+    return { isNonsense: true, reason: "Impossible word-initial consonant cluster" };
+  }
 
+  // Tokens of length >= 4
+  if (token.length >= 4) {
     // Unpronounceable consecutive consonant sequence (5+ consecutive consonants)
     // E.g. "nnlknkn" has 7, "kjlnln" has 6, "nlknlnlkn" has 9
     if (/[^aeiouy]{5,}/.test(token)) {
