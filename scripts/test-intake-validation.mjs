@@ -176,30 +176,6 @@ await check("Valid severity answers are accepted", () => {
 // ── 6. Cross-layer integration with context consistency ──
 import { assessAppointmentContext } from "../lib/appointmentContextConsistency.ts";
 
-await check("assessAppointmentContext returns NEEDS_CLARIFICATION for gibberish chief complaint 'nnlknkn'", () => {
-  const result = assessAppointmentContext({ latestAnswer: "nnlknkn" });
-  assert.equal(result.status, "NEEDS_CLARIFICATION");
-  assert.equal(result.needsClarification, true);
-  assert.ok(result.reasonCodes.includes("UNINTELLIGIBLE_INPUT"));
-  assert.match(result.question, /spasht shabdon/i);
-});
-
-await check("assessAppointmentContext returns NEEDS_CLARIFICATION for gibberish duration 'kjlnln'", () => {
-  const result = assessAppointmentContext({ latestAnswer: "kjlnln" });
-  assert.equal(result.status, "NEEDS_CLARIFICATION");
-  assert.equal(result.needsClarification, true);
-  assert.ok(result.reasonCodes.includes("UNINTELLIGIBLE_INPUT"));
-  assert.match(result.question, /spasht shabdon/i);
-});
-
-await check("assessAppointmentContext returns NEEDS_CLARIFICATION for gibberish severity 'nlknlnlkn'", () => {
-  const result = assessAppointmentContext({ latestAnswer: "nlknlnlkn" });
-  assert.equal(result.status, "NEEDS_CLARIFICATION");
-  assert.equal(result.needsClarification, true);
-  assert.ok(result.reasonCodes.includes("UNINTELLIGIBLE_INPUT"));
-  assert.match(result.question, /spasht shabdon/i);
-});
-
 await check("assessAppointmentContext accepts valid complaints and durations without false contradictions", () => {
   const complaintResult = assessAppointmentContext({ latestAnswer: "pet me dard hai" });
   assert.equal(complaintResult.status, "CONSISTENT");

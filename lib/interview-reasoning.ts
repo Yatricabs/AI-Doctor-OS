@@ -48,16 +48,6 @@ export async function evaluatePatientAnswer(context: InterviewReasoningContext):
     };
   }
 
-  const intell = checkIntelligibility(context.latestAnswer);
-  if (!intell.intelligible && context.latestAnswer.trim().length > 0) {
-    return {
-      outcome: "NEEDS_CLARIFICATION",
-      interpretation: `Unintelligible or nonsensical patient answer: ${intell.reason}`,
-      question: "Kripya apna jawab thoda spasht shabdon mein bataiye taaki doctor ke liye sahi jaankari taiyaar ho sake.",
-      missingInformation: ["Intelligible patient statement"],
-    };
-  }
-
   const generated = await Promise.race([
     askAIForJSON<ReasoningResult>([
       {
