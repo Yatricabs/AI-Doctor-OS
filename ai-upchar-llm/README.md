@@ -12,6 +12,22 @@ The first production path is 4-bit QLoRA SFT; full continued pretraining is
 available only after corpus and GPU approval. Preference/DPO is intentionally a
 future stage.
 
+## Current E2/E3 progress
+
+The latest Phase 4A E2 status, repeated-JSON root-cause evidence, corrected-E2
+training path, Kaggle notebook/dataset inventory, and remaining pipeline gates
+are tracked in:
+
+- [`docs/E2_E3_PROGRESS_AND_PIPELINE.md`](docs/E2_E3_PROGRESS_AND_PIPELINE.md)
+
+## Local workspace/artifact organization
+
+The primary local working clone is `D:\Github Repo\Cursor\AI Doctor OS`.
+Large local artifacts are organized under the Git-ignored
+`local-artifacts/` folder in that repo. See:
+
+- [`docs/LOCAL_ARTIFACTS_AND_WORKSPACE.md`](docs/LOCAL_ARTIFACTS_AND_WORKSPACE.md)
+
 ## Local contract smoke test
 
 Use Python 3.11-3.13:

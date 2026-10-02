@@ -15,7 +15,68 @@ export async function apiRequest<T>(url: string, init?: RequestInit): Promise<T>
 export type Patient = { id: string; name: string; initials: string; appointment: string; status: string; phone?: string; age?: string; sex?: string; location?: string };
 export type Report = { id: string; patientId: string; title: string; type: "Lab report" | "Prescription" | "Referral"; date: string; status: string };
 export type Prescription = { id: string; patientId: string; patientName: string; medication: string; dosage: string; status: string; safetyFlags: string[]; overrideReason?: string; createdAt: string };
-export type PreVisitReport = { problemSummary: string; fullHistory: string; provisionalDiagnosis: string; furtherTestsNeeded: string; recommendedTests: string[]; recommendedTreatment: string; urgency: "OPD" | "Admit for observation" | "Emergency"; surgeryLikely: string; aiGenerated: boolean };
+export type PreVisitReport = {
+  // ── Legacy fields (kept so older callers/UI keep working) ──
+  problemSummary: string;
+  fullHistory: string;
+  provisionalDiagnosis: string;
+  furtherTestsNeeded: string;
+  recommendedTests: string[];
+  recommendedTreatment: string;
+  urgency: "OPD" | "Admit for observation" | "Emergency";
+  surgeryLikely: string;
+  aiGenerated: boolean;
+  // ── Rich pre-visit report sections (from the intake AI report) ──
+  chiefComplaint?: string;         // what the patient is here for
+  duration?: string;               // since when / onset
+  likelyCause?: string;            // why it may be happening (assessment narrative)
+  possibleConditions?: string[];   // likely diagnoses / possibilities (review-required)
+  diagnosisConfidence?: "low" | "moderate" | "high";
+  recommendedTestsInitial?: string[];   // first-line tests
+  recommendedTestsIfSevere?: string[];  // escalation tests/scans
+  recommendedMedicines?: string[];      // medicine considerations (review-required)
+  treatmentMeasures?: string[];         // supportive/lifestyle measures
+  redFlags?: string[];                  // alarming signs to check — highlighted in UI
+  urgencyLevel?: "routine" | "opd" | "urgent" | "admit" | "emergency";
+  urgencyReason?: string;
+  infoSufficient?: boolean;             // is collected info enough to start treatment?
+  infoSufficientNote?: string;
+  nextSteps?: string[];                 // clear next-step guidance for the doctor
+  narrative?: string;                   // full at-a-glance summary
+  visitType?: "new" | "returning";      // new vs follow-up patient
+  generatedAt?: string;
+  // ── Structured grid fields (for the consultation workspace summary cards) ──
+  severityScore?: number;               // 1..10 self-reported severity, if captured
+  severityLabel?: string;               // qualitative label, e.g. "As per patient response"
+  associatedSymptoms?: string[];        // discrete associated symptoms
+  keyConcerns?: string[];               // top concerns to review (falls back to conditions/red flags)
+  specialty?: string;                   // e.g. "Gynecology", "Cardiology"
+  messageCount?: number;                // how many intake messages the summary was built from
+};
+
+// A single prescribed-medicine line in the consultation Prescription table.
+export type PrescriptionItem = {
+  medicationName: string;
+  dose: string;
+  frequency: string;
+  duration?: string;
+  instructions?: string;
+};
+
+// A test/investigation ordered during the consultation.
+export type OrderedTest = { name: string; category?: string };
+
+// The doctor's plan captured in the consultation workspace (client-side draft shape).
+export type ConsultationPlan = {
+  notes: string;
+  diagnosis: string;
+  items: PrescriptionItem[];
+  tests: OrderedTest[];
+  followUpAfter: string;   // number as string
+  followUpUnit: "Days" | "Weeks" | "Months";
+  followUpType: "In-clinic Visit" | "Teleconsultation" | "None";
+  followUpInstructions: string;
+};
 export type Appointment = {
   id: string; patientId: string; patientName: string; channel: "WhatsApp" | "Voice call" | "Mobile app" | "Walk-in";
   date: string; time: string; priority: "Urgent" | "Follow-up" | "Routine"; visitType: "New" | "Follow-up";

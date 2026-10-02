@@ -709,6 +709,27 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
+/** Today's date in YYYY-MM-DD (server local). Used as the minimum bookable day. */
+export function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Validates an appointment date string. Returns an error message if the date is
+ * malformed or falls before today; returns null when the date is acceptable
+ * (today or any future day). Appointments may not be booked in the past.
+ */
+export function pastDateError(dateStr: string): string | null {
+  const trimmed = String(dateStr).trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) return "Enter a valid date (YYYY-MM-DD).";
+  const picked = new Date(`${trimmed}T00:00:00`);
+  if (Number.isNaN(picked.getTime())) return "Enter a valid date.";
+  const today = new Date(`${todayIso()}T00:00:00`);
+  if (picked.getTime() < today.getTime()) return "Appointment date cannot be in the past. Please pick today or a later date.";
+  return null;
+}
+
 /**
  * Wraps a route handler so any thrown error becomes a JSON error response.
  * Without this, an exception makes Next.js return an HTML error page, and the

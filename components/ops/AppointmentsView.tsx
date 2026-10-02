@@ -64,14 +64,16 @@ function FollowUpForm({ onCreated }: { onCreated: () => void }) {
   const { data } = useGetPatientsQuery();
   const patients: Patient[] = data?.patients ?? [];
   const [createAppointment, { isLoading: saving }] = useCreateAppointmentMutation();
+  const realToday = new Date().toISOString().slice(0, 10);
   const [patientId, setPatientId] = useState("");
   const [reason, setReason] = useState("");
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(realToday);
   const [time, setTime] = useState("");
   const [errorText, setErrorText] = useState("");
 
   async function submit() {
     if (!patientId || !reason.trim() || !time.trim()) { setErrorText("Select a patient and fill in reason and time."); return; }
+    if (date && date < realToday) { setErrorText("Appointment date cannot be in the past. Please pick today or a later date."); return; }
     setErrorText("");
     try {
       const patient = patients.find((p) => p.id === patientId);
@@ -94,7 +96,7 @@ function FollowUpForm({ onCreated }: { onCreated: () => void }) {
           {patients.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.id}</option>)}
         </select>
         <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason for follow-up" className="rounded-lg border px-3 py-2.5 text-sm outline-none" style={{ borderColor: "#dce9e3" }} />
-        <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="rounded-lg border px-3 py-2.5 text-sm outline-none" style={{ borderColor: "#dce9e3" }} />
+        <input type="date" value={date} min={realToday} onChange={(event) => setDate(event.target.value)} className="rounded-lg border px-3 py-2.5 text-sm outline-none" style={{ borderColor: "#dce9e3" }} />
         <input value={time} onChange={(event) => setTime(event.target.value)} placeholder="Time (e.g. 4:30 PM)" className="rounded-lg border px-3 py-2.5 text-sm outline-none" style={{ borderColor: "#dce9e3" }} />
       </div>
       <button onClick={submit} disabled={saving} className="mt-4 rounded-lg px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50" style={{ background: tone.primary }}>{saving ? "Scheduling…" : "Schedule follow-up"}</button>

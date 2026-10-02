@@ -27,6 +27,36 @@ INFERENCE_USER_MESSAGE = (
 INFERENCE_MAX_NEW_TOKENS = 512
 
 
+def _append_assistant_eos(rows: list[dict[str, object]], eos_token: str | None) -> list[dict[str, object]]:
+    """Return a copy of conversational SFT rows where assistant messages end
+    with the tokenizer EOS token.
+
+    This is opt-in and intended for corrected E2 runs only. The original E2
+    JSONL is not modified. The motivation is evidence from the E2 diagnostics:
+    the base model naturally terminates with the base EOS after a complete JSON
+    object, while the E2 adapter suppresses EOS after the first JSON and
+    continues with another object. Adding an explicit EOS target after assistant
+    JSON keeps the existing Qwen chat-template `<|im_end|>` boundary while also
+    preserving the base model's end-of-response behavior.
+    """
+    if not eos_token:
+        return rows
+    transformed: list[dict[str, object]] = []
+    for row in rows:
+        copied = dict(row)
+        messages = []
+        for message in row["messages"]:  # type: ignore[index]
+            copied_message = dict(message)
+            if copied_message.get("role") == "assistant":
+                content = str(copied_message.get("content", ""))
+                if not content.endswith(eos_token):
+                    copied_message["content"] = content + eos_token
+            messages.append(copied_message)
+        copied["messages"] = messages
+        transformed.append(copied)
+    return transformed
+
+
 def build_inference_prompt(tokenizer) -> str:
     """Format the inference prompt with the tokenizer's chat template so it
     matches how SFTTrainer formatted the conversational training data, and prime
@@ -124,13 +154,15 @@ def run_real_qlora_validation(config: dict) -> dict:
     }
 
     rows = conversational_rows(load_sft(config["data"]["sft_path"]))
-    split = Dataset.from_list(rows).train_test_split(test_size=config["training"]["eval_split"], seed=config["project"]["seed"])
     dtype = {"float16": torch.float16, "bfloat16": torch.bfloat16}[config["quantization"]["compute_dtype"]]
     quantization = BitsAndBytesConfig(load_in_4bit=config["quantization"]["enabled"], bnb_4bit_quant_type=config["quantization"]["quant_type"], bnb_4bit_use_double_quant=config["quantization"]["double_quant"], bnb_4bit_compute_dtype=dtype)
     gate_a["nf4_quantization_initialized"] = config["quantization"]["quant_type"] == "nf4" and config["quantization"]["enabled"]
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=os.environ.get("TRANSFORMERS_CACHE"))
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    if config["training"].get("append_assistant_eos"):
+        rows = _append_assistant_eos(rows, tokenizer.eos_token)
+    split = Dataset.from_list(rows).train_test_split(test_size=config["training"]["eval_split"], seed=config["project"]["seed"])
     model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=os.environ.get("TRANSFORMERS_CACHE"), quantization_config=quantization, device_map="auto")
     gate_a["model_downloaded_loaded"] = True
     model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=config["training"]["gradient_checkpointing"])
