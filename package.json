@@ -14,7 +14,8 @@
     "test:appointment-intake-context": "node --experimental-strip-types scripts/appointment-intake-context-tests.mjs",
     "test:appointment-intake-browser": "node scripts/appointment-intake-browser-tests.mjs",
     "test:clinical-reasoning-bridge": "node --experimental-strip-types scripts/test-clinical-reasoning-bridge.mjs",
-    "test:intake-validation": "node --experimental-strip-types scripts/test-intake-validation.mjs"
+    "test:intake-validation": "node --experimental-strip-types scripts/test-intake-validation.mjs",
+    "test:intake-chat-flow": "node --experimental-strip-types scripts/test-intake-chat-flow.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.2.7",

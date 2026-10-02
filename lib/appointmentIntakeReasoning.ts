@@ -127,7 +127,7 @@ export function coveredClinicalInformation(context: Record<string, unknown>, sup
   if (qa.some((item) => item && typeof item === "object" && (item as { key?: unknown }).key === "associatedSymptoms") || /\b(with|saath|also|aur|associated|lakshan|symptoms|ulti|vomit|fever|bukhar)\b/i.test(text)) covered.add("associatedSymptoms");
   if (qa.some((item) => item && typeof item === "object" && (item as { key?: unknown }).key === "priorConsultation") || typeof answers.priorConsultation === "string" || /\b(doctor|treatment|इलाज|दवा|prescription)\b/i.test(text)) covered.add("priorConsultation");
   if (qa.some((item) => item && typeof item === "object" && (item as { key?: unknown }).key === "priorReports") || typeof answers.priorReports === "string" || /\b(report|scan|test|prescription|parchi)\b/i.test(text)) covered.add("priorReports");
-  if (/\b(\d+\s*(day|days|din|hafte|week|weeks|mahine|month)|since|kab se|pehle)\b/i.test(text)) covered.add("duration");
+  if (/\b(\d+\s*(day|days|din|hafte|week|weeks|mahine|month|ghante|hours)|since|kab se|pehle|kal se|kal raat|aaj se|subah se|parso se)\b/i.test(text)) covered.add("duration");
   return [...covered];
 }
 
