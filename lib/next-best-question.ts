@@ -1,5 +1,5 @@
-import { askAIForJSON } from "./puter-ai.ts";
-import { matchPathway } from "./clinicalPathways.ts";
+import { askAIForJSON } from "./puter-ai";
+import { matchPathway } from "./clinicalPathways";
 
 export const CLINICAL_COVERAGE_KEYS = [
   "duration", "severity", "character", "symptom_location", "associated_symptoms",

@@ -10,7 +10,7 @@
 // have a canned fallback ready (Puter script not loaded yet, user declined
 // sign-in, network error, etc. all resolve to null, never an exception).
 
-import { serverAiChat } from "./serverAiClient.ts";
+import { serverAiChat } from "./serverAiClient";
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 

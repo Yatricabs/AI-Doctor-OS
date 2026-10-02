@@ -1,5 +1,5 @@
-import type { ClinicalQaTurn } from "./next-best-question.ts";
-import { checkIntelligibility } from "./intakeValidation.ts";
+import type { ClinicalQaTurn } from "./next-best-question";
+import { checkIntelligibility } from "./intakeValidation";
 
 export const SEMANTIC_FACT_KINDS = [
   "ANATOMY_REFERENCE", "BODY_LOCATION", "SYMPTOM", "SYMPTOM_CHARACTERISTIC",

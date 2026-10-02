@@ -1,6 +1,6 @@
 import { askAIForJSON } from "@/lib/puter-ai";
 import { detectRedFlags } from "@/lib/red-flag-keywords";
-import { checkIntelligibility } from "./intakeValidation.ts";
+import { checkIntelligibility } from "./intakeValidation";
 
 export type ReasoningOutcome = "CONTINUE" | "NEEDS_CLARIFICATION" | "SAFETY_CONCERN";
 

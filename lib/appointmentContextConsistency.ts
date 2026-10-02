@@ -4,7 +4,7 @@
  * may add evidence, but it cannot bypass these checks or mutate answers.
  */
 
-import { checkIntelligibility } from "./intakeValidation.ts";
+import { checkIntelligibility } from "./intakeValidation";
 
 export type FactKind =
   | "ANATOMY_REFERENCE" | "BODY_LOCATION" | "SYMPTOM" | "SYMPTOM_CHARACTERISTIC"
