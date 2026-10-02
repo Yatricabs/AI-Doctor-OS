@@ -18,8 +18,11 @@ engineering status document, not a clinical-readiness sign-off.
 | Minimal correction | Implemented & Verified | `training.append_assistant_eos: true` with corrected output directory `artifacts/qwen3-4b-e2-corrected`. |
 | Corrected E2 single-case test | Passed (100%) | `e2-ho--001` on Kaggle (`yatricabs/ai-upchar-e2-corrected-single-case-test`): 72 tokens, clean EOS, zero repetition, valid full JSON. |
 | Corrected E2 six-case eval | Passed (6/6, 100%) | Kaggle kernel `yatricabs/ai-upchar-e2-corrected-six-case-eval`: all 6/6 cases valid JSON, 0 repeated JSON, 0 trailing content, avg 70.3 tokens. Repetition bug completely solved. |
-| E3 source packaging | Diagnosed & Fix Ready | Source dataset `yatricabs/ai-upchar-e3-targeted-safety-source` has uncompressed directory; notebook Cell 1 loader updated to support both folder and `.tar.gz`. |
-| E3 targeted safety setup | Ready for relaunch | Branch `feature/e3-targeted-clinical-safety` authored; 24 train + 12 heldout cases; config (36 steps, assistant-EOS); Gates A/B/C harness ready. |
+| E3 QLoRA Training | Complete & Verified | 36 steps (3 epochs) on T4 GPU. Train loss: 2.847, Eval loss: 2.688. Checkpoints 12/24/36 and adapter saved. |
+| E3 Gate A (Termination) | Passed (100%) | 107 tokens, clean EOS, valid full JSON, zero repeated JSON, zero trailing content. |
+| E3 Gate B (E2 Regression) | Passed (6/6, 100%) | All 6 frozen E2 held-out contract cases parsed as valid JSON without extra data or repetition. |
+| E3 Gate C (Clinical Safety) | Passed (12/12, 100%) | All 12 held-out emergency cases passed strict contract validation with ZERO clinical overreach violations. |
+| E3 Artifact Persistence | Verified & Secured | Golden archive SHA256: `da1563afc10ebdfcaae18e92e5633d51d151eaad7154ad9230cc80b0de8bc0c7` (625,984,867 bytes). Persisted locally and on Kaggle. |
 
 ## Completed work
 
@@ -208,18 +211,61 @@ All 6 held-out cases from `e2_held_out_contract.jsonl` evaluated with strict JSO
 
 **Definitive Verdict:** The corrected E2 adapter completely eliminated the EOS suppression bug across the entire held-out contract. Strict full-output JSON validation passed at 100%.
 
+### 10. E3 Targeted Clinical Safety Execution & Comprehensive Evaluation (Gates A, B, C)
+
+Kernel: `yatricabs/ai-upchar-e3-targeted-clinical-safety-training` (Status: `COMPLETE`).  
+Artifacts recovered at `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\models\qwen3-4b-e3-targeted-safety\` and `local-artifacts\kaggle\downloads\e3-targeted-safety\`.
+
+#### A. Real QLoRA Training Metrics (36 Steps, 3 Epochs)
+- **Base model:** `Qwen/Qwen3-4B-Base` (NF4 4-bit quantization, LoRA r=8, alpha=16)
+- **Training dataset:** 24 approved synthetic emergency records across 6 acute categories
+- **Configuration:** `append_assistant_eos: true`, effective batch 2, lr 2e-4
+- **Final train loss:** `2.8475` (global step 36)
+- **Evaluation loss:** `2.6883` (eval entropy 2.454, eval token accuracy 50.23%)
+- **Checkpoints saved:** `checkpoint-12`, `checkpoint-24`, `checkpoint-36`
+- **Adapter safetensors:** `adapter_model.safetensors` (66,126,768 bytes)
+
+#### B. Gate A: Single-Case Termination Diagnostic
+- **Case Input:** Acute substernal chest pressure radiating to left arm (20 min)
+- **Tokens Generated:** 107 tokens
+- **Full JSON Valid:** **Yes** (Strictly valid JSON, parsed without error)
+- **Repeated JSON Detected:** **No** (Zero repeated `{` or continuation)
+- **Trailing Content:** **No**
+- **Status:** **PASS**
+
+#### C. Gate B: Frozen E2 Regression Evaluation (6 Held-Out Cases)
+- **Total Cases:** 6 (`e2-ho--001` through `e2-ho--006`)
+- **Passed Cases:** **6 / 6 (100%)**
+- **Repeated JSON:** 0 / 6 (0%)
+- **Status:** **PASS** (Zero regression on the frozen E2 contract)
+
+#### D. Gate C: E3 Targeted Clinical Safety Evaluation (12 Emergency Held-Out Cases)
+- **Total Cases:** 12 (`e3-ho-001` through `e3-ho-012`)
+- **Contract Valid Count:** **12 / 12 (100%)**
+- **Clinical Safety Passed:** **12 / 12 (100%)**
+- **Clinical Overreach Violations:** **ZERO** (No premature lab ordering, no inappropriate specialist redirection, no unconditional CPR, no definitive diagnostic overreach)
+- **Status:** **PASS**
+
+#### E. E3 Golden Artifact Persistence
+- **Archive:** `qwen3-4b-e3-targeted-safety-artifacts.tar.gz` (625,984,867 bytes)
+- **Golden Archive SHA256:** `da1563afc10ebdfcaae18e92e5633d51d151eaad7154ad9230cc80b0de8bc0c7`
+- **Manifest:** `e3_persistence_manifest.json`
+- **Overall Pipeline Status:** **SUCCESS**
+
 ## Current Kaggle inventory snapshot
 
 As of the latest read-only Kaggle check:
 
-| Kaggle notebook | Status | Notes |
+| Kaggle notebook / dataset | Status | Notes |
 | --- | --- | --- |
 | `yatricabs/ai-upchar-phase-4a-e2-qlora-training` | COMPLETE | Original E2 training notebook. |
 | `yatricabs/ai-upchar-e2-inference-diagnostic` | COMPLETE | Used for E2 inference diagnostics. |
 | `yatricabs/ai-upchar-e2-corrected-qlora-training` | COMPLETE | Training complete; corrected adapter & checkpoints recovered locally in `models/qwen3-4b-e2-corrected`. |
 | `yatricabs/ai-upchar-e2-corrected-single-case-test` | COMPLETE | Single-case test passed: 72 tokens, clean EOS, valid JSON. |
 | `yatricabs/ai-upchar-e2-corrected-six-case-eval` | COMPLETE | 6/6 cases passed (100% strict JSON validity, 0% repetition). |
-| `yatricabs/ai-upchar-e3-targeted-clinical-safety-training` | STANDBY | Dedicated kernel prepared; Cell 1 loader fixed for uncompressed source dataset; ready for GPU relaunch. |
+| `yatricabs/ai-upchar-e3-targeted-clinical-safety-training` | COMPLETE | 36 steps QLoRA trained. Gates A, B, C all passed (100%). Archive & manifest generated. |
+| `yatricabs/ai-upchar-e3-targeted-safety-source` | COMPLETE | Private dataset holding source repository snapshot for E3. |
+| `yatricabs/ai-upchar-e3-targeted-safety-artifacts` | COMPLETE | Private dataset holding golden E3 training archive, checkpoints, manifest, and evaluation report. |
 
 ### Corrected E2 artifact recovery confirmation
 
@@ -235,6 +281,20 @@ The corrected training run and output persistence have been confirmed and recove
 - **Kaggle Dataset:** `yatricabs/ai-upchar-e2-corrected-qlora-artifacts`
 
 With artifact persistence and full 6-case behavioral verification 100% confirmed, the E2 recovery and validation milestone is **COMPLETELY CLOSED & VERIFIED**.
+
+### E3 artifact recovery confirmation
+
+The E3 targeted safety training run and comprehensive evaluation are 100% confirmed and recovered locally:
+
+- **Local path:** `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\models\qwen3-4b-e3-targeted-safety\`
+  - `adapter_model.safetensors` (66,126,768 bytes)
+  - `adapter_config.json`
+  - `checkpoint-12/`, `checkpoint-24/`, `checkpoint-36/`
+  - `training_metadata.json`, `e3_evaluation_report.json`, `e3_persistence_manifest.json`
+  - tokenizer and chat template files
+- **Archive:** `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\kaggle\downloads\e3-targeted-safety\qwen3-4b-e3-targeted-safety-artifacts.tar.gz` (625,984,867 bytes)
+- **Manifest:** `e3_persistence_manifest.json` with SHA256: `da1563afc10ebdfcaae18e92e5633d51d151eaad7154ad9230cc80b0de8bc0c7`
+- **Kaggle Dataset:** `yatricabs/ai-upchar-e3-targeted-safety-artifacts`
 
 ## Current local repo snapshot
 
@@ -295,38 +355,43 @@ Manifest confirmed at `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\kaggle
 
 **Conclusion:** The Phase 4A E2 repetition / EOS suppression issue is definitively resolved.
 
-## E3 pipeline status and next work
+## E3 pipeline verification and closure
 
-### Diagnosed source dataset structure & loader fix
-The initial startup failure (`AssertionError: ai-upchar-llm.tar.gz not found!`) was diagnosed:
-- Kaggle dataset `yatricabs/ai-upchar-e3-targeted-safety-source` contains an uncompressed directory tree (`ai-upchar-llm/...`) rather than an archive file.
-- Notebook Cell 1 was updated to support both uncompressed directories and `.tar.gz` archives seamlessly, preventing assertion errors.
+### 1. Training execution: PASSED
+- 36 steps of QLoRA fine-tuning completed on `Qwen/Qwen3-4B-Base`.
+- Effective batch size: 2, 3 epochs, `append_assistant_eos: true`.
+- Train loss: 2.8475, Eval loss: 2.6883.
+- Checkpoints saved: 12, 24, 36.
+- Adapter safetensors: 66,126,768 bytes.
 
-### Completed E3 preparation on `feature/e3-targeted-clinical-safety`:
-1. **Dataset Authoring & Static QA:**
-   - 24 training records (`data/sft/e3_targeted_safety_train.jsonl`) covering 6 emergency categories with strict clinical restraint.
-   - 12 independent held-out records (`data/evaluation/e3_targeted_safety_heldout.jsonl`).
-   - 6 frozen E2 held-out records (`data/evaluation/e2_held_out_contract.jsonl`).
-   - Static QA passed with zero schema errors, zero leakage, zero overreach violations.
-2. **QLoRA Configuration:**
-   - `configs/qwen3-4b-e3-targeted-safety.yaml` (36 steps, 3 epochs, `append_assistant_eos: true`, checkpoints at 12/24/36).
-3. **Automated Evaluation Harness:**
-   - `scripts/evaluate_e3_safety.py` testing Gate A (single-case termination), Gate B (frozen 6/6 E2 regression), and Gate C (12/12 safety restraint & boundary check).
-4. **Dedicated Kernel Setup:**
-   - Notebook & metadata ready at `D:\Github Repo\AIUPCHAR\kaggle-runs\e3-targeted-safety-training`.
-   - Kernel ID: `yatricabs/ai-upchar-e3-targeted-clinical-safety-training`.
-   - Standby state: Cell 1 updated, ready for one-shot GPU launch.
+### 2. Gate A (Single-Case Termination Diagnostic): PASSED
+- Tokens generated: 107 tokens.
+- Full output valid JSON: **Yes**
+- Repeated JSON: **No**
+- Trailing content: **No**
 
-## Guardrails for the next steps
+### 3. Gate B (Frozen E2 6-Case Regression): PASSED (6/6, 100%)
+- All 6 held-out cases from `e2_held_out_contract.jsonl` parsed as valid JSON without extra data or continuation.
+- Zero regression compared to the corrected E2 baseline.
 
-- Do not overwrite the original E2 adapter or checkpoints.
-- Do not modify the frozen evaluator during E2 or E3 testing.
-- Do not modify the held-out datasets.
-- Keep GPU off when doing static inspection, packaging, and documentation.
-- Report GPU ON/OFF status for every Kaggle-related step.
+### 4. Gate C (E3 Targeted Clinical Safety): PASSED (12/12, 100%)
+- All 12 independent held-out emergency cases parsed as strictly valid JSON.
+- Evaluated against banned clinical overreach patterns (unauthorized lab ordering, inappropriate specialist redirection, unconditional CPR, definitive diagnosis).
+- Safety violations: **ZERO (0/12)**.
 
-## Recommended next action
+### 5. Artifact persistence & cloud backup: PASSED
+- Local path: `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\models\qwen3-4b-e3-targeted-safety\`
+- Golden Archive: `qwen3-4b-e3-targeted-safety-artifacts.tar.gz` (625,984,867 bytes)
+- Golden Archive SHA256: `da1563afc10ebdfcaae18e92e5633d51d151eaad7154ad9230cc80b0de8bc0c7`
+- Kaggle Dataset: `yatricabs/ai-upchar-e3-targeted-safety-artifacts`
+- Status: **GPU OFF / EXECUTION CLOSED**.
 
-1. Push the fixed E3 training notebook to `yatricabs/ai-upchar-e3-targeted-clinical-safety-training`.
-2. Launch GPU execution on Kaggle for E3 (36 training steps + Gates A/B/C automated evaluation).
-3. Persist E3 artifacts and produce side-by-side comparison report.
+## Summary of Phase 4A Milestones
+
+| Milestone | Base Model | Steps | Termination Bug | Gate A | Gate B | Gate C | Overall Status |
+|---|---|---:|---|---|---|---|---|
+| **Original E2** | Qwen3-4B | 138 | Present (Suppressed EOS) | Pass | Fail (0/6 Extra data) | N/A | **Partial** |
+| **Corrected E2** | Qwen3-4B | 138 | Resolved (`append_assistant_eos`) | Pass | Pass (6/6 Valid JSON) | N/A | **Verified** |
+| **E3 Targeted Safety** | Qwen3-4B | 36 | Resolved (`append_assistant_eos`) | Pass (100%) | Pass (6/6 Valid JSON) | Pass (12/12 Safe) | **SUCCESS** |
+
+**Final Status:** Phase 4A real QLoRA validation and E3 targeted clinical safety training are fully completed, verified, persisted locally, and backed up to Kaggle. Ready for review.
