@@ -1,8 +1,8 @@
 import NextAuth, { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { queryOne } from "../../../_lib/database";
-import { logAuditAction } from "../../../../../lib/audit";
+import { queryOne } from "@/app/api/_lib/database";
+import { logAuditAction } from "@/lib/audit";
 
 export const authOptions: NextAuthOptions = {
   providers: [

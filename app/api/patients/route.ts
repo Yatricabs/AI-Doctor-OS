@@ -12,8 +12,8 @@ import {
   safeRoute,
 } from "../_lib/demo";
 import { getServerSession } from "next-auth";
-import { authOptions } from "../auth/[...nextauth]/route";
-import { logAuditAction } from "../../../lib/audit";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { logAuditAction } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
