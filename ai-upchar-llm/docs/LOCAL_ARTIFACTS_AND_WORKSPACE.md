@@ -172,6 +172,42 @@ local-artifacts\kaggle\runs
 
 Contains local notebook/package preparation for Kaggle runs.
 
+### Behavioral training V4 import staging
+
+```text
+local-artifacts\imports\behavioral-training-v4
+```
+
+Contains the locally extracted external V4 behavioral training ZIP packs:
+
+- `AI_UPCHAR_Behavioral_Training_Part1_Core_v4`
+- `AI_UPCHAR_Behavioral_Training_Part2_Advanced_v4`
+- `AI_UPCHAR_Behavioral_Training_Part3_Doctor_Intelligence_v4`
+
+These files are staged for audit and planning only. They are not yet promoted
+into `ai-upchar-llm/data/`, and they must not overwrite the completed E3
+targeted-safety assets.
+
+Audit outputs:
+
+```text
+local-artifacts\imports\behavioral-training-v4\_audit\behavioral_training_v4_import_audit.json
+local-artifacts\imports\behavioral-training-v4\_audit\behavioral_training_v4_import_audit.md
+```
+
+Audit summary:
+
+- 42 phases staged: E3-E44.
+- 4,950 SFT examples.
+- 820 held-out examples.
+- 0 phases with duplicate IDs.
+- 0 phases with train/held-out ID overlap.
+- 0 phases with JSONL parse errors.
+
+The imported packs are behavioral training material, not a medical knowledge
+base. Medical facts and current clinical guidance remain a RAG/review problem,
+not a static SFT dataset replacement.
+
 ## Git-tracked vs local-only boundary
 
 Git-tracked:
@@ -197,11 +233,14 @@ For the current E2/E3 model-training and evaluation status, see:
 
 - `ai-upchar-llm/docs/E2_E3_PROGRESS_AND_PIPELINE.md`
 
-At the time of this organization step, the next model step is still the
-controlled `e2-ho--001` comparison:
+Current model status:
 
-```text
-BASE vs OLD E2 vs CORRECTED E2
-```
+- Corrected E2 single-case comparison passed.
+- Corrected E2 frozen six-case held-out evaluation passed 6/6.
+- E3 targeted clinical safety training completed.
+- E3 gates A/B/C passed, including frozen E2 regression and 12-case safety evaluation.
 
-Only after that passes should the frozen six-case held-out evaluation proceed.
+The next planning step is to map the staged behavioral V4 imports into a
+non-conflicting future training roadmap. In particular, the imported Part 1
+`E3` patient-interview phase must not overwrite the already-trained E3
+targeted-safety milestone.

@@ -1,7 +1,7 @@
 # AI UPCHAR LLM E2/E3 progress and next pipeline
 
-**Last updated:** 2026-10-02 (Post-E3 Prep & Local E2 Audit)  
-**Scope:** Phase 4A E2 QLoRA recovery, repeated-JSON diagnosis, corrected-E2 path, and E3 setup state.
+**Last updated:** 2026-10-03 (Post-E3 Verification & Behavioral Roadmap Import Audit)
+**Scope:** Phase 4A E2 QLoRA recovery, repeated-JSON diagnosis, corrected-E2 path, E3 targeted-safety completion, and staged behavioral roadmap imports.
 
 This document records what has been completed so far, what is known from
 evidence, what remains unconfirmed, and the next safe pipeline steps. It is an
@@ -24,6 +24,7 @@ engineering status document, not a clinical-readiness sign-off.
 | E3 Gate C (Clinical Safety) | Passed (12/12, 100%) | All 12 held-out emergency cases passed strict contract validation with ZERO clinical overreach violations. |
 | E3 Artifact Persistence | Verified & Secured | Golden archive SHA256: `da1563afc10ebdfcaae18e92e5633d51d151eaad7154ad9230cc80b0de8bc0c7` (625,984,867 bytes). Persisted locally and on Kaggle. |
 | Next.js Clinical Reasoning Bridge | Complete & Verified | Typed client (`lib/clinicalReasoningClient.ts`), `POST /api/clinical/reason`, `POST /api/symptom-analysis` integration, contract test suite (`test:clinical-reasoning-bridge`) 6/6 passed, Next.js build clean. |
+| Behavioral roadmap imports | Staged locally only | V4 ZIP packs for E3-E44 were extracted under `local-artifacts/imports/behavioral-training-v4` and audited. These are behavioral datasets, not medical knowledge training material. Do not overwrite the already-trained E3 targeted-safety assets. |
 
 ## Completed work
 
@@ -407,3 +408,114 @@ Manifest confirmed at `D:\Github Repo\Cursor\AI Doctor OS\local-artifacts\kaggle
 | **E3 Targeted Safety** | Qwen3-4B | 36 | Resolved (`append_assistant_eos`) | Pass (100%) | Pass (6/6 Valid JSON) | Pass (12/12 Safe) | Verified (6/6 Tests) | **SUCCESS** |
 
 **Final Status:** Phase 4A real QLoRA validation, E3 targeted clinical safety training, and the Next.js clinical reasoning integration bridge are fully completed, verified, persisted locally, and backed up to Kaggle. Ready for review.
+
+## Behavioral roadmap import audit (E3-E44)
+
+Three external V4 behavioral training packs were inspected and staged locally
+after the E2/E3 milestone closed:
+
+```text
+local-artifacts\imports\behavioral-training-v4
+```
+
+Generated audit reports:
+
+```text
+local-artifacts\imports\behavioral-training-v4\_audit\behavioral_training_v4_import_audit.json
+local-artifacts\imports\behavioral-training-v4\_audit\behavioral_training_v4_import_audit.md
+```
+
+Import audit summary:
+
+| Metric | Value |
+|---|---:|
+| Phases staged | 42 |
+| Phase range | E3-E44 |
+| Total SFT examples | 4,950 |
+| Total held-out examples | 820 |
+| Phases with duplicate IDs | 0 |
+| Phases with train/held-out ID overlap | 0 |
+| Phases with JSONL parse errors | 0 |
+
+### Behavioral vs medical knowledge boundary
+
+The imported packs are behavioral training material. They teach interview flow,
+next-best-question selection, uncertainty handling, safety interruption,
+handoff structure, patient comprehension adaptation, provenance separation, and
+doctor-decision boundaries. They are **not** a static medical knowledge base.
+
+Current medical facts, drug guidance, guideline updates, and clinical protocols
+must continue to come from reviewed sources and/or trusted retrieval/RAG, with
+doctor review for patient-specific decisions.
+
+### E3 naming conflict
+
+The repository already has a completed and verified E3 targeted clinical safety
+adapter/dataset:
+
+```text
+qwen3-4b-e3-targeted-safety
+```
+
+The imported Part 1 pack also contains an `E3` phase, but its documented focus
+is patient interview / next-best-question behavior. Therefore:
+
+- Do **not** overwrite the existing trained E3 targeted-safety files.
+- Treat imported `E3` as a future behavioral capability dataset until naming is
+  explicitly mapped.
+- Recommended naming for the imported `E3` capability is one of:
+  - `E3B_patient_interview`
+  - `E4_behavioral_interview`
+  - `behavioral_e3_patient_interview`
+
+### Training rule for imported packs
+
+Do not blindly concatenate E3-E44 into one large training run. The package
+documentation and current project practice both require phase-by-phase
+training, held-out evaluation, raw-generation inspection, safety review, and
+clinical review before promoting a phase.
+
+The next safe planning step is a mapping document that decides which imported
+phase becomes the next trainable capability without colliding with the existing
+E3 targeted-safety milestone.
+
+## Current post-training gates (2026-10-03)
+
+The E2 corrected adapter and E3 targeted-safety adapter have both passed their
+model-side evaluation gates. GPU is currently **OFF** and no new Kaggle run is
+in progress.
+
+Remaining work before the next behavioral-training run:
+
+1. **Application integration smoke test:** exercise the existing clinical
+   reasoning bridge in test mode with corrected E2/E3-backed gateway responses,
+   including contract validation, deterministic safety-floor fallback, and
+   clinician-review disclaimers. The repository test runner now has the missing
+   `tsx` development dependency required by the existing bridge test script.
+   Do not promote a model to the production
+   default during this gate.
+2. **Clinical/product review:** review emergency, ambiguous, multilingual, and
+   handoff scenarios; confirm that the doctor-decision boundary and escalation
+   behavior remain intact in the application flow.
+3. **Documentation checkpoint:** commit the current E2/E3 status and local
+   artifact-layout documentation separately from unrelated frontend changes.
+4. **Behavioral phase selection:** map the imported packs to a non-conflicting
+   phase name (recommended: `E3B_patient_interview`), select one phase only,
+   and define its held-out and safety gates before using GPU time.
+5. **Next training gate:** only after steps 1-4 pass, prepare a separate
+   phase-specific Kaggle dataset/output directory and run training/evaluation.
+
+Local CPU-only validation completed for the current integration checkpoint:
+
+- Clinical reasoning bridge: **6/6 passed**.
+- Intake validation and gibberish checks: **22/22 passed**.
+- Appointment intake context checks: **10/10 passed**.
+- Clinical report renderer contract checks: **passed** (100 iterations/property).
+- Production build: **passed** (`next build`).
+
+These are application-contract checks only; they do not establish clinical
+readiness or replace clinician review.
+
+This ordering keeps the verified E2/E3 baseline stable and prevents the
+imported behavioral packs from being trained or merged without an explicit
+evaluation boundary.
