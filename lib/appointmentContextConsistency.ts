@@ -196,3 +196,9 @@ export function explicitSexCorrection(text: string): "Man" | "Woman" | "Transgen
 }
 
 export const detectAppointmentSafetyFlags = safetyFlags;
+
+
+export function extractClinicalContext(text: string): string {
+  // Fallback stub for missing clinical context extractor
+  return text;
+}
