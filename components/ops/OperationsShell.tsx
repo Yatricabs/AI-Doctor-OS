@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSession, signOut } from "next-auth/react";
 import { BarChart3, Bell, Boxes, CalendarClock, FileText, IndianRupee, LayoutDashboard, Search, Settings, Stethoscope, Users } from "lucide-react";
 import "@/styles/consultation.css";
 import DashboardView from "./DashboardView";
@@ -28,6 +29,7 @@ const sections = [
 type SectionKey = (typeof sections)[number]["key"];
 
 export default function OperationsShell() {
+  const { data: session } = useSession();
   const [section, setSection] = useState<SectionKey>("Dashboard");
   const [openPatientId, setOpenPatientId] = useState<string | null>(null);
   const [appointmentsTab, setAppointmentsTab] = useState<"today" | "all" | "new" | "followup">("today");
@@ -75,12 +77,31 @@ export default function OperationsShell() {
           </div>
           <div className="cw-topbar-right">
             <button className="cw-bell" aria-label="Notifications"><Bell size={18} /><span className="cw-bell-badge">1</span></button>
-            <div className="cw-profile">
-              <span className="cw-profile-avatar">RK</span>
-              <span>
-                <span className="cw-profile-name" style={{ display: "block" }}>Dr. Raj Kumar</span>
-                <span className="cw-profile-role">General Physician</span>
-              </span>
+            
+            <div className="relative group">
+              <div className="cw-profile cursor-pointer hover:bg-slate-200/50 transition rounded-lg pr-2">
+                <span className="cw-profile-avatar">{session?.user?.name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "DR"}</span>
+                <span>
+                  <span className="cw-profile-name" style={{ display: "block" }}>{session?.user?.name || "Dr. User"}</span>
+                  <span className="cw-profile-role">{(session?.user as any)?.role || "General Physician"}</span>
+                </span>
+              </div>
+              
+              {/* Dropdown Menu (Hover) */}
+              <div className="absolute right-0 top-full mt-2 w-48 rounded-lg border border-slate-200 bg-white shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <div className="p-3 border-b border-slate-100">
+                  <p className="text-sm font-semibold text-slate-800">{session?.user?.name || "Dr. User"}</p>
+                  <p className="text-xs text-slate-500">{session?.user?.email}</p>
+                </div>
+                <div className="p-1.5">
+                  <button onClick={() => navigate("Settings")} className="w-full text-left px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-md transition-colors">
+                    Account Settings
+                  </button>
+                  <button onClick={() => signOut({ callbackUrl: "/" })} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 rounded-md transition-colors">
+                    Sign Out
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </header>
