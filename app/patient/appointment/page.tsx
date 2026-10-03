@@ -41,6 +41,7 @@ import {
   type HistoryDimension,
 } from "@/lib/clinicalPathways";
 import { assessAppointmentContext } from "@/lib/appointmentContextConsistency";
+import { validateIntakeInput } from "@/lib/intakeValidation";
 
 type Turn = { role: "assistant" | "user"; content: string };
 type Phase = "chat" | "finalizing" | "done";
@@ -237,39 +238,35 @@ function AppointmentFlow() {
   }
 
   async function advance(answer: string) {
-    // Hard lock: ignore a second submit while one is being processed (prevents
-    // the double-message / double-question race seen when Enter+click overlap).
     if (processingRef.current) return;
     processingRef.current = true;
     try {
       setTurns((p) => [...p, { role: "user", content: answer }]);
       setInput(""); setOptions([]); setBusy(true); setError("");
 
-      // A clarification answer resolves the ambiguity without replacing the
-      // authoritative SEX or complaint answer, then resumes the script.
-      if (clarificationRef.current) {
-        clarificationRef.current = false;
-        const clarificationSteps = script();
-        let nextIndex = stepRef.current + 1;
-        while (clarificationSteps[nextIndex] && clarificationSteps[nextIndex].skip?.(answersRef.current)) nextIndex += 1;
-        stepRef.current = nextIndex;
-        if (clarificationSteps[nextIndex]) {
-          const q = await phrase(clarificationSteps[nextIndex], answer);
-          logQuestion(clarificationSteps[nextIndex].key, q);
-          setTurns((p) => [...p, { role: "assistant", content: q }]);
-          setOptions(clarificationSteps[nextIndex].options ?? []);
-          setBusy(false);
-          return;
-        }
-        await beginDeepPhase(answersRef.current);
-        return;
-      }
-
-      // ── If we're in the dynamic AI deep-questioning phase, route the answer
-      //    there instead of the fixed script. ──
       if (inDeepPhaseRef.current) {
         const lastIndex = deepQARef.current.length - 1;
         const currentDeep = deepQARef.current[lastIndex];
+
+        const validation = validateIntakeInput("adaptive-qa", answer, currentDeep?.q);
+        if (!validation.valid) {
+          setTurns((p) => [...p, { role: "assistant", content: validation.message }]);
+          setBusy(false);
+          return;
+        }
+
+        const assessment = assessAppointmentContext({ 
+           sex: answersRef.current.sex, 
+           complaint: answersRef.current.complaint, 
+           previousAnswers: deepQARef.current.map(x => x.a).filter(Boolean),
+           latestAnswer: answer 
+        });
+        if (assessment.needsClarification || assessment.status === "SAFETY_CONCERN") {
+           setTurns((p) => [...p, { role: "assistant", content: assessment.question }]);
+           setBusy(false);
+           return; 
+        }
+
         if (currentDeep) deepQARef.current[lastIndex] = { ...currentDeep, a: answer };
         await continueDeepPhase();
         return;
@@ -280,23 +277,32 @@ function AppointmentFlow() {
       const cur = steps[idx];
       if (!cur) { setBusy(false); await beginDeepPhase(answersRef.current); return; }
 
-      // Record answer + side effects.
-      const next: Answers = { ...answersRef.current, [cur.key]: answer };
-      if (cur.key === "identity") setIsReturning(/before|visited|purana|pehle/i.test(answer));
-      answersRef.current = next;
-      setAnswers(next);
+      const validation = validateIntakeInput(cur.key, answer, cur.base?.hinglish);
+      if (!validation.valid) {
+        setTurns((p) => [...p, { role: "assistant", content: validation.message }]);
+        setBusy(false);
+        return;
+      }
 
-      // This gate runs before the fixed complaint → duration transition.
-      // It never rewrites structured context; it pauses for clarification.
-      if (cur.key === "complaint") {
-        const assessment = assessAppointmentContext({ sex: next.sex, complaint: answer, previousAnswers: Object.values(next) });
-        if (assessment.needsClarification) {
-          clarificationRef.current = true;
+      if (cur.key === "complaint" || cur.key === "duration") {
+        const assessment = assessAppointmentContext({ 
+          sex: answersRef.current.sex, 
+          complaint: cur.key === "complaint" ? answer : answersRef.current.complaint, 
+          previousAnswers: Object.values(answersRef.current),
+          latestAnswer: answer 
+        });
+        if (assessment.needsClarification || assessment.status === "SAFETY_CONCERN") {
           setTurns((p) => [...p, { role: "assistant", content: assessment.question }]);
           setBusy(false);
           return;
         }
       }
+
+      // Record answer + side effects.
+      const next: Answers = { ...answersRef.current, [cur.key]: answer };
+      if (cur.key === "identity") setIsReturning(/before|visited|purana|pehle/i.test(answer));
+      answersRef.current = next;
+      setAnswers(next);
 
       // As soon as we know the complaint: (1) match a curated clinical pathway
       // to frame safe, consistent questioning, and (2) research (in background)
@@ -313,7 +319,7 @@ function AppointmentFlow() {
       while (steps[idx] && steps[idx].skip?.(next)) idx += 1;
       stepRef.current = idx;
 
-      // More fixed questions remain → ask the next.
+      // More fixed questions remain -> ask the next.
       if (steps[idx]) {
         const q = await phrase(steps[idx], answer);
         logQuestion(steps[idx].key, q);
@@ -323,8 +329,11 @@ function AppointmentFlow() {
         return;
       }
 
-      // Fixed script finished → start the AI deep-questioning phase.
-      await beginDeepPhase(next);
+      await beginDeepPhase(answersRef.current);
+    } catch (err) {
+      console.error(err);
+      setTurns((p) => [...p, { role: "assistant", content: "I am having trouble connecting. Let's try that again." }]);
+      setBusy(false);
     } finally {
       processingRef.current = false;
     }
