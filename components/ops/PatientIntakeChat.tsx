@@ -14,6 +14,7 @@ import { evaluatePatientAnswer, type ReasoningResult } from "@/lib/interview-rea
 import { decideNextBestQuestion, type ClinicalQaTurn, type NextBestDecision } from "@/lib/next-best-question";
 import { assessSemanticContext, type SemanticFact } from "@/lib/semantic-context";
 import { validateIntakeInput } from "@/lib/intakeValidation";
+import { assessAppointmentContext } from "@/lib/appointmentContextConsistency";
 import { matchPathway } from "@/lib/clinicalPathways";
 
 type IntakeStep =
@@ -60,7 +61,15 @@ function buildDeterministicPreVisitReport(
   };
 }
 
-export default function PatientIntakeChat({ onComplete, variant = "default" }: { onComplete?: (result: { patient: Patient; appointment: Appointment; urgent: boolean }) => void; variant?: "default" | "landing" }) {
+export default function PatientIntakeChat({
+  onComplete,
+  onClose,
+  variant = "default",
+}: {
+  onComplete?: (result: { patient: Patient; appointment: Appointment; urgent: boolean }) => void;
+  onClose?: () => void;
+  variant?: "default" | "landing";
+}) {
   const landingChat = variant === "landing";
   const [submitIntake] = useSubmitPatientIntakeMutation();
   const [step, setStep] = useState<IntakeStep>("existing-or-new");
@@ -279,6 +288,21 @@ export default function PatientIntakeChat({ onComplete, variant = "default" }: {
       setClarificationLog([]); setPendingClarification(null); setSemanticFacts([]); semanticFactsRef.current = []; setStep("reasoning");
       const replaySemantics = await assessSemantics("chiefComplaint", typedValue, replayedAnswers);
       if (replaySemantics.status !== "CONSISTENT") { setPendingClarification({ sourceStep: "chiefComplaint", answer: typedValue }); sayBot(replaySemantics.question); setStep("clarification"); return; }
+      const replayContext = assessAppointmentContext({
+        patientType: replayedAnswers.isReturning,
+        sex: replayedAnswers.sex,
+        complaint: typedValue,
+        latestAnswer: typedValue,
+        previousAnswers: thread.filter((t) => t.role === "patient").map((t) => t.content),
+        semanticFacts: semanticFactsRef.current,
+      });
+      if (replayContext.safetyFlags.length > 0) setUrgent(true);
+      if (replayContext.needsClarification || replayContext.status === "SAFETY_CONCERN" || replayContext.status === "NEEDS_CLARIFICATION") {
+        setPendingClarification({ sourceStep: "chiefComplaint", answer: typedValue });
+        sayBot(replayContext.question);
+        setStep("clarification");
+        return;
+      }
       const replayReasoning = await reasonAbout("chiefComplaint", typedValue, replayedAnswers);
       if (replayReasoning.outcome === "NEEDS_CLARIFICATION") { setPendingClarification({ sourceStep: "chiefComplaint", answer: typedValue }); sayBot(replayReasoning.question); setStep("clarification"); return; }
       if (replayReasoning.outcome === "SAFETY_CONCERN") { setUrgent(true); setPendingClarification({ sourceStep: "chiefComplaint", answer: typedValue }); sayBot(replayReasoning.question); setStep("clarification"); return; }
@@ -389,6 +413,24 @@ export default function PatientIntakeChat({ onComplete, variant = "default" }: {
         return;
       }
     }
+    if (["chiefComplaint", "duration", "adaptive-qa"].includes(activeStep)) {
+      const contextAssessment = assessAppointmentContext({
+        patientType: reasonedAnswers.isReturning,
+        sex: reasonedAnswers.sex,
+        complaint: reasonedAnswers.chiefComplaint,
+        latestAnswer: value,
+        previousAnswers: thread.filter((t) => t.role === "patient").map((t) => t.content),
+        semanticFacts: semanticFactsRef.current,
+      });
+      if (contextAssessment.safetyFlags.length > 0) setUrgent(true);
+      if (contextAssessment.needsClarification || contextAssessment.status === "SAFETY_CONCERN" || contextAssessment.status === "NEEDS_CLARIFICATION") {
+        setAnswers(reasonedAnswers);
+        setPendingClarification({ sourceStep: activeStep, answer: value });
+        sayBot(contextAssessment.question);
+        setStep("clarification");
+        return;
+      }
+    }
     if (activeStep !== "phone") {
       setStep("reasoning");
       const reasoning = await reasonAbout(activeStep, value, reasonedAnswers);
@@ -436,7 +478,6 @@ export default function PatientIntakeChat({ onComplete, variant = "default" }: {
       setResult({ patient, appointment, urgent: isUrgent });
       if (appointment.preVisitReport) setReport(appointment.preVisitReport);
       setStep("done");
-      onComplete?.({ patient, appointment, urgent: isUrgent });
     } catch {
       sayBot("Kuch gadbad ho gayi intake save karte waqt. Kripya dobara koshish karein.");
       setStep("priorReports");
@@ -451,54 +492,192 @@ export default function PatientIntakeChat({ onComplete, variant = "default" }: {
   }
 
   return (
-    <div className={`flex h-[calc(100dvh-270px)] min-h-[360px] max-h-[720px] flex-col overflow-hidden rounded-2xl border ${landingChat ? "landing-chatbox" : ""}`} style={{ borderColor: tone.border, background: tone.card }}>
+    <div className="flex h-[calc(100dvh-270px)] min-h-[360px] max-h-[720px] flex-col overflow-hidden rounded-2xl border" style={{ borderColor: tone.border, background: tone.card }}>
       <div className="flex items-center justify-between border-b px-6 py-4" style={{ borderColor: "#edf1ee" }}>
-        <span className="text-sm font-bold" style={{ color: tone.ink }}>AI UPCHAR Assistant — New Patient Intake</span>
-        <button onClick={reset} className="text-xs font-bold hover:underline" style={{ color: tone.primary }}>Start new intake</button>
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-[#0e9d94] text-white">
+            <Bot className="h-4 w-4" />
+          </span>
+          <div>
+            <span className="block text-sm font-bold" style={{ color: tone.ink }}>AI UPCHAR Assistant — Patient Intake</span>
+            <span className="block text-[11px] font-medium" style={{ color: tone.muted }}>Clinical history & appointment booking</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={reset} className="text-xs font-bold hover:underline" style={{ color: tone.primary }}>Start new intake</button>
+          {onClose && (
+            <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700" aria-label="Close intake">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-5">
         {thread.map((turn, index) => (
           <div key={index} className={`flex items-end gap-2 ${turn.role === "patient" ? "justify-end" : "justify-start"}`}>
-            {landingChat && turn.role === "bot" && <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0e9d94] text-white"><Bot className="h-5 w-5" /></span>}
+            {turn.role === "bot" && (
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0e9d94] text-white">
+                <Bot className="h-5 w-5" />
+              </span>
+            )}
             <div className="group relative max-w-[85%]">
-              <div className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${turn.role === "patient" ? "rounded-br-sm" : "rounded-bl-sm"} ${landingChat ? (turn.role === "patient" ? "bg-[#e7f0fc] text-[#173a5e]" : "bg-[#eaf7f3] text-[#173f3c]") : turn.role === "patient" ? "text-white" : ""}`} style={landingChat ? undefined : turn.role === "patient" ? { background: tone.primary } : { background: "#f3f4fa", color: "#3d4459" }}>
+              <div
+                className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${
+                  turn.role === "patient"
+                    ? "rounded-br-sm bg-[#e7f0fc] text-[#173a5e]"
+                    : "rounded-bl-sm bg-[#eaf7f3] text-[#173f3c]"
+                }`}
+              >
                 {turn.content}
               </div>
-              {turn.role === "patient" && <button type="button" onClick={() => { const cleanValue = turn.content.replace(/\n\[Attached file: .*\]$/, ""); const answerStep = stepForEditedAnswer(cleanValue); setEditingReturnStep(step); if (answerStep) { setStep(answerStep); setEditingStep(answerStep); } setEditingIndex(index); setEditingOriginal(cleanValue); setDraft(cleanValue); }} className="absolute bottom-1 right-2 flex items-center gap-1 rounded bg-black/10 px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-black/20" aria-label="Edit message"><Pencil className="h-3 w-3" /> Edit</button>}
-              {turn.role === "bot" && turn.content.includes("prescription upload") && <div className="mt-2 flex flex-wrap gap-2"><label htmlFor="patient-report-attachment" className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]" style={{ borderColor: "#b9dfd1" }}><Paperclip className="h-3.5 w-3.5" />Attach prescription</label><button type="button" onClick={() => void submit("Nahi hai / abhi available nahi hai")} className="rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]" style={{ borderColor: "#b9dfd1" }}>Nahi hai / abhi available nahi hai</button></div>}
-              {turn.role === "bot" && turn.content.includes("Koi test report ya scan") && <div className="mt-2 flex flex-wrap gap-2"><label htmlFor="patient-report-attachment" className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]" style={{ borderColor: "#b9dfd1" }}><Paperclip className="h-3.5 w-3.5" />Attach report</label><button type="button" onClick={() => void submit("Nahi hai / abhi available nahi hai")} className="rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]" style={{ borderColor: "#b9dfd1" }}>Nahi hai / abhi available nahi hai</button></div>}
+              {turn.role === "patient" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cleanValue = turn.content.replace(/\n\[Attached file: .*\]$/, "");
+                    const answerStep = stepForEditedAnswer(cleanValue);
+                    setEditingReturnStep(step);
+                    if (answerStep) {
+                      setStep(answerStep);
+                      setEditingStep(answerStep);
+                    }
+                    setEditingIndex(index);
+                    setEditingOriginal(cleanValue);
+                    setDraft(cleanValue);
+                  }}
+                  className="absolute bottom-1 right-2 flex items-center gap-1 rounded bg-black/10 px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-black/20"
+                  aria-label="Edit message"
+                >
+                  <Pencil className="h-3 w-3" /> Edit
+                </button>
+              )}
+              {turn.role === "bot" && turn.content.includes("prescription upload") && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <label
+                    htmlFor="patient-report-attachment"
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]"
+                    style={{ borderColor: "#b9dfd1" }}
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Attach prescription
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void submit("Nahi hai / abhi available nahi hai")}
+                    className="rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]"
+                    style={{ borderColor: "#b9dfd1" }}
+                  >
+                    Nahi hai / abhi available nahi hai
+                  </button>
+                </div>
+              )}
+              {turn.role === "bot" && turn.content.includes("Koi test report ya scan") && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <label
+                    htmlFor="patient-report-attachment"
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]"
+                    style={{ borderColor: "#b9dfd1" }}
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Attach report
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void submit("Nahi hai / abhi available nahi hai")}
+                    className="rounded-lg border px-3 py-2 text-xs font-semibold text-[#317b67] hover:bg-[#eef7f3]"
+                    style={{ borderColor: "#b9dfd1" }}
+                  >
+                    Nahi hai / abhi available nahi hai
+                  </button>
+                </div>
+              )}
             </div>
-            {landingChat && turn.role === "patient" && <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#246edb] text-white"><UserRound className="h-5 w-5" /></span>}
+            {turn.role === "patient" && (
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#246edb] text-white">
+                <UserRound className="h-5 w-5" />
+              </span>
+            )}
           </div>
         ))}
 
-        {step === "existing-or-new" && <div className="flex gap-2">
-          <button onClick={() => submit("New patient")} className="rounded-full border px-4 py-2 text-xs font-bold" style={{ borderColor: tone.primary, color: tone.primary }}>New patient</button>
-          <button onClick={() => submit("Existing patient")} className="rounded-full border px-4 py-2 text-xs font-bold" style={{ borderColor: tone.primary, color: tone.primary }}>Existing patient</button>
-        </div>}
-        {step === "sex" && <div className="flex flex-wrap gap-2">{["Man", "Woman", "Transgender Man", "Transgender Woman"].map((option) => <button key={option} onClick={() => submit(option)} className="rounded-full border px-4 py-2 text-xs font-bold" style={{ borderColor: tone.primary, color: tone.primary }}>{option}</button>)}</div>}
-
-        {["reasoning", "generating-questions", "generating-report", "finalizing"].includes(step) && <div className="flex justify-start"><div className="rounded-2xl rounded-bl-sm px-4 py-3 text-sm" style={{ background: "#f3f4fa", color: tone.muted }}>Thinking…</div></div>}
-
-        {step === "done" && result && <div className="space-y-3 rounded-xl border p-4" style={{ borderColor: tone.border, background: tone.bg }}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm font-bold" style={{ color: tone.ink }}>Pre-visit brief for the doctor</span>
-            {urgent && <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase" style={{ background: tone.dangerBg, color: tone.danger }}>Urgent — flagged for immediate review</span>}
+        {step === "existing-or-new" && (
+          <div className="flex gap-2">
+            <button onClick={() => submit("New patient")} className="rounded-full border px-4 py-2 text-xs font-bold" style={{ borderColor: tone.primary, color: tone.primary }}>New patient</button>
+            <button onClick={() => submit("Existing patient")} className="rounded-full border px-4 py-2 text-xs font-bold" style={{ borderColor: tone.primary, color: tone.primary }}>Existing patient</button>
           </div>
-          {report ? <div className="space-y-2.5 text-sm" style={{ color: tone.inkSoft }}>
-            <p><span className="font-bold" style={{ color: tone.ink }}>Problem: </span>{report.problemSummary}</p>
-            <p><span className="font-bold" style={{ color: tone.ink }}>History: </span>{report.fullHistory}</p>
-            <p><span className="font-bold" style={{ color: tone.ink }}>Provisional diagnosis (AI-suggested, not final): </span>{report.provisionalDiagnosis}</p>
-            <p><span className="font-bold" style={{ color: tone.ink }}>Further tests: </span>{report.furtherTestsNeeded}</p>
-            {report.recommendedTests.length > 0 && <p><span className="font-bold" style={{ color: tone.ink }}>Recommended tests: </span>{report.recommendedTests.join(", ")}</p>}
-            <p><span className="font-bold" style={{ color: tone.ink }}>Suggested treatment direction: </span>{report.recommendedTreatment}</p>
-            <div className="flex flex-wrap gap-3 pt-1">
-              <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase" style={report.urgency === "Emergency" ? { background: tone.dangerBg, color: tone.danger } : report.urgency === "Admit for observation" ? { background: tone.accentGoldBg, color: tone.accentGold } : { background: tone.successBg, color: tone.success }}>{report.urgency}</span>
-              <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase" style={{ background: tone.infoBg, color: tone.info }}>Surgery: {report.surgeryLikely}</span>
+        )}
+        {step === "sex" && (
+          <div className="flex flex-wrap gap-2">
+            {["Man", "Woman", "Transgender Man", "Transgender Woman"].map((option) => (
+              <button key={option} onClick={() => submit(option)} className="rounded-full border px-4 py-2 text-xs font-bold" style={{ borderColor: tone.primary, color: tone.primary }}>{option}</button>
+            ))}
+          </div>
+        )}
+
+        {["reasoning", "generating-questions", "generating-report", "finalizing"].includes(step) && (
+          <div className="flex items-end justify-start gap-2">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0e9d94] text-white">
+              <Bot className="h-5 w-5" />
+            </span>
+            <div className="rounded-2xl rounded-bl-sm bg-[#eaf7f3] px-4 py-3 text-sm text-[#173f3c]">Thinking…</div>
+          </div>
+        )}
+
+        {step === "done" && result && (
+          <div className="space-y-3 rounded-xl border p-4" style={{ borderColor: tone.border, background: tone.bg }}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm font-bold" style={{ color: tone.ink }}>Pre-visit brief for the doctor</span>
+              {urgent && <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase" style={{ background: tone.dangerBg, color: tone.danger }}>Urgent — flagged for immediate review</span>}
             </div>
-            <p className="pt-1 text-[11px]" style={{ color: tone.muted }}>{report.aiGenerated ? "✦ AI-generated decision support — the doctor confirms every finding before acting on it." : "AI unavailable for this intake — doctor should review the raw history above directly."}</p>
-          </div> : <p className="text-sm" style={{ color: tone.muted }}>Report unavailable — doctor should review the conversation above directly.</p>}
-        </div>}
+            {report ? (
+              <div className="space-y-2.5 text-sm" style={{ color: tone.inkSoft }}>
+                <p><span className="font-bold" style={{ color: tone.ink }}>Problem: </span>{report.problemSummary}</p>
+                <p><span className="font-bold" style={{ color: tone.ink }}>History: </span>{report.fullHistory}</p>
+                <p><span className="font-bold" style={{ color: tone.ink }}>Provisional diagnosis (AI-suggested, not final): </span>{report.provisionalDiagnosis}</p>
+                <p><span className="font-bold" style={{ color: tone.ink }}>Further tests: </span>{report.furtherTestsNeeded}</p>
+                {report.recommendedTests.length > 0 && <p><span className="font-bold" style={{ color: tone.ink }}>Recommended tests: </span>{report.recommendedTests.join(", ")}</p>}
+                <p><span className="font-bold" style={{ color: tone.ink }}>Suggested treatment direction: </span>{report.recommendedTreatment}</p>
+                <div className="flex flex-wrap gap-3 pt-1">
+                  <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase" style={report.urgency === "Emergency" ? { background: tone.dangerBg, color: tone.danger } : report.urgency === "Admit for observation" ? { background: tone.accentGoldBg, color: tone.accentGold } : { background: tone.successBg, color: tone.success }}>{report.urgency}</span>
+                  <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase" style={{ background: tone.infoBg, color: tone.info }}>Surgery: {report.surgeryLikely}</span>
+                </div>
+                <p className="pt-1 text-[11px]" style={{ color: tone.muted }}>{report.aiGenerated ? "✦ AI-generated decision support — the doctor confirms every finding before acting on it." : "AI unavailable for this intake — doctor should review the raw history above directly."}</p>
+              </div>
+            ) : (
+              <p className="text-sm" style={{ color: tone.muted }}>Report unavailable — doctor should review the conversation above directly.</p>
+            )}
+            <div className="mt-4 flex flex-wrap gap-3 pt-2">
+              {onComplete && (
+                <button
+                  type="button"
+                  onClick={() => onComplete({ patient: result.patient, appointment: result.appointment, urgent })}
+                  className="rounded-lg px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:opacity-90"
+                  style={{ background: tone.primary }}
+                >
+                  View in Today&apos;s Schedule →
+                </button>
+              )}
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:opacity-90"
+                  style={{ background: tone.primary }}
+                >
+                  Done
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={reset}
+                className="rounded-lg border px-4 py-2 text-xs font-bold transition hover:bg-black/5"
+                style={{ borderColor: tone.border, color: tone.ink }}
+              >
+                Start New Intake
+              </button>
+            </div>
+          </div>
+        )}
         <div ref={endRef} />
       </div>
       {!inputDisabled && <div className="shrink-0 border-t bg-white p-4" style={{ borderColor: "#edf1ee" }}>

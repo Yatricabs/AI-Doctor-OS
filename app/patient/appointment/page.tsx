@@ -250,7 +250,7 @@ function AppointmentFlow() {
 
         const validation = validateIntakeInput("adaptive-qa", answer, currentDeep?.q);
         if (!validation.valid) {
-          setTurns((p) => [...p, { role: "assistant", content: validation.message }]);
+          setTurns((p) => [...p, { role: "assistant", content: validation.message ?? "Kripya apna jawab thoda aur spasht likhiye." }]);
           setBusy(false);
           return;
         }
@@ -279,7 +279,7 @@ function AppointmentFlow() {
 
       const validation = validateIntakeInput(cur.key, answer, cur.base?.hinglish);
       if (!validation.valid) {
-        setTurns((p) => [...p, { role: "assistant", content: validation.message }]);
+        setTurns((p) => [...p, { role: "assistant", content: validation.message ?? "Kripya apna jawab thoda aur spasht likhiye." }]);
         setBusy(false);
         return;
       }

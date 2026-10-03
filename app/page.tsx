@@ -981,7 +981,7 @@ function AppointmentDialog() {
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[var(--color-ink)]/45 px-3 py-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Book an appointment">
       <div className="relative flex max-h-[96vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <button onClick={() => dispatch(closeAppointmentDialog())} className="absolute right-3 top-3 z-10 rounded-lg bg-white/90 p-2 text-[var(--color-ink-soft)] shadow-sm hover:bg-[var(--color-sky)]" aria-label="Close appointment dialog"><X width={18} height={18} /></button>
-        <PatientIntakeChat variant="landing" />
+        <PatientIntakeChat onClose={() => dispatch(closeAppointmentDialog())} variant="landing" />
       </div>
     </div>
   )

@@ -4,7 +4,7 @@
  * may add evidence, but it cannot bypass these checks or mutate answers.
  */
 
-import { checkIntelligibility } from "./intakeValidation";
+import { checkIntelligibility } from "./intakeValidation.ts";
 
 export type FactKind =
   | "ANATOMY_REFERENCE" | "BODY_LOCATION" | "SYMPTOM" | "SYMPTOM_CHARACTERISTIC"
@@ -151,6 +151,20 @@ export function assessAppointmentContext(context: AppointmentContext): ContextAs
   const flags = safetyFlags([latest, context.complaint ?? ""].join(" "));
   if (flags.length) return { status: "SAFETY_CONCERN", needsClarification: false, explanation: "A safety-relevant symptom was reported and must be reviewed before routine questioning.", question: "Yeh symptom safety ke liye important ho sakta hai. Kripya batayein: abhi saans ki dikkat, behoshi, bahut tez dard ya zyada bleeding to nahi hai? Agar hai, to turant emergency medical help lein.", facts: currentFacts, contradictions: [], safetyFlags: flags, reasonCodes: ["SAFETY_GATE"] };
 
+  const intell = checkIntelligibility(latest);
+  if (!intell.intelligible && latest.trim().length > 0) {
+    return {
+      status: "NEEDS_CLARIFICATION",
+      needsClarification: true,
+      explanation: `Unintelligible or nonsensical patient answer: ${intell.reason}`,
+      question: "Kripya apni takleef ya jaankari thoda spasht shabdon mein likhiye taaki hum use samajh sakein.",
+      facts: [],
+      contradictions: [],
+      safetyFlags: [],
+      reasonCodes: ["UNINTELLIGIBLE_INPUT"],
+    };
+  }
+
   const contradictions: ContextContradiction[] = [];
   if (hasSex(context.sex, "man")) {
     const reproductive = currentFacts.find((item) => item.conceptKey === "anatomy:vaginal" || item.conceptKey === "anatomy:uterine" || item.conceptKey === "symptom:menstrual");
@@ -182,3 +196,10 @@ export function explicitSexCorrection(text: string): "Man" | "Woman" | "Transgen
 }
 
 export const detectAppointmentSafetyFlags = safetyFlags;
+
+
+export function extractClinicalContext(text: string): string {
+  // Fallback stub for missing clinical context extractor
+  return text;
+}
+
