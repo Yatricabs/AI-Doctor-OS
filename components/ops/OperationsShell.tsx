@@ -76,8 +76,37 @@ export default function OperationsShell() {
             <span className="cw-kbd">Ctrl K</span>
           </div>
           <div className="cw-topbar-right">
-            <button className="cw-bell" aria-label="Notifications"><Bell size={18} /><span className="cw-bell-badge">1</span></button>
-            
+            <div className="relative group">
+              <button className="cw-bell" aria-label="Notifications">
+                <Bell size={18} />
+                <span className="cw-bell-badge">3</span>
+              </button>
+              
+              {/* Notification Dropdown (Hover) */}
+              <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-slate-200 bg-white shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <div className="p-3 border-b border-slate-100 flex justify-between items-center">
+                  <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
+                  <span className="text-xs text-primary-600 cursor-pointer hover:underline">Mark all as read</span>
+                </div>
+                <div className="max-h-80 overflow-y-auto">
+                  <div className="p-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition">
+                    <p className="text-sm font-medium text-slate-800">New patient intake completed</p>
+                    <p className="text-xs text-slate-500 mt-1">Rajkumar just finished the AI intake flow.</p>
+                    <p className="text-[10px] text-slate-400 mt-1">2 mins ago</p>
+                  </div>
+                  <div className="p-3 border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition">
+                    <p className="text-sm font-medium text-slate-800">System Update</p>
+                    <p className="text-xs text-slate-500 mt-1">Auth & V2 configurations are fully deployed.</p>
+                    <p className="text-[10px] text-slate-400 mt-1">15 mins ago</p>
+                  </div>
+                  <div className="p-3 hover:bg-slate-50 cursor-pointer transition">
+                    <p className="text-sm font-medium text-slate-800">Database connected</p>
+                    <p className="text-xs text-slate-500 mt-1">Supabase connection established successfully.</p>
+                    <p className="text-[10px] text-slate-400 mt-1">1 hour ago</p>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="relative group">
               <div className="cw-profile cursor-pointer hover:bg-slate-200/50 transition rounded-lg pr-2">
                 <span className="cw-profile-avatar">{session?.user?.name?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "DR"}</span>
