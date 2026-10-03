@@ -3,6 +3,7 @@ import Script from "next/script";
 import "./globals.css";
 import ScrollReset from "@/components/ScrollReset";
 import ReduxProvider from "@/components/ReduxProvider";
+import AuthProvider from "@/components/AuthProvider";
 
 export const metadata: Metadata = {
   title: "AI UPCHAR — Better Conversations. Healthier Lives.",
@@ -47,7 +48,9 @@ export default function RootLayout({
       </head>
       <body className="bg-[#080D14] text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-black">
         <ScrollReset />
-        <ReduxProvider>{children}</ReduxProvider>
+        <AuthProvider>
+          <ReduxProvider>{children}</ReduxProvider>
+        </AuthProvider>
       </body>
     </html>
   );

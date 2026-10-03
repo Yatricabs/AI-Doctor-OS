@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { MouseEvent } from "react";
 import Link from "next/link";
 import { Menu, Stethoscope, X } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
 
 const navItems = [
   { label: "Home", id: "home", href: "/#home" },
@@ -16,6 +17,7 @@ const navItems = [
 
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: session } = useSession();
 
   function closeMobile() {
     setMobileOpen(false);
@@ -48,9 +50,19 @@ export default function Header() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
-          <Link href="/demo" className="hidden rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg shadow-emerald-500/25 transition-all hover:from-emerald-300 hover:to-teal-300 sm:inline-flex">
-            Watch Demo
-          </Link>
+          {session ? (
+            <div className="hidden items-center gap-4 sm:flex">
+              <span className="text-sm text-slate-300 font-medium">Dr. {session.user?.name?.split(" ")[1] || session.user?.name}</span>
+              <button onClick={() => signOut()} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold text-slate-300 transition-all hover:bg-white/10">Sign Out</button>
+              <Link href="/demo" className="rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg shadow-emerald-500/25 transition-all hover:from-emerald-300 hover:to-teal-300">
+                Workspace
+              </Link>
+            </div>
+          ) : (
+            <Link href="/login" className="hidden rounded-xl bg-gradient-to-r from-emerald-400 to-teal-400 px-4 py-2.5 text-sm font-bold text-slate-950 shadow-lg shadow-emerald-500/25 transition-all hover:from-emerald-300 hover:to-teal-300 sm:inline-flex">
+              Doctor Login
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => setMobileOpen((open) => !open)}

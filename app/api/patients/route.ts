@@ -11,6 +11,9 @@ import {
   requiredString,
   safeRoute,
 } from "../_lib/demo";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../auth/[...nextauth]/route";
+import { logAuditAction } from "../../../lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +59,19 @@ export const GET = safeRoute(async (request: Request) => {
     const matchesStatus = !status || patient.status === status;
     return matchesQuery && matchesStatus;
   });
+
+  const session = await getServerSession(authOptions);
+  if (session?.user) {
+    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    await logAuditAction({
+      userId: (session.user as any).id,
+      action: "VIEW_PATIENT",
+      entityType: "PATIENT",
+      details: { query: q, statusFilter: status, matchCount: data.length },
+      ipAddress: ip
+    }).catch(console.error);
+  }
+
   return json({ patients: data, total: data.length });
 });
 
