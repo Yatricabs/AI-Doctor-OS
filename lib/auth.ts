@@ -81,5 +81,5 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   secret: process.env.NEXTAUTH_SECRET || "fallback_secret_for_development_only",
-  debug: true,
+  debug: process.env.NODE_ENV === "development",
 };
