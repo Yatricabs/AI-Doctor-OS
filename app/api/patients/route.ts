@@ -12,7 +12,7 @@ import {
   safeRoute,
 } from "../_lib/demo";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth";
 import { logAuditAction } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
