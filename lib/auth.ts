@@ -81,5 +81,6 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   secret: process.env.NEXTAUTH_SECRET || "fallback_secret_for_development_only",
-  debug: process.env.NODE_ENV === "development",
+  // Never enable verbose NextAuth logging in a deployed environment.
+  debug: process.env.NODE_ENV !== "production",
 };

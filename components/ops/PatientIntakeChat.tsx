@@ -16,6 +16,7 @@ import { assessSemanticContext, type SemanticFact } from "@/lib/semantic-context
 import { validateIntakeInput } from "@/lib/intakeValidation";
 import { assessAppointmentContext } from "@/lib/appointmentContextConsistency";
 import { matchPathway } from "@/lib/clinicalPathways";
+import { type ClinicalReasoningRequest, type ClinicalReasoningResponse } from "@/lib/clinicalReasoningClient";
 
 type IntakeStep =
   | "existing-or-new" | "phone" | "name" | "age" | "sex" | "location"
@@ -88,11 +89,12 @@ export default function PatientIntakeChat({
   const [report, setReport] = useState<PreVisitReport | null>(null);
   const [result, setResult] = useState<{ patient: Patient; appointment: Appointment; urgent: boolean } | null>(null);
   const [urgent, setUrgent] = useState(false);
+  const [useE3Mode, setUseE3Mode] = useState(false);
   const [reasoningLog, setReasoningLog] = useState<ReasoningResult[]>([]);
   const [semanticFacts, setSemanticFacts] = useState<SemanticFact[]>([]);
   const semanticFactsRef = useRef<SemanticFact[]>([]);
   const [clarificationLog, setClarificationLog] = useState<{ question: string; answer: string }[]>([]);
-  const [pendingClarification, setPendingClarification] = useState<{ sourceStep: IntakeStep; answer: string } | null>(null);
+  const [pendingClarification, setPendingClarification] = useState<{ sourceStep: IntakeStep; answer: string; kind?: "sex-conflict" } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const dispatch = useDispatch<AppDispatch>();
   const citySearch = useSelector((state: RootState) => state.cities);
@@ -173,6 +175,19 @@ export default function PatientIntakeChat({
 
   function sayBot(content: string) {
     setThread((current) => [...current, { role: "bot", content }]);
+  }
+
+  function sexCorrectionFromClarification(value: string): "Woman" | "Man" | null {
+    const normalized = value.trim().toLocaleLowerCase();
+    if (/\b(woman|women|female|girl|mahila|aurat|स्त्री|महिला)\b/i.test(normalized)) return "Woman";
+    if (/\b(man|men|male|boy|purush|पुरुष)\b/i.test(normalized)) return "Man";
+    return null;
+  }
+
+  function pendingClarificationFor(sourceStep: IntakeStep, answer: string, sex: string) {
+    const reproductiveComplaint = /\b(period|periods|menstrual|menstruation|vaginal|reproductive|महिला|मासिक|पीरियड)\b/i.test(answer);
+    const sexConflict = reproductiveComplaint && /\b(man|male|पुरुष)\b/i.test(sex);
+    return { sourceStep, answer, ...(sexConflict ? { kind: "sex-conflict" as const } : {}) };
   }
 
   function answersWith(stepToApply: IntakeStep, value: string) {
@@ -287,7 +302,7 @@ export default function PatientIntakeChat({
       setQaLog([]); setCurrentClinicalDecision(null); setReport(null); setResult(null);
       setClarificationLog([]); setPendingClarification(null); setSemanticFacts([]); semanticFactsRef.current = []; setStep("reasoning");
       const replaySemantics = await assessSemantics("chiefComplaint", typedValue, replayedAnswers);
-      if (replaySemantics.status !== "CONSISTENT") { setPendingClarification({ sourceStep: "chiefComplaint", answer: typedValue }); sayBot(replaySemantics.question); setStep("clarification"); return; }
+      if (replaySemantics.status !== "CONSISTENT") { setPendingClarification(pendingClarificationFor("chiefComplaint", typedValue, replayedAnswers.sex)); sayBot(replaySemantics.question); setStep("clarification"); return; }
       const replayContext = assessAppointmentContext({
         patientType: replayedAnswers.isReturning,
         sex: replayedAnswers.sex,
@@ -298,14 +313,14 @@ export default function PatientIntakeChat({
       });
       if (replayContext.safetyFlags.length > 0) setUrgent(true);
       if (replayContext.needsClarification || replayContext.status === "SAFETY_CONCERN" || replayContext.status === "NEEDS_CLARIFICATION") {
-        setPendingClarification({ sourceStep: "chiefComplaint", answer: typedValue });
+        setPendingClarification(pendingClarificationFor("chiefComplaint", typedValue, replayedAnswers.sex));
         sayBot(replayContext.question);
         setStep("clarification");
         return;
       }
       const replayReasoning = await reasonAbout("chiefComplaint", typedValue, replayedAnswers);
-      if (replayReasoning.outcome === "NEEDS_CLARIFICATION") { setPendingClarification({ sourceStep: "chiefComplaint", answer: typedValue }); sayBot(replayReasoning.question); setStep("clarification"); return; }
-      if (replayReasoning.outcome === "SAFETY_CONCERN") { setUrgent(true); setPendingClarification({ sourceStep: "chiefComplaint", answer: typedValue }); sayBot(replayReasoning.question); setStep("clarification"); return; }
+      if (replayReasoning.outcome === "NEEDS_CLARIFICATION") { setPendingClarification(pendingClarificationFor("chiefComplaint", typedValue, replayedAnswers.sex)); sayBot(replayReasoning.question); setStep("clarification"); return; }
+      if (replayReasoning.outcome === "SAFETY_CONCERN") { setUrgent(true); setPendingClarification(pendingClarificationFor("chiefComplaint", typedValue, replayedAnswers.sex)); sayBot(replayReasoning.question); setStep("clarification"); return; }
       await continueAfterAnswer("chiefComplaint", typedValue, replayedAnswers);
       return;
     }
@@ -318,6 +333,31 @@ export default function PatientIntakeChat({
         sayBot(validation.message);
         return;
       }
+
+      // This is an explicit state-machine gate. A sex conflict cannot resume
+      // the original complaint until the structured context is corrected.
+      const isSexConflictClarification = pendingClarification.kind === "sex-conflict";
+      if (isSexConflictClarification) {
+        const correction = sexCorrectionFromClarification(typedValue);
+        if (correction === "Woman") {
+          const correctedAnswers = { ...answers, sex: "Woman" };
+          setAnswers(correctedAnswers);
+          setDraft("");
+          setThread((current) => [...current, { role: "patient", content: typedValue }]);
+          setClarificationLog((current) => [...current, { question: lastPrompt ?? "Sex clarification", answer: typedValue }]);
+          setPendingClarification(null);
+          await continueAfterAnswer(pendingClarification.sourceStep, pendingClarification.answer, correctedAnswers);
+          return;
+        } else {
+          // Patient is confirming they are male, or correcting their symptom (e.g. meant 'chest' instead of 'period')
+          setPendingClarification(null);
+          setDraft("");
+          // Don't add to thread here since the recursive call will do it
+          window.setTimeout(() => { void submit(typedValue, pendingClarification.sourceStep); }, 0);
+          return;
+        }
+      }
+
       setDraft("");
       setThread((current) => [...current, { role: "patient", content: typedValue }]);
       setStep("reasoning");
@@ -335,6 +375,15 @@ export default function PatientIntakeChat({
       const resume = pendingClarification;
       setPendingClarification(null);
       if (clarificationReasoning.outcome === "SAFETY_CONCERN") { setUrgent(true); sayBot(clarificationReasoning.question); setStep("finalizing"); return; }
+      
+      if (resume.sourceStep === "adaptive-qa") {
+        const question = currentClinicalDecision?.question ?? thread[thread.length - 1]?.content ?? "Clinical follow-up";
+        const nextLog = [...qaLog, { question, answer: resume.answer, coverageTarget: currentClinicalDecision?.coverageTarget ?? undefined }];
+        setQaLog(nextLog);
+        await requestNextClinicalQuestion(answers, nextLog);
+        return;
+      }
+      
       await continueAfterAnswer(resume.sourceStep, resume.answer, answers);
       return;
     }
@@ -407,7 +456,7 @@ export default function PatientIntakeChat({
       const semanticAssessment = await assessSemantics(activeStep, value, reasonedAnswers);
       if (semanticAssessment.status !== "CONSISTENT") {
         setAnswers(reasonedAnswers);
-        setPendingClarification({ sourceStep: activeStep, answer: value });
+        setPendingClarification(pendingClarificationFor(activeStep, value, reasonedAnswers.sex));
         sayBot(semanticAssessment.question);
         setStep("clarification");
         return;
@@ -425,18 +474,73 @@ export default function PatientIntakeChat({
       if (contextAssessment.safetyFlags.length > 0) setUrgent(true);
       if (contextAssessment.needsClarification || contextAssessment.status === "SAFETY_CONCERN" || contextAssessment.status === "NEEDS_CLARIFICATION") {
         setAnswers(reasonedAnswers);
-        setPendingClarification({ sourceStep: activeStep, answer: value });
+        setPendingClarification(pendingClarificationFor(activeStep, value, reasonedAnswers.sex));
         sayBot(contextAssessment.question);
         setStep("clarification");
         return;
       }
     }
     if (activeStep !== "phone") {
+      if (useE3Mode && ["chiefComplaint", "duration", "adaptive-qa"].includes(activeStep)) {
+        setStep("reasoning");
+        const req: ClinicalReasoningRequest = {
+          patient_context: reasonedAnswers,
+          current_answer: value,
+          semantic_context: { qaLog, previousPatientAnswers: thread.filter(t => t.role === "patient").map(t => t.content) },
+          safety_state: { status: urgent ? "SAFETY_CONCERN" : "CLEAR" },
+          retrieved_evidence: [],
+        };
+        try {
+           const res = await fetch("/api/clinical/reason", { method: "POST", body: JSON.stringify(req) });
+           if (res.ok) {
+             const e3Res = (await res.json()) as ClinicalReasoningResponse;
+             if (e3Res.recommended_action === "SAFETY_REVIEW") {
+               setAnswers(reasonedAnswers);
+               setUrgent(true);
+               setPendingClarification(pendingClarificationFor(activeStep, value, reasonedAnswers.sex));
+               sayBot(e3Res.next_best_question || "Emergency alert: Please seek immediate care. (Are you safe?)");
+               setStep("clarification");
+               return;
+             }
+             if (e3Res.recommended_action === "CLARIFY") {
+               setAnswers(reasonedAnswers);
+               setPendingClarification(pendingClarificationFor(activeStep, value, reasonedAnswers.sex));
+               sayBot(e3Res.next_best_question || "Can you clarify your answer?");
+               setStep("clarification");
+               return;
+             }
+             if (activeStep === "adaptive-qa") {
+                const question = currentClinicalDecision?.question ?? thread[thread.length - 1]?.content ?? "Clinical follow-up";
+                const nextLog = [...qaLog, { question, answer: value, coverageTarget: undefined }];
+                setQaLog(nextLog);
+                if (!e3Res.missing_information || e3Res.missing_information.length === 0 || nextLog.length >= 5) {
+                   setStep("generating-report");
+                   sayBot("Bahut achha — zaroori jaankari mil gayi hai. Ab main doctor ke liye summary taiyaar kar raha hoon...");
+                   await generateReport(reasonedAnswers, nextLog);
+                   return;
+                }
+                const nextQ = e3Res.next_best_question || "Aapko koi aur takleef hai?";
+                setCurrentClinicalDecision({ action: "CONTINUE_WITH_QUESTION", question: nextQ, coverageTarget: null, rationale: "E3 Gateway" });
+                sayBot(nextQ);
+                setStep("adaptive-qa");
+                return;
+             }
+             // If not adaptive-qa, allow to fall through to `continueAfterAnswer` which handles the normal state machine progression (chiefComplaint -> duration -> adaptive-qa).
+           }
+        } catch (err) {
+           console.error("E3 inference failed", err);
+        }
+        if (activeStep !== "adaptive-qa") {
+          await continueAfterAnswer(activeStep, value, reasonedAnswers);
+          return;
+        }
+      }
+
       setStep("reasoning");
       const reasoning = await reasonAbout(activeStep, value, reasonedAnswers);
       if (reasoning.outcome === "NEEDS_CLARIFICATION") {
         setAnswers(reasonedAnswers);
-        setPendingClarification({ sourceStep: activeStep, answer: value });
+        setPendingClarification(pendingClarificationFor(activeStep, value, reasonedAnswers.sex));
         sayBot(reasoning.question);
         setStep("clarification");
         return;
@@ -444,7 +548,7 @@ export default function PatientIntakeChat({
       if (reasoning.outcome === "SAFETY_CONCERN") {
         setAnswers(reasonedAnswers);
         setUrgent(true);
-        setPendingClarification({ sourceStep: activeStep, answer: value });
+        setPendingClarification(pendingClarificationFor(activeStep, value, reasonedAnswers.sex));
         sayBot(reasoning.question);
         setStep("clarification");
         return;
@@ -502,6 +606,10 @@ export default function PatientIntakeChat({
             <span className="block text-sm font-bold" style={{ color: tone.ink }}>AI UPCHAR Assistant — Patient Intake</span>
             <span className="block text-[11px] font-medium" style={{ color: tone.muted }}>Clinical history & appointment booking</span>
           </div>
+          <label className="ml-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-semibold text-emerald-700 shadow-sm cursor-pointer hover:bg-emerald-100 transition-colors">
+            <input type="checkbox" checked={useE3Mode} onChange={e => setUseE3Mode(e.target.checked)} className="accent-emerald-600" />
+            Use E3 Target Safety Model
+          </label>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={reset} className="text-xs font-bold hover:underline" style={{ color: tone.primary }}>Start new intake</button>
@@ -530,7 +638,7 @@ export default function PatientIntakeChat({
               >
                 {turn.content}
               </div>
-              {turn.role === "patient" && (
+              {turn.role === "patient" && stepForEditedAnswer(turn.content.replace(/\n\\[Attached file: .*\\]$/, "")) !== null && (
                 <button
                   type="button"
                   onClick={() => {

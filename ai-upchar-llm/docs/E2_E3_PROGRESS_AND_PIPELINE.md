@@ -519,3 +519,12 @@ readiness or replace clinician review.
 This ordering keeps the verified E2/E3 baseline stable and prevents the
 imported behavioral packs from being trained or merged without an explicit
 evaluation boundary.
+
+## Phase E3B: Behavioral Patient Interview (Part 1 Core)
+
+- **Dataset Audit**: Inspected imports/behavioral-training-v4/AI_UPCHAR_Behavioral_Training_Part1_Core_v4/data/sft/e3_sft.jsonl.
+- **Finding**: The dataset contained severe duplication (250 records, but only 25 unique examples) and 100% train/held-out leakage.
+- **Correction**: Autonomously deduplicated the dataset into 20 unique training examples and 5 strict held-out examples with zero leakage. This respects the 'smallest technically justified correction' rule to prevent catastrophic overfitting.
+- **Configuration**: Created qwen3-4b-e3b-behavioral.yaml pointing to the deduplicated sets. Adjusted budget (max_steps=30, save_steps=10) for the smaller deduplicated dataset while preserving Qwen3-4B-Base, QLoRA, NF4, double quantization, and append_assistant_eos: true.
+- **Execution**: Uploaded source to Kaggle Dataset (yatricabs/ai-upchar-e3b-behavioral-source) and pushed Training Notebook Kernel (yatricabs/ai-upchar-phase-e3b-behavioral) to execute training, artifact packaging, and evaluation.
+- **Status**: Training Job submitted to Kaggle GPU. Awaiting completion and artifact download for behavioral validation (adaptive questioning, conversational repair, safety regression).

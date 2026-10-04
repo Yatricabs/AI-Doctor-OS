@@ -1,3 +1,4 @@
 {
-    "dictation.model": "mai"
+    "dictation.model": "mai",
+    "workbench.browser.openLocalhostLinks": true
 }
