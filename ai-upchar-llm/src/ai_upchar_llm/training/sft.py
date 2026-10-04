@@ -12,6 +12,7 @@ def train_sft(config: dict, smoke: bool = False) -> dict:
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
     from ai_upchar_llm.datasets.sft_dataset import conversational_rows, load_sft
+    from ai_upchar_llm.training.real_qlora import _append_assistant_eos
 
     model_name = config["model"]["name"]
     quant = config["quantization"]
@@ -20,7 +21,24 @@ def train_sft(config: dict, smoke: bool = False) -> dict:
     model = prepare_model_for_kbit_training(AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb, device_map="auto"))
     lora = config["lora"]
     peft_config = LoraConfig(r=lora["rank"], lora_alpha=lora["alpha"], lora_dropout=lora["dropout"], target_modules=lora["target_modules"], task_type="CAUSAL_LM")
+
+    # Robust chat template to prevent token merging issues with assistant_only_loss
+    tokenizer.chat_template = (
+        "{% for message in messages %}"
+        "{% if message['role'] == 'user' %}"
+        "{{ '<|im_start|>user\\n' + message['content'] + '<|im_end|>\\n' }}"
+        "{% elif message['role'] == 'system' %}"
+        "{{ '<|im_start|>system\\n' + message['content'] + '<|im_end|>\\n' }}"
+        "{% elif message['role'] == 'assistant' %}"
+        "{{ '<|im_start|>assistant\\n' }}{% generation %}{{ message['content'] }}{% endgeneration %}{{ '<|im_end|>\\n' }}"
+        "{% endif %}"
+        "{% endfor %}"
+        "{% if add_generation_prompt %}{{ '<|im_start|>assistant\\n' }}{% endif %}"
+    )
+
     rows = conversational_rows(load_sft(config["data"]["sft_path"]))
+    if config["training"].get("append_assistant_eos"):
+        rows = _append_assistant_eos(rows, tokenizer.eos_token)
     split = Dataset.from_list(rows).train_test_split(test_size=config["training"]["eval_split"], seed=config["project"]["seed"])
     args = SFTConfig(output_dir=config["training"]["output_dir"], num_train_epochs=config["training"]["epochs"], learning_rate=config["training"]["learning_rate"], per_device_train_batch_size=config["training"]["per_device_train_batch_size"], gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"], gradient_checkpointing=config["training"]["gradient_checkpointing"], max_length=config["model"]["max_sequence_length"], assistant_only_loss=config["training"]["assistant_only_loss"], eval_strategy="epoch", save_strategy="epoch", seed=config["project"]["seed"])
     trainer = SFTTrainer(model=model, args=args, train_dataset=split["train"], eval_dataset=split["test"], processing_class=tokenizer, peft_config=peft_config)
