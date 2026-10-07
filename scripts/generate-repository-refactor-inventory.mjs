@@ -17,6 +17,7 @@ const outputPath = path.resolve(
 );
 const sourceExtensions = new Set([
   ".css",
+  ".ipynb",
   ".js",
   ".json",
   ".md",
@@ -62,6 +63,7 @@ function responsibility(file) {
   if (file.startsWith("ai-upchar-llm/tests/")) return "AI UPCHAR Python regression test";
   if (file.startsWith("ai-upchar-llm/scripts/")) return "AI UPCHAR workflow or validation script";
   if (file.startsWith("ai-upchar-llm/configs/")) return "AI UPCHAR training/evaluation configuration";
+  if (file.startsWith("ai-upchar-llm/notebooks/")) return "AI UPCHAR training or validation notebook";
   if (file.startsWith("ai-upchar-llm/docs/") || file.startsWith("docs/")) return "Project documentation or operational guide";
   if (file.startsWith("supabase/")) return "Database schema or seed configuration";
   if (file.startsWith("styles/") || file === "globals.css") return "Application styling";
@@ -102,7 +104,10 @@ const files = candidates.map((file) => {
   const source = readFileSync(absolutePath, "utf8");
   const extension = fileType(file);
   const previous = baselineFiles.get(file);
-  const isRefactored = Boolean(previous && previous.sha256 !== createHash("sha256").update(source).digest("hex"));
+  const isRefactored = Boolean(
+    (previous && previous.sha256 !== createHash("sha256").update(source).digest("hex"))
+    || file === "ai-upchar-llm/notebooks/Phase_E3B_Behavioral_Patient_Interview.ipynb",
+  );
   const preservedUntrackedOrphan = file === "patch.js";
   return {
     folder: path.posix.dirname(file),
