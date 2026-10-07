@@ -1,0 +1,34 @@
+extends: qwen3-4b.yaml
+project:
+  model_version: ai-upchar-med-part2-advanced-v12.0.0
+  dataset_version: part2-advanced-v12-replay-deduped
+  evaluation_version: part2-advanced-eval-v12.0.0
+model:
+  # Exact Qwen3 tokenizer audit: max 545 after schema conditioning.
+  max_sequence_length: 640
+training:
+  method: qlora
+  output_dir: artifacts/qwen3-4b-part2-advanced-v12
+  epochs: 3
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 2
+  gradient_checkpointing: true
+  # External held-out suites are authoritative; retain sparse unique phases in train.
+  eval_split: 0.05
+  logging_steps: 25
+  append_assistant_eos: true
+quantization:
+  enabled: true
+  bits: 4
+  quant_type: nf4
+  double_quant: true
+  compute_dtype: float16
+lora:
+  rank: 8
+  alpha: 16
+  dropout: 0.05
+data:
+  sft_path: data/sft/part2_advanced_v12_replay_sft.jsonl
+  evaluation_path: data/evaluation/part2_advanced_held_out.jsonl
+  candidate_preproduction_only: true
+  production_approved: false

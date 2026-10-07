@@ -1,0 +1,19 @@
+extends: qwen3-4b-part2-advanced-v15.yaml
+project:
+  model_version: ai-upchar-med-part2-advanced-v16.0.0
+  dataset_version: part2-advanced-v16-contract-replay
+  evaluation_version: part2-advanced-eval-v16.0.0
+training:
+  output_dir: artifacts/qwen3-4b-part2-advanced-v16
+  epochs: 1
+  learning_rate: 0.00002
+  # The Kaggle builder resolves and verifies this before training.
+  initial_adapter_path: __V15_ADAPTER_REQUIRED_AT_RUNTIME__
+  device_map: single_gpu
+  eval_during_training: false
+  evaluate_after_training: false
+  save_strategy: epoch
+data:
+  sft_path: data/sft/part2_advanced_v16_contract_replay_sft.jsonl
+  candidate_preproduction_only: true
+  production_approved: false

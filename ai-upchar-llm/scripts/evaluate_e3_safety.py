@@ -13,6 +13,11 @@ import re
 import sys
 from pathlib import Path
 
+from structured_json_generation import (
+    STRUCTURED_DECODING_IMPLEMENTATION,
+    build_json_prefix_allowed_tokens_fn,
+)
+
 ROOT = Path(__file__).resolve().parent.parent
 
 # Banned clinical overreach patterns for Gate C
@@ -87,6 +92,13 @@ CONTRACT_INSTRUCTION = (
     "Do not add or rename keys. No explanatory prose and no markdown code fences."
 )
 
+SIX_KEY_EXPECTED = {key: "required" for key in SIX_KEYS}
+
+# Qwen3 Hindi structured responses can legitimately require more than 256
+# generated tokens.  V15 diagnostics proved that the frozen E2/E3 failures hit
+# exactly 256 tokens without EOS and become valid, safe JSON at 307-410 tokens.
+SAFETY_MAX_NEW_TOKENS = 512
+
 
 def build_prompt(tokenizer, user_message: str) -> str:
     text = user_message.strip()
@@ -109,9 +121,12 @@ def run_gate_a(model, tokenizer, case_input: str) -> dict:
     with torch.no_grad():
         out = model.generate(
             **inputs,
-            max_new_tokens=256,
+            max_new_tokens=SAFETY_MAX_NEW_TOKENS,
             do_sample=False,
             eos_token_id=eos_ids,
+            prefix_allowed_tokens_fn=build_json_prefix_allowed_tokens_fn(
+                tokenizer, SIX_KEY_EXPECTED
+            ),
         )[0][inputs["input_ids"].shape[1]:]
 
     raw_text = tokenizer.decode(out, skip_special_tokens=True).strip()
@@ -151,9 +166,12 @@ def run_gate_b(model, tokenizer, e2_heldout_path: Path) -> dict:
         with torch.no_grad():
             out = model.generate(
                 **inputs,
-                max_new_tokens=256,
+                max_new_tokens=SAFETY_MAX_NEW_TOKENS,
                 do_sample=False,
                 eos_token_id=eos_ids,
+                prefix_allowed_tokens_fn=build_json_prefix_allowed_tokens_fn(
+                    tokenizer, SIX_KEY_EXPECTED
+                ),
             )[0][inputs["input_ids"].shape[1]:]
 
         raw = tokenizer.decode(out, skip_special_tokens=True).strip()
@@ -199,9 +217,12 @@ def run_gate_c(model, tokenizer, e3_heldout_path: Path) -> dict:
         with torch.no_grad():
             out = model.generate(
                 **inputs,
-                max_new_tokens=256,
+                max_new_tokens=SAFETY_MAX_NEW_TOKENS,
                 do_sample=False,
                 eos_token_id=eos_ids,
+                prefix_allowed_tokens_fn=build_json_prefix_allowed_tokens_fn(
+                    tokenizer, SIX_KEY_EXPECTED
+                ),
             )[0][inputs["input_ids"].shape[1]:]
 
         raw = tokenizer.decode(out, skip_special_tokens=True).strip()
@@ -284,6 +305,7 @@ def main() -> None:
     print(f"Gate C Safety Passed:   {gate_c['safety_passed_count']}/{gate_c['total']} ({gate_c['status']})")
 
     report = {
+        "structured_decoding": STRUCTURED_DECODING_IMPLEMENTATION,
         "gate_a": gate_a,
         "gate_b": gate_b,
         "gate_c": gate_c,

@@ -1,0 +1,18 @@
+extends: qwen3-4b-part2-advanced-v14.yaml
+project:
+  model_version: ai-upchar-med-part2-advanced-v15.0.0
+  dataset_version: part2-advanced-v15-targeted-safety-replay
+  evaluation_version: part2-advanced-eval-v15.0.0
+training:
+  output_dir: artifacts/qwen3-4b-part2-advanced-v15
+  # V14 failed after training while eval was running on an auto-sharded model.
+  # Keep this single-process Kaggle run on GPU 0 and validate separately.
+  device_map: single_gpu
+  eval_during_training: false
+  evaluate_after_training: false
+  save_strategy: epoch
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+data:
+  candidate_preproduction_only: true
+  production_approved: false

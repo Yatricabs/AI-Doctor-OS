@@ -1,0 +1,11 @@
+extends: qwen3-4b-part2-advanced-v13.yaml
+project:
+  model_version: ai-upchar-med-part2-advanced-v14.0.0
+  dataset_version: part2-advanced-v14-targeted-safety-replay
+  evaluation_version: part2-advanced-eval-v14.0.0
+training:
+  output_dir: artifacts/qwen3-4b-part2-advanced-v14
+data:
+  sft_path: data/sft/part2_advanced_v14_safety_replay_sft.jsonl
+  candidate_preproduction_only: true
+  production_approved: false
