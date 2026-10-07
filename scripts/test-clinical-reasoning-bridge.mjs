@@ -15,7 +15,7 @@ try {
   console.log("Loading clinicalReasoningClient...");
 }
 
-const { deterministicClinicalFloor, evaluateClinicalReasoning } = clinicalClient;
+const { deterministicClinicalFloor, evaluateClinicalReasoning, validateClinicalReasoningResponse } = clinicalClient;
 
 console.log("==================================================================");
 console.log("RUNNING AI UPCHAR CLINICAL REASONING BRIDGE TESTS");
@@ -140,7 +140,75 @@ runTest("All 6 contract keys are strictly present in output", () => {
   }
 });
 
-// ── Test 6: Zero-downtime offline fallback resilience ─────────────────────────
+// ── Test 6: Strict gateway response validation rejects malformed contracts ────
+runTest("Gateway response validator fails closed on incomplete output", () => {
+  assert.throws(
+    () => validateClinicalReasoningResponse({ recommended_action: "CLARIFY" }),
+    /missing keys/i,
+  );
+
+  assert.throws(
+    () => validateClinicalReasoningResponse({
+      semantic_interpretation: {},
+      recommended_action: "CLARIFY",
+      next_best_question: null,
+      missing_information: ["duration", 3],
+      clinical_considerations: [],
+      confidence: "MEDIUM",
+    }),
+    /missing_information/i,
+  );
+
+  assert.throws(
+    () => validateClinicalReasoningResponse({
+      semantic_interpretation: { confirmed_diagnoses: ["pneumonia"] },
+      recommended_action: "CLARIFY",
+      next_best_question: null,
+      missing_information: [],
+      clinical_considerations: [],
+      confidence: "MEDIUM",
+    }),
+    /confirm/i,
+  );
+});
+
+// ── Test 7: Semantically invalid but syntactically valid JSON falls back ─────
+await runAsyncTest("Malformed gateway contract uses deterministic safety floor", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        semantic_interpretation: {},
+        recommended_action: "CLARIFY",
+        next_best_question: null,
+        missing_information: ["duration", 42],
+        clinical_considerations: [],
+        confidence: "MEDIUM",
+      };
+    },
+  });
+
+  try {
+    const result = await evaluateClinicalReasoning(
+      {
+        patient_context: {},
+        current_answer: "Severe chest pressure",
+        semantic_context: {},
+        safety_state: { status: "CLEAR" },
+        retrieved_evidence: [],
+      },
+      { gatewayUrl: "http://mock-gateway", timeoutMs: 500 },
+    );
+    assert.equal(result.source, "CLINICAL_SAFETY_FLOOR");
+    assert.equal(result.recommended_action, "SAFETY_REVIEW");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+// ── Test 8: Zero-downtime offline fallback resilience ─────────────────────────
 await runAsyncTest("Offline gateway automatically falls back to clinical safety floor", async () => {
   const req = {
     patient_context: {},

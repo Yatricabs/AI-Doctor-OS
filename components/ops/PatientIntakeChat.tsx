@@ -11,7 +11,7 @@ import type { AppDispatch, RootState } from "@/lib/store";
 import { clearCitySuggestions, searchCities, selectCity, setCityActiveIndex, setCityQuery } from "@/lib/citySlice";
 import { clearLookup, lookupPatientByPhone } from "@/lib/patientLookupSlice";
 import { evaluatePatientAnswer, type ReasoningResult } from "@/lib/interview-reasoning";
-import { decideNextBestQuestion, type ClinicalQaTurn, type NextBestDecision } from "@/lib/next-best-question";
+import { CLINICAL_COVERAGE_KEYS, decideNextBestQuestion, type ClinicalQaTurn, type NextBestDecision } from "@/lib/next-best-question";
 import { assessSemanticContext, type SemanticFact } from "@/lib/semantic-context";
 import { validateIntakeInput } from "@/lib/intakeValidation";
 import { assessAppointmentContext } from "@/lib/appointmentContextConsistency";
@@ -375,7 +375,7 @@ export default function PatientIntakeChat({
       const resume = pendingClarification;
       setPendingClarification(null);
       if (clarificationReasoning.outcome === "SAFETY_CONCERN") { setUrgent(true); sayBot(clarificationReasoning.question); setStep("finalizing"); return; }
-      
+
       if (resume.sourceStep === "adaptive-qa") {
         const question = currentClinicalDecision?.question ?? thread[thread.length - 1]?.content ?? "Clinical follow-up";
         const nextLog = [...qaLog, { question, answer: resume.answer, coverageTarget: currentClinicalDecision?.coverageTarget ?? undefined }];
@@ -383,7 +383,7 @@ export default function PatientIntakeChat({
         await requestNextClinicalQuestion(answers, nextLog);
         return;
       }
-      
+
       await continueAfterAnswer(resume.sourceStep, resume.answer, answers);
       return;
     }
@@ -491,44 +491,56 @@ export default function PatientIntakeChat({
           retrieved_evidence: [],
         };
         try {
-           const res = await fetch("/api/clinical/reason", { method: "POST", body: JSON.stringify(req) });
-           if (res.ok) {
-             const e3Res = (await res.json()) as ClinicalReasoningResponse;
-             if (e3Res.recommended_action === "SAFETY_REVIEW") {
-               setAnswers(reasonedAnswers);
-               setUrgent(true);
-               setPendingClarification(pendingClarificationFor(activeStep, value, reasonedAnswers.sex));
-               sayBot(e3Res.next_best_question || "Emergency alert: Please seek immediate care. (Are you safe?)");
-               setStep("clarification");
-               return;
-             }
-             if (e3Res.recommended_action === "CLARIFY") {
-               setAnswers(reasonedAnswers);
-               setPendingClarification(pendingClarificationFor(activeStep, value, reasonedAnswers.sex));
-               sayBot(e3Res.next_best_question || "Can you clarify your answer?");
-               setStep("clarification");
-               return;
-             }
-             if (activeStep === "adaptive-qa") {
-                const question = currentClinicalDecision?.question ?? thread[thread.length - 1]?.content ?? "Clinical follow-up";
-                const nextLog = [...qaLog, { question, answer: value, coverageTarget: undefined }];
-                setQaLog(nextLog);
-                if (!e3Res.missing_information || e3Res.missing_information.length === 0 || nextLog.length >= 5) {
-                   setStep("generating-report");
-                   sayBot("Bahut achha — zaroori jaankari mil gayi hai. Ab main doctor ke liye summary taiyaar kar raha hoon...");
-                   await generateReport(reasonedAnswers, nextLog);
-                   return;
-                }
-                const nextQ = e3Res.next_best_question || "Aapko koi aur takleef hai?";
-                setCurrentClinicalDecision({ action: "CONTINUE_WITH_QUESTION", question: nextQ, coverageTarget: null, rationale: "E3 Gateway" });
-                sayBot(nextQ);
-                setStep("adaptive-qa");
+          const res = await fetch("/api/clinical/reason", { method: "POST", body: JSON.stringify(req) });
+          if (res.ok) {
+            const e3Res = (await res.json()) as ClinicalReasoningResponse;
+            if (e3Res.recommended_action === "SAFETY_REVIEW") {
+              setAnswers(reasonedAnswers);
+              setUrgent(true);
+              setPendingClarification(pendingClarificationFor(activeStep, value, reasonedAnswers.sex));
+              sayBot(e3Res.next_best_question || "Emergency alert: Please seek immediate care. (Are you safe?)");
+              setStep("clarification");
+              return;
+            }
+            if (e3Res.recommended_action === "CLARIFY") {
+              setAnswers(reasonedAnswers);
+              setPendingClarification(pendingClarificationFor(activeStep, value, reasonedAnswers.sex));
+              sayBot(e3Res.next_best_question || "Can you clarify your answer?");
+              setStep("clarification");
+              return;
+            }
+            if (activeStep === "adaptive-qa") {
+              const question = currentClinicalDecision?.question ?? thread[thread.length - 1]?.content ?? "Clinical follow-up";
+              const nextLog = [...qaLog, { question, answer: value, coverageTarget: undefined }];
+              setQaLog(nextLog);
+              if (!e3Res.missing_information || e3Res.missing_information.length === 0 || nextLog.length >= 5) {
+                setStep("generating-report");
+                sayBot("Bahut achha — zaroori jaankari mil gayi hai. Ab main doctor ke liye summary taiyaar kar raha hoon...");
+                await generateReport(reasonedAnswers, nextLog);
                 return;
-             }
-             // If not adaptive-qa, allow to fall through to `continueAfterAnswer` which handles the normal state machine progression (chiefComplaint -> duration -> adaptive-qa).
-           }
+              }
+              const nextQ = e3Res.next_best_question || "Aapko koi aur takleef hai?";
+              const gatewayMissing = e3Res.missing_information.filter(
+                (item): item is (typeof CLINICAL_COVERAGE_KEYS)[number] =>
+                  (CLINICAL_COVERAGE_KEYS as readonly string[]).includes(item),
+              );
+              setCurrentClinicalDecision({
+                action: "CONTINUE_WITH_QUESTION",
+                question: nextQ,
+                coverageTarget: null,
+                rationale: "E3 Gateway",
+                missingInformation: gatewayMissing,
+                safetyConcern: false,
+                readyToFinalize: false,
+              });
+              sayBot(nextQ);
+              setStep("adaptive-qa");
+              return;
+            }
+            // If not adaptive-qa, allow to fall through to `continueAfterAnswer` which handles the normal state machine progression (chiefComplaint -> duration -> adaptive-qa).
+          }
         } catch (err) {
-           console.error("E3 inference failed", err);
+          console.error("E3 inference failed", err);
         }
         if (activeStep !== "adaptive-qa") {
           await continueAfterAnswer(activeStep, value, reasonedAnswers);
@@ -630,11 +642,10 @@ export default function PatientIntakeChat({
             )}
             <div className="group relative max-w-[85%]">
               <div
-                className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${
-                  turn.role === "patient"
-                    ? "rounded-br-sm bg-[#e7f0fc] text-[#173a5e]"
-                    : "rounded-bl-sm bg-[#eaf7f3] text-[#173f3c]"
-                }`}
+                className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${turn.role === "patient"
+                  ? "rounded-br-sm bg-[#e7f0fc] text-[#173a5e]"
+                  : "rounded-bl-sm bg-[#eaf7f3] text-[#173f3c]"
+                  }`}
               >
                 {turn.content}
               </div>

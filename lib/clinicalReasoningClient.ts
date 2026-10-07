@@ -157,6 +157,93 @@ export function deterministicClinicalFloor(
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+const REQUIRED_GATEWAY_KEYS = [
+  "semantic_interpretation",
+  "recommended_action",
+  "next_best_question",
+  "missing_information",
+  "clinical_considerations",
+  "confidence",
+] as const;
+
+/**
+ * Validate the gateway response without coercion or repair.
+ * Invalid model output must throw so evaluateClinicalReasoning() uses the
+ * deterministic safety floor instead of passing malformed data to callers.
+ */
+export function validateClinicalReasoningResponse(
+  value: unknown
+): asserts value is Record<string, unknown> {
+  if (!isRecord(value)) {
+    throw new Error("Gateway response must be a JSON object");
+  }
+
+  const missing = REQUIRED_GATEWAY_KEYS.filter((key) => !(key in value));
+  if (missing.length > 0) {
+    throw new Error(`Gateway response is missing keys: ${missing.join(", ")}`);
+  }
+
+  if (!isRecord(value.semantic_interpretation)) {
+    throw new Error("semantic_interpretation must be an object");
+  }
+
+  const action = value.recommended_action;
+  if (!["ASK_QUESTION", "CLARIFY", "SAFETY_REVIEW"].includes(String(action))) {
+    throw new Error(`Invalid recommended_action from gateway: ${String(action)}`);
+  }
+
+  const nextQuestion = value.next_best_question;
+  if (nextQuestion !== null && typeof nextQuestion !== "string") {
+    throw new Error("next_best_question must be a string or null");
+  }
+  if (action === "ASK_QUESTION" && (!nextQuestion || !nextQuestion.trim())) {
+    throw new Error("ASK_QUESTION requires a non-empty next_best_question");
+  }
+
+  for (const key of ["missing_information", "clinical_considerations"]) {
+    if (!isStringArray(value[key])) {
+      throw new Error(`${key} must be an array of strings`);
+    }
+  }
+
+  const confidence = value.confidence;
+  if (confidence !== null) {
+    if (typeof confidence === "boolean") {
+      throw new Error("confidence must not be boolean");
+    }
+    if (typeof confidence === "string") {
+      if (!["LOW", "MEDIUM", "HIGH"].includes(confidence.toUpperCase())) {
+        throw new Error("Unsupported confidence label");
+      }
+    } else if (typeof confidence === "number") {
+      if (!Number.isFinite(confidence)) {
+        throw new Error("confidence must be finite");
+      }
+    } else {
+      throw new Error("confidence must be a label, number, or null");
+    }
+  }
+
+  const semantic = value.semantic_interpretation;
+  if ("confirmed_diagnoses" in semantic) {
+    const diagnoses = semantic.confirmed_diagnoses;
+    if (diagnoses !== null && !Array.isArray(diagnoses)) {
+      throw new Error("confirmed_diagnoses must be an array or null");
+    }
+    if (Array.isArray(diagnoses) && diagnoses.length > 0) {
+      throw new Error("The model cannot independently confirm a diagnosis");
+    }
+  }
+}
+
 /**
  * Calls the AI UPCHAR Clinical Reasoning Gateway.
  * Returns parsed and validated clinical response conforming to the 6-key contract.
@@ -183,32 +270,16 @@ export async function callClinicalReasoningGateway(
       throw new Error(`Gateway returned HTTP ${res.status}`);
     }
 
-    const data = (await res.json()) as Record<string, unknown>;
-
-    // Validate contract compliance
-    const action = data.recommended_action as RecommendedAction;
-    if (!["ASK_QUESTION", "CLARIFY", "SAFETY_REVIEW"].includes(action)) {
-      throw new Error(`Invalid recommended_action from gateway: ${String(action)}`);
-    }
-
-    const semantic = (typeof data.semantic_interpretation === "object" && data.semantic_interpretation !== null
-      ? data.semantic_interpretation
-      : {}) as ClinicalSemanticInterpretation;
-
-    // Clinical Safety Floor: ensure models never confirm diagnosis independently
-    if (semantic.confirmed_diagnoses) {
-      semantic.confirmed_diagnoses = null;
-    }
+    const data: unknown = await res.json();
+    validateClinicalReasoningResponse(data);
 
     return {
-      semantic_interpretation: semantic,
-      clinical_considerations: Array.isArray(data.clinical_considerations)
-        ? data.clinical_considerations.map(String)
-        : [],
-      recommended_action: action,
-      next_best_question: typeof data.next_best_question === "string" ? data.next_best_question : null,
-      missing_information: Array.isArray(data.missing_information) ? data.missing_information.map(String) : [],
-      confidence: (data.confidence as ClinicalReasoningResponse["confidence"]) ?? null,
+      semantic_interpretation: data.semantic_interpretation as ClinicalSemanticInterpretation,
+      clinical_considerations: data.clinical_considerations as string[],
+      recommended_action: data.recommended_action as RecommendedAction,
+      next_best_question: data.next_best_question as string | null,
+      missing_information: data.missing_information as string[],
+      confidence: data.confidence as ClinicalReasoningResponse["confidence"],
       source: "AI_UPCHAR_E3_GATEWAY",
       disclaimer: CLINICAL_DISCLAIMER,
     };

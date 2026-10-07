@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.vercel
+ai-upchar-llm
+local-artifacts
+test-results
+freebuff
+.freebuff
+*.log
+*.apk
+*.ipa
+*.zip
+*.tar.gz
+*.safetensors
