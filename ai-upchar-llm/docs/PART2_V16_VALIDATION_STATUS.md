@@ -6,7 +6,7 @@ Status checked: 2026-10-07 (Asia/Calcutta)
 
 | Run | Kaggle state | Verified result |
 |---|---|---|
-| `ai-upchar-part2-v16-full-validation` | Complete | `FAIL`: 387/390 Part 2 cases; Gate B E2 4/6; Gate C E3 9/12 |
+| `ai-upchar-part2-v16-full-validation` | Complete | `FAIL`: 387/390 Part 2 cases; Gate B E2 6/6 PASS; Gate C E3 12/12 PASS |
 | `ai-upchar-part2-v16-structured-diagnostic` (version 5) | Complete | `PASS`: 2 unique historical failure prompts covering 3 frozen failure IDs |
 | `ai-upchar-part2-v16-structured-focused-validation` | Stopped before completion | Intentionally stopped while running because the Kaggle GPU quota had only 24 minutes remaining; no result is claimed |
 
