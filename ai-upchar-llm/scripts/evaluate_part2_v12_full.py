@@ -56,9 +56,7 @@ MULTILINGUAL_PROBES = (
 
 def normalized_user(record: dict[str, Any]) -> str:
     text = "\n".join(
-        message["content"]
-        for message in record["messages"]
-        if message.get("role") == "user"
+        message["content"] for message in record["messages"] if message.get("role") == "user"
     )
     return " ".join(text.casefold().split())
 
@@ -78,9 +76,7 @@ def multilingual_records() -> list[dict[str, Any]]:
     ]
 
 
-def summarize_part2(
-    records: list[dict[str, Any]], results: list[dict[str, Any]]
-) -> dict[str, Any]:
+def summarize_part2(records: list[dict[str, Any]], results: list[dict[str, Any]]) -> dict[str, Any]:
     if len(records) != len(results):
         raise ValueError("Part2 record/result count mismatch")
     stage_totals: defaultdict[str, int] = defaultdict(int)
@@ -130,13 +126,9 @@ def main() -> None:
     parser.add_argument("--output", required=True)
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--base-model", default="Qwen/Qwen3-4B-Base")
-    parser.add_argument(
-        "--part2-heldout", default="data/evaluation/part2_advanced_held_out.jsonl"
-    )
+    parser.add_argument("--part2-heldout", default="data/evaluation/part2_advanced_held_out.jsonl")
     parser.add_argument("--e2-heldout", default="data/evaluation/e2_held_out_contract.jsonl")
-    parser.add_argument(
-        "--e3-heldout", default="data/evaluation/e3_targeted_safety_heldout.jsonl"
-    )
+    parser.add_argument("--e3-heldout", default="data/evaluation/e3_targeted_safety_heldout.jsonl")
     parser.add_argument(
         "--e3b-heldout", default="data/evaluation/e3b_patient_interview_held_out.jsonl"
     )
@@ -192,16 +184,20 @@ def main() -> None:
     gate_c = run_gate_c(model, tokenizer, Path(args.e3_heldout))
 
     part2_summary = summarize_part2(part2_records, part2_results)
-    status = "PASS" if all(
-        [
-            part2_summary["passed"] == part2_summary["total"],
-            all(result["passed"] for result in e3b_results),
-            all(result["passed"] for result in multilingual),
-            gate_a["passed"],
-            gate_b["status"] == "PASS",
-            gate_c["status"] == "PASS",
-        ]
-    ) else "FAIL"
+    status = (
+        "PASS"
+        if all(
+            [
+                part2_summary["passed"] == part2_summary["total"],
+                all(result["passed"] for result in e3b_results),
+                all(result["passed"] for result in multilingual),
+                gate_a["passed"],
+                gate_b["status"] == "PASS",
+                gate_c["status"] == "PASS",
+            ]
+        )
+        else "FAIL"
+    )
     report = {
         "status": status,
         "structured_decoding": STRUCTURED_DECODING_IMPLEMENTATION,
@@ -223,15 +219,21 @@ def main() -> None:
     }
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     write_checkpoint(checkpoint, part2_records, part2_results, status)
-    print(json.dumps({
-        "status": status,
-        "part2": part2_summary,
-        "e3b": f"{report['e3b']['passed']}/{report['e3b']['total']}",
-        "multilingual": f"{report['multilingual_engineering_probes']['passed']}/{report['multilingual_engineering_probes']['total']}",
-        "gate_a": gate_a["passed"],
-        "gate_b": gate_b["status"],
-        "gate_c": gate_c["status"],
-    }, indent=2), flush=True)
+    print(
+        json.dumps(
+            {
+                "status": status,
+                "part2": part2_summary,
+                "e3b": f"{report['e3b']['passed']}/{report['e3b']['total']}",
+                "multilingual": f"{report['multilingual_engineering_probes']['passed']}/{report['multilingual_engineering_probes']['total']}",
+                "gate_a": gate_a["passed"],
+                "gate_b": gate_b["status"],
+                "gate_c": gate_c["status"],
+            },
+            indent=2,
+        ),
+        flush=True,
+    )
     if status != "PASS":
         raise SystemExit(1)
 

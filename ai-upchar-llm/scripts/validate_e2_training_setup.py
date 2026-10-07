@@ -1,8 +1,9 @@
 """Read-only validation of the E2 training setup. Modifies nothing."""
+
 from __future__ import annotations
 
-import json
 import math
+from importlib import import_module
 from pathlib import Path
 
 from ai_upchar_llm.config import load_config
@@ -28,7 +29,9 @@ print(f"  training.grad_accum     = {e2_cfg['training']['gradient_accumulation_s
 print(f"  model.max_sequence_len  = {e2_cfg['model']['max_sequence_length']}")
 print(f"  quantization.quant_type = {e2_cfg['quantization']['quant_type']}")
 print(f"  quantization.double_quant = {e2_cfg['quantization']['double_quant']}")
-print(f"  lora.rank/alpha/dropout = {e2_cfg['lora']['rank']}/{e2_cfg['lora']['alpha']}/{e2_cfg['lora']['dropout']}")
+print(
+    f"  lora.rank/alpha/dropout = {e2_cfg['lora']['rank']}/{e2_cfg['lora']['alpha']}/{e2_cfg['lora']['dropout']}"
+)
 print(f"  lora.target_modules     = {e2_cfg['lora']['target_modules']}")
 print(f"  project.seed            = {e2_cfg['project']['seed']}")
 print(f"  data.sft_path           = {e2_cfg['data']['sft_path']}")
@@ -37,29 +40,41 @@ print(f"  data.evaluation_path    = {e2_cfg['data']['evaluation_path']}")
 # 2. Verify 122-record dataset
 print("\n[2] E2 dataset record count")
 sft_path = ROOT / e2_cfg["data"]["sft_path"]
-train_records = [l for l in sft_path.read_text(encoding="utf-8").strip().split("\n") if l.strip()]
+train_records = [
+    line for line in sft_path.read_text(encoding="utf-8").strip().split("\n") if line.strip()
+]
 print(f"  {sft_path.name}: {len(train_records)} records")
 eval_path = ROOT / e2_cfg["data"]["evaluation_path"]
-held_records = [l for l in eval_path.read_text(encoding="utf-8").strip().split("\n") if l.strip()]
+held_records = [
+    line for line in eval_path.read_text(encoding="utf-8").strip().split("\n") if line.strip()
+]
 print(f"  {eval_path.name}: {len(held_records)} records")
 
 # 3. Verify 91/31 split using the actual library
 print("\n[3] Internal train/eval split (actual library)")
-from datasets import Dataset
+Dataset = import_module("datasets").Dataset
+
 rows = [{"i": i} for i in range(len(train_records))]
 split = Dataset.from_list(rows).train_test_split(
     test_size=e2_cfg["training"]["eval_split"], seed=e2_cfg["project"]["seed"]
 )
-print(f"  train: {len(split['train'])}  eval: {len(split['test'])}  (seed={e2_cfg['project']['seed']})")
+print(
+    f"  train: {len(split['train'])}  eval: {len(split['test'])}  (seed={e2_cfg['project']['seed']})"
+)
 
 # 4. Verify max_steps and step budget
 print("\n[4] max_steps + step budget")
-eff_batch = e2_cfg["training"]["per_device_train_batch_size"] * e2_cfg["training"]["gradient_accumulation_steps"]
+eff_batch = (
+    e2_cfg["training"]["per_device_train_batch_size"]
+    * e2_cfg["training"]["gradient_accumulation_steps"]
+)
 steps_per_epoch = math.ceil(len(split["train"]) / eff_batch)
 print(f"  max_steps          = {e2_cfg['training']['max_steps']}")
 print(f"  effective batch    = {eff_batch}")
 print(f"  steps/epoch (91)   = {steps_per_epoch}")
-print(f"  3 epochs           = {steps_per_epoch * 3} steps  (max_steps caps at {e2_cfg['training']['max_steps']})")
+print(
+    f"  3 epochs           = {steps_per_epoch * 3} steps  (max_steps caps at {e2_cfg['training']['max_steps']})"
+)
 
 # 5. Verify E1 config/data unchanged (still points to E1 data)
 print("\n[5] E1 config integrity (must still point to E1 data)")
@@ -79,8 +94,10 @@ print("\n[6] Frozen evaluator + contract")
 print(f"  CONTRACT_REQUIRED_KEYS = {CONTRACT_REQUIRED_KEYS}")
 contract_ok = CONTRACT_REQUIRED_KEYS == ("semantic_interpretation", "recommended_action")
 # Behavioral spot-check of the frozen evaluator (does not modify it)
-v_good = evaluate_contract_json('{"semantic_interpretation": {}, "recommended_action": "ASK_QUESTION"}')
-v_bad = evaluate_contract_json('not json')
+v_good = evaluate_contract_json(
+    '{"semantic_interpretation": {}, "recommended_action": "ASK_QUESTION"}'
+)
+v_bad = evaluate_contract_json("not json")
 v_missing = evaluate_contract_json('{"recommended_action": "ASK_QUESTION"}')
 print(f"  evaluator valid-case  -> valid={v_good['valid']}")
 print(f"  evaluator non-json    -> valid={v_bad['valid']} reason={v_bad['reason']}")
@@ -100,8 +117,14 @@ checks = {
     "max_steps = 138": e2_cfg["training"]["max_steps"] == 138,
     "eval_split = 0.25": e2_cfg["training"]["eval_split"] == 0.25,
     "seed = 42": e2_cfg["project"]["seed"] == 42,
-    "LoRA r8/a16/d0.05": (e2_cfg["lora"]["rank"], e2_cfg["lora"]["alpha"], e2_cfg["lora"]["dropout"]) == (8, 16, 0.05),
-    "NF4 + double_quant": e2_cfg["quantization"]["quant_type"] == "nf4" and e2_cfg["quantization"]["double_quant"],
+    "LoRA r8/a16/d0.05": (
+        e2_cfg["lora"]["rank"],
+        e2_cfg["lora"]["alpha"],
+        e2_cfg["lora"]["dropout"],
+    )
+    == (8, 16, 0.05),
+    "NF4 + double_quant": e2_cfg["quantization"]["quant_type"] == "nf4"
+    and e2_cfg["quantization"]["double_quant"],
     "seq_len = 256": e2_cfg["model"]["max_sequence_length"] == 256,
     "E2 -> E2 data": e2_cfg["data"]["sft_path"] == "data/sft/e2_contract_sft.jsonl",
     "E1 config unchanged": e1_ok,

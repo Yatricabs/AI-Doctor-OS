@@ -26,9 +26,7 @@ def parser_accepts(expected: dict[str, Any], text: str, alphabet: str) -> bool:
 
 def load_records(path: Path) -> list[dict[str, Any]]:
     return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
 
 
@@ -51,11 +49,7 @@ def main() -> None:
     args = parser.parse_args()
 
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer, local_files_only=True)
-    records = [
-        record
-        for dataset in args.dataset
-        for record in load_records(Path(dataset))
-    ]
+    records = [record for dataset in args.dataset for record in load_records(Path(dataset))]
     failure_report = json.loads(Path(args.failure_report).read_text(encoding="utf-8"))
     structured_failure_report = json.loads(
         Path(args.structured_failure_report).read_text(encoding="utf-8")
@@ -89,11 +83,7 @@ def main() -> None:
         if tokenizer.decode(token_ids, skip_special_tokens=False) != raw:
             roundtrip_failures.append(str(record.get("id")))
 
-    malformed = [
-        item
-        for item in failure_report["part2"]["results"]
-        if not item["json_valid"]
-    ]
+    malformed = [item for item in failure_report["part2"]["results"] if not item["json_valid"]]
     malformed_checks: list[dict[str, Any]] = []
     by_id = {record.get("id"): record for record in records}
     for item in malformed:
@@ -121,7 +111,8 @@ def main() -> None:
 
     template = tokenizer.chat_template or ""
     report = {
-        "status": "PASS" if (
+        "status": "PASS"
+        if (
             len(records) == 413
             and not expected_failures
             and not roundtrip_failures
@@ -129,7 +120,8 @@ def main() -> None:
             and all(item["parser_rejects"] for item in malformed_checks)
             and len(structured_checks) == 2
             and all(item["consistent"] for item in structured_checks)
-        ) else "FAIL",
+        )
+        else "FAIL",
         "structured_decoding": STRUCTURED_DECODING_IMPLEMENTATION,
         "tokenizer_class": type(tokenizer).__name__,
         "tokenizer_source": str(Path(args.tokenizer).resolve()),
@@ -153,9 +145,7 @@ def main() -> None:
         "v2_structured_output_replay": structured_checks,
     }
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.output).write_text(
-        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    Path(args.output).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if report["status"] != "PASS":
         raise SystemExit(1)

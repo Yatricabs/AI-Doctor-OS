@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -42,20 +41,26 @@ def inspect_adapter(adapter_dir: Path) -> dict:
     }
 
 
-def merge_and_save(base_model_id: str, adapter_dir: Path, output_dir: Path, device: str = "cpu") -> None:
+def merge_and_save(
+    base_model_id: str, adapter_dir: Path, output_dir: Path, device: str = "cpu"
+) -> None:
     print(f"\n[INFO] Loading base model: {base_model_id} on {device}...")
     try:
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from peft import PeftModel
     except ImportError as e:
-        print(f"[ERROR] Required packages missing: {e}. Please install: pip install torch transformers peft")
+        print(
+            f"[ERROR] Required packages missing: {e}. Please install: pip install torch transformers peft"
+        )
         sys.exit(1)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
     dtype = torch.bfloat16 if torch.cuda.is_available() and device != "cpu" else torch.float32
-    tokenizer = AutoTokenizer.from_pretrained(str(adapter_dir) if (adapter_dir / "tokenizer_config.json").exists() else base_model_id)
+    tokenizer = AutoTokenizer.from_pretrained(
+        str(adapter_dir) if (adapter_dir / "tokenizer_config.json").exists() else base_model_id
+    )
 
     base_model = AutoModelForCausalLM.from_pretrained(
         base_model_id,
@@ -82,7 +87,9 @@ def merge_and_save(base_model_id: str, adapter_dir: Path, output_dir: Path, devi
         "method": "peft_merge_and_unload",
         "precision": str(dtype),
     }
-    (output_dir / "standalone_model_manifest.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    (output_dir / "standalone_model_manifest.json").write_text(
+        json.dumps(meta, indent=2), encoding="utf-8"
+    )
     print(f"[SUCCESS] Standalone merged model saved successfully to {output_dir}")
 
 
@@ -106,8 +113,12 @@ def main() -> None:
         default="artifacts/qwen3-4b-e3-standalone",
         help="Target directory for merged standalone model",
     )
-    parser.add_argument("--device", type=str, default="cpu", help="Device for merge operation (cpu or cuda)")
-    parser.add_argument("--dry-run", action="store_true", help="Inspect adapter without executing merge")
+    parser.add_argument(
+        "--device", type=str, default="cpu", help="Device for merge operation (cpu or cuda)"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Inspect adapter without executing merge"
+    )
 
     args = parser.parse_args()
     adapter_path = Path(args.adapter_dir).resolve()

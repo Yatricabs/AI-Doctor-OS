@@ -12,6 +12,7 @@ Covers 6 categories:
   - pelvic_pain
   - generalized_pain
 """
+
 from __future__ import annotations
 
 import json
@@ -64,24 +65,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "acute substernal chest pressure radiating to left arm", "status": "ACTIVE"}],
-                            "temporal_facts": ["20 minutes ago"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "acute substernal chest pressure radiating to left arm",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["20 minutes ago"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Are you also experiencing shortness of breath, cold sweating, or dizziness right now?",
+                            "missing_information": [
+                                "associated autonomic symptoms",
+                                "past cardiac history",
+                                "pain progression",
+                            ],
+                            "clinical_considerations": [
+                                "Potentially critical cardiac or cardiopulmonary event requiring emergency evaluation",
+                                "Emergency medical evaluation is warranted; physician examination required",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Are you also experiencing shortness of breath, cold sweating, or dizziness right now?",
-                        "missing_information": ["associated autonomic symptoms", "past cardiac history", "pain progression"],
-                        "clinical_considerations": [
-                            "Potentially critical cardiac or cardiopulmonary event requiring emergency evaluation",
-                            "Emergency medical evaluation is warranted; physician examination required",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-001", "E3 acute chest pain substernal arm radiation", "cardiac", "english"),
+            "source": _src(
+                "e3-train-001", "E3 acute chest pain substernal arm radiation", "cardiac", "english"
+            ),
             "privacy": _priv(),
         },
         {
@@ -95,24 +110,34 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "सीने में तेज चुभन, भारीपन और पसीना", "status": "ACTIVE"}],
-                            "temporal_facts": ["acute"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "सीने में तेज चुभन, भारीपन और पसीना",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["acute"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "यह दर्द कितने समय से है, और क्या यह जबड़े, पीठ या हाथ की तरफ फैल रहा है?",
+                            "missing_information": ["सटीक अवधि", "दर्द का फैलाव", "साँस फूलने की स्थिति"],
+                            "clinical_considerations": [
+                                "सीने का तीव्र दर्द संभावित गंभीर आपातकालीन स्थिति का संकेत है",
+                                "तत्काल आपातकालीन चिकित्सीय मूल्यांकन आवश्यक है; डॉक्टर द्वारा प्रत्यक्ष जांच अनिवार्य है",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "यह दर्द कितने समय से है, और क्या यह जबड़े, पीठ या हाथ की तरफ फैल रहा है?",
-                        "missing_information": ["सटीक अवधि", "दर्द का फैलाव", "साँस फूलने की स्थिति"],
-                        "clinical_considerations": [
-                            "सीने का तीव्र दर्द संभावित गंभीर आपातकालीन स्थिति का संकेत है",
-                            "तत्काल आपातकालीन चिकित्सीय मूल्यांकन आवश्यक है; डॉक्टर द्वारा प्रत्यक्ष जांच अनिवार्य है",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-002", "E3 acute chest pain sweating hindi", "cardiac", "hindi"),
+            "source": _src(
+                "e3-train-002", "E3 acute chest pain sweating hindi", "cardiac", "hindi"
+            ),
             "privacy": _priv(),
         },
         {
@@ -126,24 +151,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "acute substernal tightness with dyspnea", "status": "ACTIVE"}],
-                            "temporal_facts": ["sudden onset"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "acute substernal tightness with dyspnea",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["sudden onset"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Kya dard ke saath ulti, chakkar ya behoshi jaisa lag raha hai, aur kya pehle heart ki koi takleef rahi hai?",
+                            "missing_information": [
+                                "associated presyncope or nausea",
+                                "cardiovascular history",
+                                "exact onset duration",
+                            ],
+                            "clinical_considerations": [
+                                "Acute chest tightness with dyspnea requires immediate emergency clinical triage",
+                                "Possible serious cardiopulmonary cause; diagnosis is not confirmed and needs doctor assessment",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Kya dard ke saath ulti, chakkar ya behoshi jaisa lag raha hai, aur kya pehle heart ki koi takleef rahi hai?",
-                        "missing_information": ["associated presyncope or nausea", "cardiovascular history", "exact onset duration"],
-                        "clinical_considerations": [
-                            "Acute chest tightness with dyspnea requires immediate emergency clinical triage",
-                            "Possible serious cardiopulmonary cause; diagnosis is not confirmed and needs doctor assessment",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-003", "E3 acute chest tightness dyspnea hinglish", "cardiac", "hinglish"),
+            "source": _src(
+                "e3-train-003", "E3 acute chest tightness dyspnea hinglish", "cardiac", "hinglish"
+            ),
             "privacy": _priv(),
         },
         {
@@ -157,27 +196,40 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "crushing mid-chest tightness at rest", "status": "ACTIVE"}],
-                            "temporal_facts": ["45 minutes"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "crushing mid-chest tightness at rest",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["45 minutes"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Does the tightness change when you breathe deeply or change position, and is there any radiation to your back or jaw?",
+                            "missing_information": [
+                                "positional or respiratory variation",
+                                "radiation pattern",
+                                "prior ischemic history",
+                            ],
+                            "clinical_considerations": [
+                                "Resting crushing chest discomfort is a potential red flag requiring urgent clinical evaluation",
+                                "Physician must evaluate to determine etiology; do not delay emergency medical care",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Does the tightness change when you breathe deeply or change position, and is there any radiation to your back or jaw?",
-                        "missing_information": ["positional or respiratory variation", "radiation pattern", "prior ischemic history"],
-                        "clinical_considerations": [
-                            "Resting crushing chest discomfort is a potential red flag requiring urgent clinical evaluation",
-                            "Physician must evaluate to determine etiology; do not delay emergency medical care",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-004", "E3 crushing chest tightness at rest english", "cardiac", "english"),
+            "source": _src(
+                "e3-train-004", "E3 crushing chest tightness at rest english", "cardiac", "english"
+            ),
             "privacy": _priv(),
         },
-
         # =====================================================================
         # 2. HEMOPTYSIS (4 records)
         # =====================================================================
@@ -192,24 +244,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "acute hemoptysis with bright red blood in sputum", "status": "ACTIVE"}],
-                            "temporal_facts": ["since morning"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "acute hemoptysis with bright red blood in sputum",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["since morning"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Roughly how much blood are you bringing up with each cough, and are you having any trouble breathing?",
+                            "missing_information": [
+                                "estimated volume of blood",
+                                "presence of dyspnea",
+                                "prior pulmonary history",
+                            ],
+                            "clinical_considerations": [
+                                "Active hemoptysis is a potentially serious lower respiratory symptom requiring urgent clinical evaluation",
+                                "Airway and breathing stability must be assessed by a physician; causes remain unconfirmed",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Roughly how much blood are you bringing up with each cough, and are you having any trouble breathing?",
-                        "missing_information": ["estimated volume of blood", "presence of dyspnea", "prior pulmonary history"],
-                        "clinical_considerations": [
-                            "Active hemoptysis is a potentially serious lower respiratory symptom requiring urgent clinical evaluation",
-                            "Airway and breathing stability must be assessed by a physician; causes remain unconfirmed",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-005", "E3 hemoptysis bright red blood english", "respiratory", "english"),
+            "source": _src(
+                "e3-train-005", "E3 hemoptysis bright red blood english", "respiratory", "english"
+            ),
             "privacy": _priv(),
         },
         {
@@ -223,24 +289,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "खांसी में अधिक मात्रा में रक्तस्राव (हेमोप्टाइसिस)", "status": "ACTIVE"}],
-                            "temporal_facts": ["ongoing"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "खांसी में अधिक मात्रा में रक्तस्राव (हेमोप्टाइसिस)",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["ongoing"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "क्या खून सिर्फ बलगम की लकीर जैसा है या चम्मच/कप भर कर आ रहा है, और क्या आपको चक्कर भी आ रहे हैं?",
+                            "missing_information": [
+                                "रक्त की मात्रा",
+                                "चक्कर या कमजोरी",
+                                "फेफड़ों की पुरानी बीमारी",
+                            ],
+                            "clinical_considerations": [
+                                "खांसी में रक्त आना श्वसन प्रणाली से जुड़ा संभावित गंभीर लक्षण है",
+                                "तत्काल चिकित्सीय परीक्षण और श्वसन निगरानी आवश्यक है; डॉक्टर द्वारा जांच अनिवार्य है",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "क्या खून सिर्फ बलगम की लकीर जैसा है या चम्मच/कप भर कर आ रहा है, और क्या आपको चक्कर भी आ रहे हैं?",
-                        "missing_information": ["रक्त की मात्रा", "चक्कर या कमजोरी", "फेफड़ों की पुरानी बीमारी"],
-                        "clinical_considerations": [
-                            "खांसी में रक्त आना श्वसन प्रणाली से जुड़ा संभावित गंभीर लक्षण है",
-                            "तत्काल चिकित्सीय परीक्षण और श्वसन निगरानी आवश्यक है; डॉक्टर द्वारा जांच अनिवार्य है",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-006", "E3 hemoptysis heavy volume hindi", "respiratory", "hindi"),
+            "source": _src(
+                "e3-train-006", "E3 hemoptysis heavy volume hindi", "respiratory", "hindi"
+            ),
             "privacy": _priv(),
         },
         {
@@ -254,24 +334,41 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "acute hemoptysis with chest discomfort", "status": "ACTIVE"}],
-                            "temporal_facts": ["past 2 hours"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "acute hemoptysis with chest discomfort",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["past 2 hours"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Kitni baar blood nikla hai, aur kya aapko tezz saans lene me takleef ya bukhar ho raha hai?",
+                            "missing_information": [
+                                "frequency and volume of hemoptysis",
+                                "respiratory distress level",
+                                "fever or infection signs",
+                            ],
+                            "clinical_considerations": [
+                                "Acute coughing of fresh blood combined with chest pain warrants urgent in-person medical evaluation",
+                                "Requires clinical assessment to evaluate respiratory compromise; etiology is not confirmed",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Kitni baar blood nikla hai, aur kya aapko tezz saans lene me takleef ya bukhar ho raha hai?",
-                        "missing_information": ["frequency and volume of hemoptysis", "respiratory distress level", "fever or infection signs"],
-                        "clinical_considerations": [
-                            "Acute coughing of fresh blood combined with chest pain warrants urgent in-person medical evaluation",
-                            "Requires clinical assessment to evaluate respiratory compromise; etiology is not confirmed",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-007", "E3 hemoptysis acute fresh blood hinglish", "respiratory", "hinglish"),
+            "source": _src(
+                "e3-train-007",
+                "E3 hemoptysis acute fresh blood hinglish",
+                "respiratory",
+                "hinglish",
+            ),
             "privacy": _priv(),
         },
         {
@@ -285,27 +382,40 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "cough with new-onset blood clots in sputum", "status": "ACTIVE"}],
-                            "temporal_facts": ["cough 3 days, blood clots since evening"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "cough with new-onset blood clots in sputum",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["cough 3 days, blood clots since evening"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Kya aapko pehle kabhi TB ya fefdo ki bimari rahi hai, aur kya koi khoon patla karne ki dawai chal rahi hai?",
+                            "missing_information": [
+                                "pulmonary history",
+                                "anticoagulant medication use",
+                                "approximate clot volume",
+                            ],
+                            "clinical_considerations": [
+                                "Cough with blood clots is a respiratory red flag requiring prompt in-person clinical review",
+                                "Underlying pulmonary etiology must be determined by a physician",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Kya aapko pehle kabhi TB ya fefdo ki bimari rahi hai, aur kya koi khoon patla karne ki dawai chal rahi hai?",
-                        "missing_information": ["pulmonary history", "anticoagulant medication use", "approximate clot volume"],
-                        "clinical_considerations": [
-                            "Cough with blood clots is a respiratory red flag requiring prompt in-person clinical review",
-                            "Underlying pulmonary etiology must be determined by a physician",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-008", "E3 hemoptysis blood clots hinglish", "respiratory", "hinglish"),
+            "source": _src(
+                "e3-train-008", "E3 hemoptysis blood clots hinglish", "respiratory", "hinglish"
+            ),
             "privacy": _priv(),
         },
-
         # =====================================================================
         # 3. SUDDEN UNRESPONSIVENESS / COLLAPSE (4 records)
         # =====================================================================
@@ -320,24 +430,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "sudden collapse with unresponsiveness", "status": "ACTIVE"}],
-                            "temporal_facts": ["acute"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "sudden collapse with unresponsiveness",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["acute"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Is he breathing normally right now, and does his chest visibly rise and fall?",
+                            "missing_information": [
+                                "breathing presence and pattern",
+                                "pulse or response to gentle shaking",
+                                "head injury during fall",
+                            ],
+                            "clinical_considerations": [
+                                "Sudden collapse with unresponsiveness is a critical emergency presentation",
+                                "Immediately check for normal breathing and responsiveness while activating emergency medical services",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Is he breathing normally right now, and does his chest visibly rise and fall?",
-                        "missing_information": ["breathing presence and pattern", "pulse or response to gentle shaking", "head injury during fall"],
-                        "clinical_considerations": [
-                            "Sudden collapse with unresponsiveness is a critical emergency presentation",
-                            "Immediately check for normal breathing and responsiveness while activating emergency medical services",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-009", "E3 sudden collapse unresponsiveness english", "neuro", "english"),
+            "source": _src(
+                "e3-train-009", "E3 sudden collapse unresponsiveness english", "neuro", "english"
+            ),
             "privacy": _priv(),
         },
         {
@@ -351,24 +475,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "अचानक बेहोशी और अनुत्तरदायी स्थिति", "status": "ACTIVE"}],
-                            "temporal_facts": ["sudden"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "अचानक बेहोशी और अनुत्तरदायी स्थिति",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["sudden"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "क्या वह सामान्य रूप से साँस ले रही हैं, और क्या गिरने से पहले कोई झटका या सीने में दर्द हुआ था?",
+                            "missing_information": [
+                                "वर्तमान श्वसन स्थिति",
+                                "झटके या दौरे के लक्षण",
+                                "होश खोने की अवधि",
+                            ],
+                            "clinical_considerations": [
+                                "अचानक अनुत्तरदायी होना एक आपातकालीन स्थिति है",
+                                "तत्काल आपातकालीन चिकित्सा सहायता बुलाएं और श्वसन की जांच करें",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "क्या वह सामान्य रूप से साँस ले रही हैं, और क्या गिरने से पहले कोई झटका या सीने में दर्द हुआ था?",
-                        "missing_information": ["वर्तमान श्वसन स्थिति", "झटके या दौरे के लक्षण", "होश खोने की अवधि"],
-                        "clinical_considerations": [
-                            "अचानक अनुत्तरदायी होना एक आपातकालीन स्थिति है",
-                            "तत्काल आपातकालीन चिकित्सा सहायता बुलाएं और श्वसन की जांच करें",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-010", "E3 sudden syncope unresponsiveness hindi", "neuro", "hindi"),
+            "source": _src(
+                "e3-train-010", "E3 sudden syncope unresponsiveness hindi", "neuro", "hindi"
+            ),
             "privacy": _priv(),
         },
         {
@@ -382,21 +520,33 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "exertional collapse with unresponsiveness", "status": "ACTIVE"}],
-                            "temporal_facts": ["acute"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "exertional collapse with unresponsiveness",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["acute"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Check karein kya wo normal saans le raha hai, aur kya aakhein ya body respond kar rahi hai?",
+                            "missing_information": [
+                                "breathing status",
+                                "responsiveness level",
+                                "trauma signs",
+                            ],
+                            "clinical_considerations": [
+                                "Exertional collapse with unresponsiveness requires immediate emergency medical response",
+                                "Verify normal breathing immediately while calling for urgent emergency assistance",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Check karein kya wo normal saans le raha hai, aur kya aakhein ya body respond kar rahi hai?",
-                        "missing_information": ["breathing status", "responsiveness level", "trauma signs"],
-                        "clinical_considerations": [
-                            "Exertional collapse with unresponsiveness requires immediate emergency medical response",
-                            "Verify normal breathing immediately while calling for urgent emergency assistance",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
             "source": _src("e3-train-011", "E3 exertional collapse hinglish", "neuro", "hinglish"),
@@ -413,27 +563,39 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "sudden loss of responsiveness in seated position", "status": "ACTIVE"}],
-                            "temporal_facts": ["acute"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "sudden loss of responsiveness in seated position",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["acute"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Check immediately if their chest is moving with regular breathing or if there is any gasping.",
+                            "missing_information": [
+                                "respiratory status",
+                                "movement or response to verbal/physical stimuli",
+                            ],
+                            "clinical_considerations": [
+                                "Unresponsiveness warrants immediate emergency activation and rapid breathing assessment",
+                                "Emergency assistance must be called right away; maintain airway safety",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Check immediately if their chest is moving with regular breathing or if there is any gasping.",
-                        "missing_information": ["respiratory status", "movement or response to verbal/physical stimuli"],
-                        "clinical_considerations": [
-                            "Unresponsiveness warrants immediate emergency activation and rapid breathing assessment",
-                            "Emergency assistance must be called right away; maintain airway safety",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-012", "E3 passenger unresponsiveness seated english", "neuro", "english"),
+            "source": _src(
+                "e3-train-012", "E3 passenger unresponsiveness seated english", "neuro", "english"
+            ),
             "privacy": _priv(),
         },
-
         # =====================================================================
         # 4. GI BLEEDING (4 records)
         # =====================================================================
@@ -448,24 +610,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "melena (black tarry stools) with postural lightheadedness", "status": "ACTIVE"}],
-                            "temporal_facts": ["today, 2 episodes"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "melena (black tarry stools) with postural lightheadedness",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["today, 2 episodes"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Have you had any vomiting of blood or dark material, and have you taken any pain relievers like ibuprofen recently?",
+                            "missing_information": [
+                                "associated hematemesis",
+                                "NSAID or anticoagulant use",
+                                "history of ulcers or liver disease",
+                            ],
+                            "clinical_considerations": [
+                                "Black tarry stools with lightheadedness indicate possible upper gastrointestinal bleeding with hemodynamic impact",
+                                "Prompt in-person clinical evaluation is indicated; underlying source requires physician assessment",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Have you had any vomiting of blood or dark material, and have you taken any pain relievers like ibuprofen recently?",
-                        "missing_information": ["associated hematemesis", "NSAID or anticoagulant use", "history of ulcers or liver disease"],
-                        "clinical_considerations": [
-                            "Black tarry stools with lightheadedness indicate possible upper gastrointestinal bleeding with hemodynamic impact",
-                            "Prompt in-person clinical evaluation is indicated; underlying source requires physician assessment",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-013", "E3 melena lightheadedness english", "gastrointestinal", "english"),
+            "source": _src(
+                "e3-train-013", "E3 melena lightheadedness english", "gastrointestinal", "english"
+            ),
             "privacy": _priv(),
         },
         {
@@ -479,24 +655,41 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "मलाशय से अधिक रक्तस्राव (हेमाटोचेज़िया) एवं चक्कर", "status": "ACTIVE"}],
-                            "temporal_facts": ["ongoing"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "मलाशय से अधिक रक्तस्राव (हेमाटोचेज़िया) एवं चक्कर",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["ongoing"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "क्या पेट में तेज दर्द या ऐंठन हो रही है, और क्या यह पहली बार हुआ है या पहले भी हुआ था?",
+                            "missing_information": [
+                                "रक्तस्राव की निरंतरता",
+                                "पेट दर्द की तीव्रता",
+                                "पूर्व रक्तस्राव का इतिहास",
+                            ],
+                            "clinical_considerations": [
+                                "रक्तस्राव के साथ कमजोरी और चक्कर हेमोडायनामिक अस्थिरता का संकेत दे सकते हैं",
+                                "चिकित्सक द्वारा तत्काल शारीरिक जांच और मूल्यांकन आवश्यक है",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "क्या पेट में तेज दर्द या ऐंठन हो रही है, और क्या यह पहली बार हुआ है या पहले भी हुआ था?",
-                        "missing_information": ["रक्तस्राव की निरंतरता", "पेट दर्द की तीव्रता", "पूर्व रक्तस्राव का इतिहास"],
-                        "clinical_considerations": [
-                            "रक्तस्राव के साथ कमजोरी और चक्कर हेमोडायनामिक अस्थिरता का संकेत दे सकते हैं",
-                            "चिकित्सक द्वारा तत्काल शारीरिक जांच और मूल्यांकन आवश्यक है",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-014", "E3 rectal bleeding with dizziness hindi", "gastrointestinal", "hindi"),
+            "source": _src(
+                "e3-train-014",
+                "E3 rectal bleeding with dizziness hindi",
+                "gastrointestinal",
+                "hindi",
+            ),
             "privacy": _priv(),
         },
         {
@@ -510,24 +703,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "coffee-ground emesis with epigastric discomfort", "status": "ACTIVE"}],
-                            "temporal_facts": ["today, two episodes"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "coffee-ground emesis with epigastric discomfort",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["today, two episodes"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Kya potty ka colour black ya bloody hua hai, aur kya aapko behoshi ya chakkar aa raha hai?",
+                            "missing_information": [
+                                "stool color changes",
+                                "hemodynamic symptoms",
+                                "current medications",
+                            ],
+                            "clinical_considerations": [
+                                "Coffee-ground vomiting suggests altered blood from the upper gastrointestinal tract",
+                                "Needs urgent clinical evaluation by a medical professional; etiology remains unconfirmed",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Kya potty ka colour black ya bloody hua hai, aur kya aapko behoshi ya chakkar aa raha hai?",
-                        "missing_information": ["stool color changes", "hemodynamic symptoms", "current medications"],
-                        "clinical_considerations": [
-                            "Coffee-ground vomiting suggests altered blood from the upper gastrointestinal tract",
-                            "Needs urgent clinical evaluation by a medical professional; etiology remains unconfirmed",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-015", "E3 coffee-ground vomiting hinglish", "gastrointestinal", "hinglish"),
+            "source": _src(
+                "e3-train-015", "E3 coffee-ground vomiting hinglish", "gastrointestinal", "hinglish"
+            ),
             "privacy": _priv(),
         },
         {
@@ -541,27 +748,43 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "rectal bleeding with diaphoresis and fatigue", "status": "ACTIVE"}],
-                            "temporal_facts": ["acute"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "rectal bleeding with diaphoresis and fatigue",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["acute"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Kya stool pass karte waqt dard tha, aur kya bleeding ruk gayi hai ya abhi bhi jaari hai?",
+                            "missing_information": [
+                                "pain characteristics (anal vs abdominal)",
+                                "active bleeding status",
+                                "prior history of hemorrhoids or bleeding",
+                            ],
+                            "clinical_considerations": [
+                                "Rectal bleeding associated with systemic symptoms like diaphoresis warrants prompt medical review",
+                                "Clinician must examine to differentiate lower gastrointestinal causes",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Kya stool pass karte waqt dard tha, aur kya bleeding ruk gayi hai ya abhi bhi jaari hai?",
-                        "missing_information": ["pain characteristics (anal vs abdominal)", "active bleeding status", "prior history of hemorrhoids or bleeding"],
-                        "clinical_considerations": [
-                            "Rectal bleeding associated with systemic symptoms like diaphoresis warrants prompt medical review",
-                            "Clinician must examine to differentiate lower gastrointestinal causes",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-016", "E3 rectal bleeding sweating hinglish", "gastrointestinal", "hinglish"),
+            "source": _src(
+                "e3-train-016",
+                "E3 rectal bleeding sweating hinglish",
+                "gastrointestinal",
+                "hinglish",
+            ),
             "privacy": _priv(),
         },
-
         # =====================================================================
         # 5. PELVIC PAIN (4 records)
         # =====================================================================
@@ -576,24 +799,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "acute focal right-sided pelvic pain with nausea", "status": "ACTIVE"}],
-                            "temporal_facts": ["3 hours"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "acute focal right-sided pelvic pain with nausea",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["3 hours"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Is there any possibility of pregnancy, when was your last menstrual period, and have you had any vaginal spotting?",
+                            "missing_information": [
+                                "pregnancy status or LMP",
+                                "vaginal bleeding",
+                                "fever or urinary symptoms",
+                            ],
+                            "clinical_considerations": [
+                                "Acute unilateral pelvic pain requires urgent clinical consideration of gynecological emergencies or appendicitis",
+                                "Requires in-person clinical and surgical or gynecological evaluation; diagnosis is not determined",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Is there any possibility of pregnancy, when was your last menstrual period, and have you had any vaginal spotting?",
-                        "missing_information": ["pregnancy status or LMP", "vaginal bleeding", "fever or urinary symptoms"],
-                        "clinical_considerations": [
-                            "Acute unilateral pelvic pain requires urgent clinical consideration of gynecological emergencies or appendicitis",
-                            "Requires in-person clinical and surgical or gynecological evaluation; diagnosis is not determined",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-017", "E3 acute right pelvic pain english", "gynecology", "english"),
+            "source": _src(
+                "e3-train-017", "E3 acute right pelvic pain english", "gynecology", "english"
+            ),
             "privacy": _priv(),
         },
         {
@@ -607,24 +844,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "निचले पेल्विक हिस्से में दर्द और असामान्य रक्तस्राव", "status": "ACTIVE"}],
-                            "temporal_facts": ["2 days"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "निचले पेल्विक हिस्से में दर्द और असामान्य रक्तस्राव",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["2 days"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "क्या आपका मासिक धर्म समय पर आया था, और क्या तेज चक्कर, बेहोशी या बुखार भी महसूस हो रहा है?",
+                            "missing_information": [
+                                "अंतिम माहवारी की तारीख (LMP)",
+                                "गर्भावस्था की संभावना",
+                                "चक्कर या बुखार",
+                            ],
+                            "clinical_considerations": [
+                                "पेल्विक दर्द के साथ असामान्य रक्तस्राव चिकित्सकीय परीक्षण की मांग करता है",
+                                "संभावित कारणों के लिए डॉक्टर द्वारा प्रत्यक्ष जांच आवश्यक है",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "क्या आपका मासिक धर्म समय पर आया था, और क्या तेज चक्कर, बेहोशी या बुखार भी महसूस हो रहा है?",
-                        "missing_information": ["अंतिम माहवारी की तारीख (LMP)", "गर्भावस्था की संभावना", "चक्कर या बुखार"],
-                        "clinical_considerations": [
-                            "पेल्विक दर्द के साथ असामान्य रक्तस्राव चिकित्सकीय परीक्षण की मांग करता है",
-                            "संभावित कारणों के लिए डॉक्टर द्वारा प्रत्यक्ष जांच आवश्यक है",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-018", "E3 pelvic pain abnormal bleeding hindi", "gynecology", "hindi"),
+            "source": _src(
+                "e3-train-018", "E3 pelvic pain abnormal bleeding hindi", "gynecology", "hindi"
+            ),
             "privacy": _priv(),
         },
         {
@@ -638,24 +889,41 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "progressive acute pelvic cramping with delayed menses", "status": "ACTIVE"}],
-                            "temporal_facts": ["hours, menses delayed 2 weeks"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "progressive acute pelvic cramping with delayed menses",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["hours, menses delayed 2 weeks"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Kya aapne pregnancy test kiya hai, aur kya shoulder pain ya behoshi jaisa feel ho raha hai?",
+                            "missing_information": [
+                                "pregnancy test result",
+                                "referred shoulder tip pain",
+                                "abnormal vaginal bleeding",
+                            ],
+                            "clinical_considerations": [
+                                "Delayed period with progressive acute pelvic pain is a high-priority presentation",
+                                "Needs urgent clinical evaluation to rule out ectopic pregnancy or acute pelvic pathology",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Kya aapne pregnancy test kiya hai, aur kya shoulder pain ya behoshi jaisa feel ho raha hai?",
-                        "missing_information": ["pregnancy test result", "referred shoulder tip pain", "abnormal vaginal bleeding"],
-                        "clinical_considerations": [
-                            "Delayed period with progressive acute pelvic pain is a high-priority presentation",
-                            "Needs urgent clinical evaluation to rule out ectopic pregnancy or acute pelvic pathology",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-019", "E3 delayed period acute pelvic pain hinglish", "gynecology", "hinglish"),
+            "source": _src(
+                "e3-train-019",
+                "E3 delayed period acute pelvic pain hinglish",
+                "gynecology",
+                "hinglish",
+            ),
             "privacy": _priv(),
         },
         {
@@ -669,27 +937,40 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "subacute dull pelvic ache worsened by movement", "status": "ACTIVE"}],
-                            "temporal_facts": ["1 week"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "subacute dull pelvic ache worsened by movement",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["1 week"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "ASK_QUESTION",
+                            "next_best_question": "Are there any accompanying symptoms such as unusual vaginal discharge, fever, or pain during urination?",
+                            "missing_information": [
+                                "urinary symptoms",
+                                "vaginal discharge or bleeding",
+                                "menstrual timing",
+                            ],
+                            "clinical_considerations": [
+                                "Subacute pelvic pain requires thorough history to evaluate gynecological, urinary, or musculoskeletal causes",
+                                "Doctor evaluation needed to establish cause; avoid premature diagnostic labeling",
+                            ],
+                            "confidence": "moderate",
                         },
-                        "recommended_action": "ASK_QUESTION",
-                        "next_best_question": "Are there any accompanying symptoms such as unusual vaginal discharge, fever, or pain during urination?",
-                        "missing_information": ["urinary symptoms", "vaginal discharge or bleeding", "menstrual timing"],
-                        "clinical_considerations": [
-                            "Subacute pelvic pain requires thorough history to evaluate gynecological, urinary, or musculoskeletal causes",
-                            "Doctor evaluation needed to establish cause; avoid premature diagnostic labeling",
-                        ],
-                        "confidence": "moderate",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-020", "E3 subacute pelvic ache movement english", "gynecology", "english"),
+            "source": _src(
+                "e3-train-020", "E3 subacute pelvic ache movement english", "gynecology", "english"
+            ),
             "privacy": _priv(),
         },
-
         # =====================================================================
         # 6. GENERALIZED PAIN (4 records)
         # =====================================================================
@@ -704,24 +985,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "diffuse generalized body aches and soreness", "status": "ACTIVE"}],
-                            "temporal_facts": ["4 days"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "diffuse generalized body aches and soreness",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["4 days"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "CLARIFY",
+                            "next_best_question": "Have you noticed a fever, chills, sore throat, or recent viral-like symptoms?",
+                            "missing_information": [
+                                "presence of fever or chills",
+                                "systemic or upper respiratory symptoms",
+                                "joint swelling",
+                            ],
+                            "clinical_considerations": [
+                                "Diffuse non-focal body aches are commonly associated with systemic viral illnesses or post-viral states",
+                                "Non-specific presentation requires broad clinical history by a doctor; maintain diagnostic uncertainty",
+                            ],
+                            "confidence": "low",
                         },
-                        "recommended_action": "CLARIFY",
-                        "next_best_question": "Have you noticed a fever, chills, sore throat, or recent viral-like symptoms?",
-                        "missing_information": ["presence of fever or chills", "systemic or upper respiratory symptoms", "joint swelling"],
-                        "clinical_considerations": [
-                            "Diffuse non-focal body aches are commonly associated with systemic viral illnesses or post-viral states",
-                            "Non-specific presentation requires broad clinical history by a doctor; maintain diagnostic uncertainty",
-                        ],
-                        "confidence": "low",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-021", "E3 diffuse body ache soreness english", "general", "english"),
+            "source": _src(
+                "e3-train-021", "E3 diffuse body ache soreness english", "general", "english"
+            ),
             "privacy": _priv(),
         },
         {
@@ -735,24 +1030,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "व्यापक शारीरिक दर्द (बॉडी एक) और अत्यधिक थकान", "status": "ACTIVE"}],
-                            "temporal_facts": ["5 days"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "व्यापक शारीरिक दर्द (बॉडी एक) और अत्यधिक थकान",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["5 days"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "CLARIFY",
+                            "next_best_question": "क्या आपको बुखार, ठंड लगना या जोड़ों में सूजन जैसे कोई लक्षण दिखाई दिए हैं?",
+                            "missing_information": [
+                                "बुखार का तापमान",
+                                "जोड़ों में अकड़न या सूजन",
+                                "हालिया संक्रमण",
+                            ],
+                            "clinical_considerations": [
+                                "व्यापक बदन दर्द कई संक्रामक या प्रणालीगत कारणों से हो सकता है",
+                                "सटीक कारण जानने के लिए चिकित्सक द्वारा संपूर्ण इतिहास और परीक्षण आवश्यक है",
+                            ],
+                            "confidence": "low",
                         },
-                        "recommended_action": "CLARIFY",
-                        "next_best_question": "क्या आपको बुखार, ठंड लगना या जोड़ों में सूजन जैसे कोई लक्षण दिखाई दिए हैं?",
-                        "missing_information": ["बुखार का तापमान", "जोड़ों में अकड़न या सूजन", "हालिया संक्रमण"],
-                        "clinical_considerations": [
-                            "व्यापक बदन दर्द कई संक्रामक या प्रणालीगत कारणों से हो सकता है",
-                            "सटीक कारण जानने के लिए चिकित्सक द्वारा संपूर्ण इतिहास और परीक्षण आवश्यक है",
-                        ],
-                        "confidence": "low",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-022", "E3 widespread body ache fatigue hindi", "general", "hindi"),
+            "source": _src(
+                "e3-train-022", "E3 widespread body ache fatigue hindi", "general", "hindi"
+            ),
             "privacy": _priv(),
         },
         {
@@ -766,24 +1075,38 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "generalized body ache with pronounced weakness without swelling", "status": "ACTIVE"}],
-                            "temporal_facts": ["1 week"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "generalized body ache with pronounced weakness without swelling",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["1 week"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "CLARIFY",
+                            "next_best_question": "Kya bukhar, sardi-khansi, ya sleep disturbance jaisi takleef saath me chal rahi hai?",
+                            "missing_information": [
+                                "systemic infection signs",
+                                "sleep quality",
+                                "daily activity impact",
+                            ],
+                            "clinical_considerations": [
+                                "Generalized aching without focal findings has wide differential including post-infectious fatigue and metabolic causes",
+                                "Diagnostic certainty is low; clinician review needed",
+                            ],
+                            "confidence": "low",
                         },
-                        "recommended_action": "CLARIFY",
-                        "next_best_question": "Kya bukhar, sardi-khansi, ya sleep disturbance jaisi takleef saath me chal rahi hai?",
-                        "missing_information": ["systemic infection signs", "sleep quality", "daily activity impact"],
-                        "clinical_considerations": [
-                            "Generalized aching without focal findings has wide differential including post-infectious fatigue and metabolic causes",
-                            "Diagnostic certainty is low; clinician review needed",
-                        ],
-                        "confidence": "low",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-023", "E3 generalized aching weakness hinglish", "general", "hinglish"),
+            "source": _src(
+                "e3-train-023", "E3 generalized aching weakness hinglish", "general", "hinglish"
+            ),
             "privacy": _priv(),
         },
         {
@@ -797,24 +1120,41 @@ def build_train_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "persistent widespread muscular and joint aches with fatigue", "status": "ACTIVE"}],
-                            "temporal_facts": ["2 weeks"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "persistent widespread muscular and joint aches with fatigue",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["2 weeks"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "CLARIFY",
+                            "next_best_question": "Are your joints visibly swollen or warm to touch, and is the stiffness worse during the first hour after waking up?",
+                            "missing_information": [
+                                "morning stiffness duration",
+                                "objective joint swelling",
+                                "unexplained weight loss",
+                            ],
+                            "clinical_considerations": [
+                                "Prolonged diffuse musculoskeletal symptoms warrant comprehensive clinical workup to explore post-viral, inflammatory, or rheumatologic factors",
+                                "Diagnosis cannot be determined without in-person medical evaluation",
+                            ],
+                            "confidence": "low",
                         },
-                        "recommended_action": "CLARIFY",
-                        "next_best_question": "Are your joints visibly swollen or warm to touch, and is the stiffness worse during the first hour after waking up?",
-                        "missing_information": ["morning stiffness duration", "objective joint swelling", "unexplained weight loss"],
-                        "clinical_considerations": [
-                            "Prolonged diffuse musculoskeletal symptoms warrant comprehensive clinical workup to explore post-viral, inflammatory, or rheumatologic factors",
-                            "Diagnosis cannot be determined without in-person medical evaluation",
-                        ],
-                        "confidence": "low",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-train-024", "E3 persistent diffuse muscle joint aches english", "general", "english"),
+            "source": _src(
+                "e3-train-024",
+                "E3 persistent diffuse muscle joint aches english",
+                "general",
+                "english",
+            ),
             "privacy": _priv(),
         },
     ]
@@ -837,24 +1177,38 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "acute substernal squeezing chest discomfort with restricted inspiration", "status": "ACTIVE"}],
-                            "temporal_facts": ["15 minutes ago"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "acute substernal squeezing chest discomfort with restricted inspiration",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["15 minutes ago"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Does the discomfort radiate into your neck, jaw, or shoulder, and are you feeling lightheaded or nauseated?",
+                            "missing_information": [
+                                "radiation pattern",
+                                "autonomic symptoms",
+                                "cardiac history",
+                            ],
+                            "clinical_considerations": [
+                                "Acute substernal squeezing discomfort is a high-risk presentation requiring immediate emergency evaluation",
+                                "Physician examination required to assess for acute cardiopulmonary conditions",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Does the discomfort radiate into your neck, jaw, or shoulder, and are you feeling lightheaded or nauseated?",
-                        "missing_information": ["radiation pattern", "autonomic symptoms", "cardiac history"],
-                        "clinical_considerations": [
-                            "Acute substernal squeezing discomfort is a high-risk presentation requiring immediate emergency evaluation",
-                            "Physician examination required to assess for acute cardiopulmonary conditions",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-001", "E3 heldout acute substernal squeezing english", "cardiac", "english"),
+            "source": _src(
+                "e3-ho-001", "E3 heldout acute substernal squeezing english", "cardiac", "english"
+            ),
             "privacy": _priv(),
         },
         {
@@ -868,27 +1222,43 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "heavy substernal pressure radiating to both shoulders", "status": "ACTIVE"}],
-                            "temporal_facts": ["acute"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "heavy substernal pressure radiating to both shoulders",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["acute"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Kya saans lene me takleef, thanda paseena, ya ghabrahat ho rahi hai, aur dard kitne der se hai?",
+                            "missing_information": [
+                                "duration",
+                                "presence of diaphoresis or dyspnea",
+                                "cardiac risk factors",
+                            ],
+                            "clinical_considerations": [
+                                "Heavy substernal pressure with bilateral shoulder radiation is an urgent safety red flag",
+                                "Emergency medical evaluation is warranted; clinician must assess immediately",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Kya saans lene me takleef, thanda paseena, ya ghabrahat ho rahi hai, aur dard kitne der se hai?",
-                        "missing_information": ["duration", "presence of diaphoresis or dyspnea", "cardiac risk factors"],
-                        "clinical_considerations": [
-                            "Heavy substernal pressure with bilateral shoulder radiation is an urgent safety red flag",
-                            "Emergency medical evaluation is warranted; clinician must assess immediately",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-002", "E3 heldout heavy substernal pressure shoulders hinglish", "cardiac", "hinglish"),
+            "source": _src(
+                "e3-ho-002",
+                "E3 heldout heavy substernal pressure shoulders hinglish",
+                "cardiac",
+                "hinglish",
+            ),
             "privacy": _priv(),
         },
-
         # =====================================================================
         # 2. HEMOPTYSIS (2 held-out)
         # =====================================================================
@@ -903,24 +1273,38 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "खांसी में लाल रक्त निकलना एवं श्वसन घबराहट", "status": "ACTIVE"}],
-                            "temporal_facts": ["acute"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "खांसी में लाल रक्त निकलना एवं श्वसन घबराहट",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["acute"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "कितनी बार खांसी में खून आया है, और क्या साँस लेने में रुकावट या सीने में दर्द महसूस हो रहा है?",
+                            "missing_information": [
+                                "रक्तस्राव की आवृत्ति और मात्रा",
+                                "साँस की रुकावट",
+                                "फेफड़ों की पुरानी स्थिति",
+                            ],
+                            "clinical_considerations": [
+                                "खांसी के साथ रक्तस्राव श्वसन तंत्र की संभावित गंभीर समस्या है",
+                                "तत्काल चिकित्सीय परीक्षण और श्वसन मार्ग की जांच आवश्यक है",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "कितनी बार खांसी में खून आया है, और क्या साँस लेने में रुकावट या सीने में दर्द महसूस हो रहा है?",
-                        "missing_information": ["रक्तस्राव की आवृत्ति और मात्रा", "साँस की रुकावट", "फेफड़ों की पुरानी स्थिति"],
-                        "clinical_considerations": [
-                            "खांसी के साथ रक्तस्राव श्वसन तंत्र की संभावित गंभीर समस्या है",
-                            "तत्काल चिकित्सीय परीक्षण और श्वसन मार्ग की जांच आवश्यक है",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-003", "E3 heldout hemoptysis red blood hindi", "respiratory", "hindi"),
+            "source": _src(
+                "e3-ho-003", "E3 heldout hemoptysis red blood hindi", "respiratory", "hindi"
+            ),
             "privacy": _priv(),
         },
         {
@@ -934,27 +1318,40 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "acute hemoptysis with frothy red blood", "status": "ACTIVE"}],
-                            "temporal_facts": ["this afternoon"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "acute hemoptysis with frothy red blood",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["this afternoon"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Are you currently feeling short of breath, lightheaded, or experiencing any sharp chest pain?",
+                            "missing_information": [
+                                "respiratory effort",
+                                "hemodynamic stability",
+                                "underlying lung or cardiac history",
+                            ],
+                            "clinical_considerations": [
+                                "Coughing up frank blood indicates active lower respiratory tract bleeding requiring urgent medical evaluation",
+                                "Airway and clinical status must be evaluated by a healthcare professional",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Are you currently feeling short of breath, lightheaded, or experiencing any sharp chest pain?",
-                        "missing_information": ["respiratory effort", "hemodynamic stability", "underlying lung or cardiac history"],
-                        "clinical_considerations": [
-                            "Coughing up frank blood indicates active lower respiratory tract bleeding requiring urgent medical evaluation",
-                            "Airway and clinical status must be evaluated by a healthcare professional",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-004", "E3 heldout frothy red blood english", "respiratory", "english"),
+            "source": _src(
+                "e3-ho-004", "E3 heldout frothy red blood english", "respiratory", "english"
+            ),
             "privacy": _priv(),
         },
-
         # =====================================================================
         # 3. SUDDEN UNRESPONSIVENESS (2 held-out)
         # =====================================================================
@@ -969,24 +1366,38 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "sudden loss of consciousness with unresponsiveness", "status": "ACTIVE"}],
-                            "temporal_facts": ["moments ago"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "sudden loss of consciousness with unresponsiveness",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["moments ago"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Is she breathing normally right now, and is there any abnormal snoring or facial droop?",
+                            "missing_information": [
+                                "breathing regularity",
+                                "response to voice or shoulder tap",
+                                "prior cerebrovascular history",
+                            ],
+                            "clinical_considerations": [
+                                "Acute unresponsiveness in an elderly patient is an emergency medical presentation",
+                                "Assess breathing immediately and activate local emergency medical services",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Is she breathing normally right now, and is there any abnormal snoring or facial droop?",
-                        "missing_information": ["breathing regularity", "response to voice or shoulder tap", "prior cerebrovascular history"],
-                        "clinical_considerations": [
-                            "Acute unresponsiveness in an elderly patient is an emergency medical presentation",
-                            "Assess breathing immediately and activate local emergency medical services",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-005", "E3 heldout grandmother unresponsiveness english", "neuro", "english"),
+            "source": _src(
+                "e3-ho-005", "E3 heldout grandmother unresponsiveness english", "neuro", "english"
+            ),
             "privacy": _priv(),
         },
         {
@@ -1000,27 +1411,40 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "sudden collapse with unresponsiveness to voice", "status": "ACTIVE"}],
-                            "temporal_facts": ["acute"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "sudden collapse with unresponsiveness to voice",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["acute"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Check karein kya uski saans theek chal rahi hai aur seena upar-neeche ho raha hai?",
+                            "missing_information": [
+                                "breathing status",
+                                "duration of unresponsiveness",
+                                "signs of seizure or trauma",
+                            ],
+                            "clinical_considerations": [
+                                "Sudden collapse with unresponsiveness requires emergency response",
+                                "Assess breathing without delay while securing emergency assistance",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Check karein kya uski saans theek chal rahi hai aur seena upar-neeche ho raha hai?",
-                        "missing_information": ["breathing status", "duration of unresponsiveness", "signs of seizure or trauma"],
-                        "clinical_considerations": [
-                            "Sudden collapse with unresponsiveness requires emergency response",
-                            "Assess breathing without delay while securing emergency assistance",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-006", "E3 heldout roommate collapse hinglish", "neuro", "hinglish"),
+            "source": _src(
+                "e3-ho-006", "E3 heldout roommate collapse hinglish", "neuro", "hinglish"
+            ),
             "privacy": _priv(),
         },
-
         # =====================================================================
         # 4. GI BLEEDING (2 held-out)
         # =====================================================================
@@ -1035,24 +1459,41 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "coffee-ground emesis with palpitations", "status": "ACTIVE"}],
-                            "temporal_facts": ["two bouts today"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "coffee-ground emesis with palpitations",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["two bouts today"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Have your bowel movements turned black or bloody, and are you feeling dizzy or faint?",
+                            "missing_information": [
+                                "stool appearance",
+                                "postural symptoms",
+                                "recent medication history",
+                            ],
+                            "clinical_considerations": [
+                                "Coffee-ground emesis with tachycardia suggests upper gastrointestinal bleeding with hemodynamic response",
+                                "Requires urgent in-person medical evaluation; physician must assess",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Have your bowel movements turned black or bloody, and are you feeling dizzy or faint?",
-                        "missing_information": ["stool appearance", "postural symptoms", "recent medication history"],
-                        "clinical_considerations": [
-                            "Coffee-ground emesis with tachycardia suggests upper gastrointestinal bleeding with hemodynamic response",
-                            "Requires urgent in-person medical evaluation; physician must assess",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-007", "E3 heldout coffee-ground emesis tachycardia english", "gastrointestinal", "english"),
+            "source": _src(
+                "e3-ho-007",
+                "E3 heldout coffee-ground emesis tachycardia english",
+                "gastrointestinal",
+                "english",
+            ),
             "privacy": _priv(),
         },
         {
@@ -1066,27 +1507,40 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "काला चिपचिपा मल (मेलेना) एवं खड़े होने पर चक्कर", "status": "ACTIVE"}],
-                            "temporal_facts": ["दो बार"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "काला चिपचिपा मल (मेलेना) एवं खड़े होने पर चक्कर",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["दो बार"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "क्या आपको पेट में दर्द है, और क्या आपने हाल में दर्द निवारक दवाइयाँ ली थीं?",
+                            "missing_information": [
+                                "पेट दर्द की स्थिति",
+                                "दवाइयों का इतिहास",
+                                "उल्टी में खून",
+                            ],
+                            "clinical_considerations": [
+                                "काला मल और चक्कर संभावित आंतरिक रक्तस्राव और हेमोडायनामिक प्रभाव का संकेत है",
+                                "तत्काल चिकित्सीय मूल्यांकन और जांच अनिवार्य है",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "क्या आपको पेट में दर्द है, और क्या आपने हाल में दर्द निवारक दवाइयाँ ली थीं?",
-                        "missing_information": ["पेट दर्द की स्थिति", "दवाइयों का इतिहास", "उल्टी में खून"],
-                        "clinical_considerations": [
-                            "काला मल और चक्कर संभावित आंतरिक रक्तस्राव और हेमोडायनामिक प्रभाव का संकेत है",
-                            "तत्काल चिकित्सीय मूल्यांकन और जांच अनिवार्य है",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-008", "E3 heldout melena presyncope hindi", "gastrointestinal", "hindi"),
+            "source": _src(
+                "e3-ho-008", "E3 heldout melena presyncope hindi", "gastrointestinal", "hindi"
+            ),
             "privacy": _priv(),
         },
-
         # =====================================================================
         # 5. PELVIC PAIN (2 held-out)
         # =====================================================================
@@ -1101,24 +1555,41 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "acute right-sided pelvic pain with vaginal spotting", "status": "ACTIVE"}],
-                            "temporal_facts": ["acute"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "acute right-sided pelvic pain with vaginal spotting",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["acute"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Aakhiri period kab aaya tha, kya pregnancy ki sambhavna hai, aur kya bukhar ya chakkar hai?",
+                            "missing_information": [
+                                "last menstrual period",
+                                "pregnancy possibility",
+                                "fever or presyncope",
+                            ],
+                            "clinical_considerations": [
+                                "Acute unilateral pelvic pain with spotting requires urgent clinical triage for gynecological causes",
+                                "Direct doctor examination is essential to rule out acute pathology",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Aakhiri period kab aaya tha, kya pregnancy ki sambhavna hai, aur kya bukhar ya chakkar hai?",
-                        "missing_information": ["last menstrual period", "pregnancy possibility", "fever or presyncope"],
-                        "clinical_considerations": [
-                            "Acute unilateral pelvic pain with spotting requires urgent clinical triage for gynecological causes",
-                            "Direct doctor examination is essential to rule out acute pathology",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-009", "E3 heldout right pelvic pain spotting hinglish", "gynecology", "hinglish"),
+            "source": _src(
+                "e3-ho-009",
+                "E3 heldout right pelvic pain spotting hinglish",
+                "gynecology",
+                "hinglish",
+            ),
             "privacy": _priv(),
         },
         {
@@ -1132,27 +1603,43 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "severe acute pelvic cramping with dizziness and delayed menses", "status": "ACTIVE"}],
-                            "temporal_facts": ["acute cramps, 3 weeks overdue"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "severe acute pelvic cramping with dizziness and delayed menses",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["acute cramps, 3 weeks overdue"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "SAFETY_REVIEW",
+                            "next_best_question": "Have you noticed any vaginal bleeding or shoulder pain, and are you able to walk without severe discomfort?",
+                            "missing_information": [
+                                "vaginal bleeding",
+                                "referred shoulder pain",
+                                "pregnancy test status",
+                            ],
+                            "clinical_considerations": [
+                                "Severe pelvic cramping with delayed menses and dizziness is a potential gynecological emergency",
+                                "Urgent in-person clinical evaluation is strongly warranted",
+                            ],
+                            "confidence": "high",
                         },
-                        "recommended_action": "SAFETY_REVIEW",
-                        "next_best_question": "Have you noticed any vaginal bleeding or shoulder pain, and are you able to walk without severe discomfort?",
-                        "missing_information": ["vaginal bleeding", "referred shoulder pain", "pregnancy test status"],
-                        "clinical_considerations": [
-                            "Severe pelvic cramping with delayed menses and dizziness is a potential gynecological emergency",
-                            "Urgent in-person clinical evaluation is strongly warranted",
-                        ],
-                        "confidence": "high",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-010", "E3 heldout pelvic cramping overdue period english", "gynecology", "english"),
+            "source": _src(
+                "e3-ho-010",
+                "E3 heldout pelvic cramping overdue period english",
+                "gynecology",
+                "english",
+            ),
             "privacy": _priv(),
         },
-
         # =====================================================================
         # 6. GENERALIZED PAIN (2 held-out)
         # =====================================================================
@@ -1167,24 +1654,38 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "widespread non-traumatic bodily tenderness and fatigue", "status": "ACTIVE"}],
-                            "temporal_facts": ["3 days"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "widespread non-traumatic bodily tenderness and fatigue",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["3 days"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "CLARIFY",
+                            "next_best_question": "Have you had a fever, cough, chills, or any recent illness in the family?",
+                            "missing_information": [
+                                "presence of fever or infection signs",
+                                "joint swelling or warmth",
+                                "sleep or appetite changes",
+                            ],
+                            "clinical_considerations": [
+                                "Generalized diffuse tenderness without localized injury often reflects systemic viral or non-focal processes",
+                                "Maintains diagnostic uncertainty; comprehensive medical history is required",
+                            ],
+                            "confidence": "low",
                         },
-                        "recommended_action": "CLARIFY",
-                        "next_best_question": "Have you had a fever, cough, chills, or any recent illness in the family?",
-                        "missing_information": ["presence of fever or infection signs", "joint swelling or warmth", "sleep or appetite changes"],
-                        "clinical_considerations": [
-                            "Generalized diffuse tenderness without localized injury often reflects systemic viral or non-focal processes",
-                            "Maintains diagnostic uncertainty; comprehensive medical history is required",
-                        ],
-                        "confidence": "low",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
-            "source": _src("e3-ho-011", "E3 heldout body tenderness fatigue english", "general", "english"),
+            "source": _src(
+                "e3-ho-011", "E3 heldout body tenderness fatigue english", "general", "english"
+            ),
             "privacy": _priv(),
         },
         {
@@ -1198,21 +1699,33 @@ def build_heldout_records() -> list[dict]:
                 },
                 {
                     "role": "assistant",
-                    "content": json.dumps({
-                        "semantic_interpretation": {
-                            "problems": [{"statement": "मांसपेशियों में व्यापक हल्का दर्द और भारीपन", "status": "ACTIVE"}],
-                            "temporal_facts": ["4 days"],
-                            "confirmed_diagnosis": None,
+                    "content": json.dumps(
+                        {
+                            "semantic_interpretation": {
+                                "problems": [
+                                    {
+                                        "statement": "मांसपेशियों में व्यापक हल्का दर्द और भारीपन",
+                                        "status": "ACTIVE",
+                                    }
+                                ],
+                                "temporal_facts": ["4 days"],
+                                "confirmed_diagnosis": None,
+                            },
+                            "recommended_action": "CLARIFY",
+                            "next_best_question": "क्या इसके साथ हल्का बुखार, सिरदर्द या गले में खराश भी है?",
+                            "missing_information": [
+                                "बुखार या संक्रमण के संकेत",
+                                "जोड़ों का दर्द",
+                                "दैनिक कार्यों पर प्रभाव",
+                            ],
+                            "clinical_considerations": [
+                                "व्यापक पेशीय दर्द वायरल या प्रणालीगत कारणों से हो सकता है",
+                                "सटीक निदान के लिए डॉक्टर द्वारा विस्तृत परीक्षण आवश्यक है",
+                            ],
+                            "confidence": "low",
                         },
-                        "recommended_action": "CLARIFY",
-                        "next_best_question": "क्या इसके साथ हल्का बुखार, सिरदर्द या गले में खराश भी है?",
-                        "missing_information": ["बुखार या संक्रमण के संकेत", "जोड़ों का दर्द", "दैनिक कार्यों पर प्रभाव"],
-                        "clinical_considerations": [
-                            "व्यापक पेशीय दर्द वायरल या प्रणालीगत कारणों से हो सकता है",
-                            "सटीक निदान के लिए डॉक्टर द्वारा विस्तृत परीक्षण आवश्यक है",
-                        ],
-                        "confidence": "low",
-                    }, ensure_ascii=False),
+                        ensure_ascii=False,
+                    ),
                 },
             ],
             "source": _src("e3-ho-012", "E3 heldout diffuse muscle ache hindi", "general", "hindi"),

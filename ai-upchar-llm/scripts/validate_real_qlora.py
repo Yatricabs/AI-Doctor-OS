@@ -14,7 +14,16 @@ parser.add_argument("--config", default="configs/qwen3-4b-real-validation.yaml")
 args = parser.parse_args()
 diagnostic = subprocess.run([sys.executable, "scripts/check_training_environment.py"], check=False)
 if diagnostic.returncode:
-    print(json.dumps({"training_mode": "REAL_QWEN_QLORA", "status": "BLOCKED", "reason": "Environment preflight failed; smoke fallback is forbidden."}, indent=2))
+    print(
+        json.dumps(
+            {
+                "training_mode": "REAL_QWEN_QLORA",
+                "status": "BLOCKED",
+                "reason": "Environment preflight failed; smoke fallback is forbidden.",
+            },
+            indent=2,
+        )
+    )
     raise SystemExit(diagnostic.returncode)
 config = load_config(args.config)
 config["model"]["name"] = os.environ.get("MODEL_NAME", config["model"]["name"])

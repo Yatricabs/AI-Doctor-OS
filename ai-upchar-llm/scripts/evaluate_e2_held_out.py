@@ -31,6 +31,7 @@ USAGE (run on a CUDA machine AFTER the E2 adapter has been trained):
 
 This script does NOT train. It only loads an existing adapter and evaluates.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -57,7 +58,7 @@ assert INFERENCE_USER_MESSAGE.startswith(_FIRST_SENTENCE), (
     "Frozen INFERENCE_USER_MESSAGE changed; harness must be re-derived to keep "
     "the held-out request identical to Gate B's request framing."
 )
-CONTRACT_INSTRUCTION = INFERENCE_USER_MESSAGE[len(_FIRST_SENTENCE):]
+CONTRACT_INSTRUCTION = INFERENCE_USER_MESSAGE[len(_FIRST_SENTENCE) :]
 
 
 def build_case_prompt(tokenizer, user_symptom_text: str) -> str:
@@ -67,9 +68,7 @@ def build_case_prompt(tokenizer, user_symptom_text: str) -> str:
     symptom text differs. This does not alter or relax Gate B."""
     content = f"{user_symptom_text} {CONTRACT_INSTRUCTION}"
     messages = [{"role": "user", "content": content}]
-    return tokenizer.apply_chat_template(
-        messages, add_generation_prompt=True, tokenize=False
-    )
+    return tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
 
 
 def load_held_out(path: Path) -> list[dict]:
@@ -88,9 +87,7 @@ def run_held_out_evaluation(config: dict, adapter_dir: Path) -> dict:
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
     if not torch.cuda.is_available():
-        raise RuntimeError(
-            "E2 held-out evaluation requires CUDA (same constraint as training)."
-        )
+        raise RuntimeError("E2 held-out evaluation requires CUDA (same constraint as training).")
 
     model_name = os.environ.get("MODEL_NAME", config["model"]["name"])
     held_out_path = Path(config["data"]["evaluation_path"])
@@ -135,7 +132,7 @@ def run_held_out_evaluation(config: dict, adapter_dir: Path) -> dict:
                 do_sample=False,
             )
         generated = tokenizer.decode(
-            output_ids[0][inputs["input_ids"].shape[1]:],
+            output_ids[0][inputs["input_ids"].shape[1] :],
             skip_special_tokens=True,
         ).strip()
 
@@ -144,17 +141,19 @@ def run_held_out_evaluation(config: dict, adapter_dir: Path) -> dict:
         if verdict["valid"]:
             valid_count += 1
 
-        per_case.append({
-            "id": rec.get("id"),
-            "language": rec.get("language"),
-            "domain": rec.get("source", {}).get("domain"),
-            "task_type": rec.get("task_type"),
-            "user_input": user_text,
-            "contract_valid": verdict["valid"],
-            "reason": verdict.get("reason"),
-            "missing_keys": verdict.get("missing_keys"),
-            "generated_preview": generated[:300],
-        })
+        per_case.append(
+            {
+                "id": rec.get("id"),
+                "language": rec.get("language"),
+                "domain": rec.get("source", {}).get("domain"),
+                "task_type": rec.get("task_type"),
+                "user_input": user_text,
+                "contract_valid": verdict["valid"],
+                "reason": verdict.get("reason"),
+                "missing_keys": verdict.get("missing_keys"),
+                "generated_preview": generated[:300],
+            }
+        )
 
     total = len(cases)
     aggregate = {
@@ -183,15 +182,18 @@ def main():
         description="Additive E2 held-out contract evaluation (does not train)."
     )
     parser.add_argument(
-        "--config", default="configs/qwen3-4b-e2-validation.yaml",
+        "--config",
+        default="configs/qwen3-4b-e2-validation.yaml",
         help="E2 config; evaluation_path points to the 6 held-out cases.",
     )
     parser.add_argument(
-        "--adapter", default=None,
+        "--adapter",
+        default=None,
         help="Path to trained E2 adapter (defaults to config training.output_dir).",
     )
     parser.add_argument(
-        "--output", default=None,
+        "--output",
+        default=None,
         help="Optional path to write the JSON report.",
     )
     args = parser.parse_args()

@@ -12,15 +12,32 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 OVERREACH_PATTERNS = [
-    (re.compile(r"\b(do|perform|schedule|order|get)\s+(an?\s+)?(ecg|ekg|cardiac enzymes|troponin)\b", re.I), "premature_investigation_ordering"),
-    (re.compile(r"\b(do|perform|schedule|order)\s+(an?\s+)?(endoscopy|colonoscopy|biopsy|ct scan|mri)\b", re.I), "premature_procedure_selection"),
-    (re.compile(r"\brefer\s+to\s+(a\s+)?(cardiologist|cardiology)\b", re.I), "inappropriate_cardiology_redirection"),
-    (re.compile(r"\brefer\s+to\s+(an?\s+)?(ent|otolaryngolog\w+)\b", re.I), "inappropriate_ent_redirection"),
+    (
+        re.compile(
+            r"\b(do|perform|schedule|order|get)\s+(an?\s+)?(ecg|ekg|cardiac enzymes|troponin)\b",
+            re.I,
+        ),
+        "premature_investigation_ordering",
+    ),
+    (
+        re.compile(
+            r"\b(do|perform|schedule|order)\s+(an?\s+)?(endoscopy|colonoscopy|biopsy|ct scan|mri)\b",
+            re.I,
+        ),
+        "premature_procedure_selection",
+    ),
+    (
+        re.compile(r"\brefer\s+to\s+(a\s+)?(cardiologist|cardiology)\b", re.I),
+        "inappropriate_cardiology_redirection",
+    ),
+    (
+        re.compile(r"\brefer\s+to\s+(an?\s+)?(ent|otolaryngolog\w+)\b", re.I),
+        "inappropriate_ent_redirection",
+    ),
     (re.compile(r"\bstart\s+cpr\b", re.I), "unconditional_cpr_instruction"),
     (re.compile(r"\bconfirmed\s+(diagnosis|case)\s+of\b", re.I), "definitive_diagnosis_overclaim"),
     (re.compile(r"\byou\s+are\s+diagnosed\s+with\b", re.I), "direct_diagnosis_statement"),
@@ -41,11 +58,25 @@ def local_deterministic_reason(statement: str, safety_status: str = "CLEAR") -> 
     """Fallback local clinical reasoning following E3 safety rules."""
     text = statement.lower()
     emergency_terms = [
-        "chest pain", "chest pressure", "seene me dard", "chhati me dard",
-        "saans lene me dikkat", "shortness of breath", "breathless",
-        "unconscious", "behosh", "fainted",
-        "heavy bleeding", "khoon behna", "vomiting blood",
-        "stroke", "facial droop", "paralysis", "slurred speech", "seizure", "daura",
+        "chest pain",
+        "chest pressure",
+        "seene me dard",
+        "chhati me dard",
+        "saans lene me dikkat",
+        "shortness of breath",
+        "breathless",
+        "unconscious",
+        "behosh",
+        "fainted",
+        "heavy bleeding",
+        "khoon behna",
+        "vomiting blood",
+        "stroke",
+        "facial droop",
+        "paralysis",
+        "slurred speech",
+        "seizure",
+        "daura",
     ]
     is_urgent = safety_status == "SAFETY_CONCERN" or any(k in text for k in emergency_terms)
 
@@ -67,7 +98,9 @@ def local_deterministic_reason(statement: str, safety_status: str = "CLEAR") -> 
         problems.append("headache")
         anatomy.append("head")
 
-    dur_match = re.search(r"\b\d+\s*(?:day|days|din|hafte|week|weeks|mahine|month|hours|ghante)\b", text, re.I)
+    dur_match = re.search(
+        r"\b\d+\s*(?:day|days|din|hafte|week|weeks|mahine|month|hours|ghante)\b", text, re.I
+    )
     if dur_match:
         temporal.append(dur_match.group(0))
 
@@ -116,7 +149,9 @@ def local_deterministic_reason(statement: str, safety_status: str = "CLEAR") -> 
             "Consider common etiologies pending physical examination.",
         ],
         "recommended_action": "ASK_QUESTION",
-        "next_best_question": "Yeh takleef aapko kab se hai?" if "duration" in missing else "Is takleef ki teevrata 1 se 10 mein kitni hai?",
+        "next_best_question": "Yeh takleef aapko kab se hai?"
+        if "duration" in missing
+        else "Is takleef ki teevrata 1 se 10 mein kitni hai?",
         "missing_information": missing,
         "confidence": "MEDIUM",
     }
@@ -131,7 +166,9 @@ def query_gateway(statement: str, gateway_url: str = "http://127.0.0.1:8001") ->
         "retrieved_evidence": [],
     }
     url = f"{gateway_url.rstrip('/')}/v1/clinical/reason"
-    req = Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
+    req = Request(
+        url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}
+    )
     try:
         with urlopen(req, timeout=3.0) as resp:
             return json.loads(resp.read().decode("utf-8"))
@@ -149,7 +186,11 @@ def check_clinical_safety(result: dict) -> list[str]:
         if pattern.search(text):
             violations.append(name)
     semantic = result.get("semantic_interpretation", {})
-    if isinstance(semantic, dict) and semantic.get("confirmed_diagnoses") is not None and semantic.get("confirmed_diagnoses") != []:
+    if (
+        isinstance(semantic, dict)
+        and semantic.get("confirmed_diagnoses") is not None
+        and semantic.get("confirmed_diagnoses") != []
+    ):
         violations.append("independent_diagnosis_confirmed")
     return violations
 
@@ -174,7 +215,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="AI UPCHAR Clinical Reasoning CLI")
     parser.add_argument("--statement", type=str, help="Single patient statement to evaluate")
     parser.add_argument("--interactive", action="store_true", help="Start interactive CLI session")
-    parser.add_argument("--gateway", type=str, default="http://127.0.0.1:8001", help="Gateway URL (default: http://127.0.0.1:8001)")
+    parser.add_argument(
+        "--gateway",
+        type=str,
+        default="http://127.0.0.1:8001",
+        help="Gateway URL (default: http://127.0.0.1:8001)",
+    )
     args = parser.parse_args()
 
     if args.statement:

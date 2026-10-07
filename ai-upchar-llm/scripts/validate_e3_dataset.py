@@ -8,9 +8,9 @@ Against:
   - Frozen E2 train set: data/sft/e2_contract_sft.jsonl
   - Frozen E2 held-out set: data/evaluation/e2_held_out_contract.jsonl
 """
+
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import re
@@ -43,12 +43,36 @@ CATEGORIES = [
 
 # Clinical safety rules: patterns that indicate boundary violations or overreach
 BANNED_SAFETY_PATTERNS = [
-    (re.compile(r"\b(do|perform|schedule|order|get)\s+(an?\s+)?(ecg|ekg|cardiac enzymes|troponin)\b", re.I), "premature ECG/enzymes prescribing"),
-    (re.compile(r"\b(do|perform|schedule|order)\s+(an?\s+)?(endoscopy|colonoscopy|biopsy|ct scan|mri)\b", re.I), "premature procedure/scan selection"),
-    (re.compile(r"\brefer\s+to\s+(a\s+)?(cardiologist|cardiology)\b", re.I), "inappropriate cardiology redirection"),
-    (re.compile(r"\brefer\s+to\s+(an?\s+)?(ent|otolaryngolog\w+)\b", re.I), "inappropriate ENT redirection"),
-    (re.compile(r"\bstart\s+cpr\b", re.I), "unconditional CPR instruction before checking breathing/responsiveness"),
-    (re.compile(r"\bconfirmed\s+(diagnosis|case)\s+of\b", re.I), "definitive diagnosis overclaiming"),
+    (
+        re.compile(
+            r"\b(do|perform|schedule|order|get)\s+(an?\s+)?(ecg|ekg|cardiac enzymes|troponin)\b",
+            re.I,
+        ),
+        "premature ECG/enzymes prescribing",
+    ),
+    (
+        re.compile(
+            r"\b(do|perform|schedule|order)\s+(an?\s+)?(endoscopy|colonoscopy|biopsy|ct scan|mri)\b",
+            re.I,
+        ),
+        "premature procedure/scan selection",
+    ),
+    (
+        re.compile(r"\brefer\s+to\s+(a\s+)?(cardiologist|cardiology)\b", re.I),
+        "inappropriate cardiology redirection",
+    ),
+    (
+        re.compile(r"\brefer\s+to\s+(an?\s+)?(ent|otolaryngolog\w+)\b", re.I),
+        "inappropriate ENT redirection",
+    ),
+    (
+        re.compile(r"\bstart\s+cpr\b", re.I),
+        "unconditional CPR instruction before checking breathing/responsiveness",
+    ),
+    (
+        re.compile(r"\bconfirmed\s+(diagnosis|case)\s+of\b", re.I),
+        "definitive diagnosis overclaiming",
+    ),
     (re.compile(r"\byou\s+are\s+diagnosed\s+with\b", re.I), "direct diagnosis statement"),
     (re.compile(r"\btake\s+\d+\s*(mg|ml|tablets?)\b", re.I), "medication dose prescribing"),
 ]
@@ -145,7 +169,9 @@ def audit_e3(
         # Check messages structure
         messages = r.get("messages", [])
         if len(messages) != 2:
-            report["errors"].append(f"[{split} {rid}] Expected exactly 2 messages, got {len(messages)}")
+            report["errors"].append(
+                f"[{split} {rid}] Expected exactly 2 messages, got {len(messages)}"
+            )
             continue
         if messages[0].get("role") != "user":
             report["errors"].append(f"[{split} {rid}] First message must have role 'user'")
@@ -176,7 +202,9 @@ def audit_e3(
         if missing_contract:
             report["errors"].append(f"[{split} {rid}] Missing contract keys: {missing_contract}")
         if extra_contract:
-            report["errors"].append(f"[{split} {rid}] Unexpected extra contract keys: {extra_contract}")
+            report["errors"].append(
+                f"[{split} {rid}] Unexpected extra contract keys: {extra_contract}"
+            )
 
         # Check types
         if not isinstance(parsed.get("semantic_interpretation"), dict):
@@ -190,7 +218,9 @@ def audit_e3(
         if not isinstance(parsed.get("clinical_considerations"), list):
             report["errors"].append(f"[{split} {rid}] 'clinical_considerations' must be list")
         if parsed.get("confidence") not in VALID_CONFIDENCE:
-            report["errors"].append(f"[{split} {rid}] Invalid confidence '{parsed.get('confidence')}'; expected one of {VALID_CONFIDENCE}")
+            report["errors"].append(
+                f"[{split} {rid}] Invalid confidence '{parsed.get('confidence')}'; expected one of {VALID_CONFIDENCE}"
+            )
 
         # 3. Clinical Safety & Boundary Audit
         scan_text = f"{parsed.get('recommended_action', '')} {' '.join(parsed.get('clinical_considerations', []))} {parsed.get('next_best_question', '')}"
@@ -227,16 +257,22 @@ def audit_e3(
 
     dup_train_hashes = [h for h, c in Counter(train_hashes).items() if c > 1]
     if dup_train_hashes:
-        report["errors"].append(f"Exact duplicate user inputs within E3 train: {len(dup_train_hashes)}")
+        report["errors"].append(
+            f"Exact duplicate user inputs within E3 train: {len(dup_train_hashes)}"
+        )
 
     dup_heldout_hashes = [h for h, c in Counter(heldout_hashes).items() if c > 1]
     if dup_heldout_hashes:
-        report["errors"].append(f"Exact duplicate user inputs within E3 heldout: {len(dup_heldout_hashes)}")
+        report["errors"].append(
+            f"Exact duplicate user inputs within E3 heldout: {len(dup_heldout_hashes)}"
+        )
 
     # Train <-> Heldout leakage
     leakage = set(train_hashes) & set(heldout_hashes)
     if leakage:
-        report["errors"].append(f"Critical leakage: E3 train and E3 held-out share {len(leakage)} exact inputs!")
+        report["errors"].append(
+            f"Critical leakage: E3 train and E3 held-out share {len(leakage)} exact inputs!"
+        )
 
     # E3 <-> E2 leakage
     e2_train_hashes = {content_hash(r["messages"][0]["content"]) for r in e2_train}
@@ -244,11 +280,15 @@ def audit_e3(
 
     e3_train_e2_train_leak = set(train_hashes) & e2_train_hashes
     if e3_train_e2_train_leak:
-        report["errors"].append(f"Leakage: E3 train shares {len(e3_train_e2_train_leak)} exact inputs with E2 train!")
+        report["errors"].append(
+            f"Leakage: E3 train shares {len(e3_train_e2_train_leak)} exact inputs with E2 train!"
+        )
 
     e3_held_e2_held_leak = set(heldout_hashes) & e2_heldout_hashes
     if e3_held_e2_held_leak:
-        report["errors"].append(f"Leakage: E3 heldout shares {len(e3_held_e2_held_leak)} exact inputs with E2 heldout!")
+        report["errors"].append(
+            f"Leakage: E3 heldout shares {len(e3_held_e2_held_leak)} exact inputs with E2 heldout!"
+        )
 
     # Near-duplicate check between train and held-out (Jaccard > 0.85)
     for tr in train_records:
@@ -257,7 +297,9 @@ def audit_e3(
             h_text = ho["messages"][0]["content"]
             sim = jaccard_similarity(t_text, h_text)
             if sim > 0.85:
-                report["warnings"].append(f"High lexical similarity ({sim:.2f}) between train {tr['id']} and heldout {ho['id']}")
+                report["warnings"].append(
+                    f"High lexical similarity ({sim:.2f}) between train {tr['id']} and heldout {ho['id']}"
+                )
 
     # 6. Coverage & Distributions
     train_langs = Counter(r.get("language") for r in train_records)
@@ -281,9 +323,13 @@ def audit_e3(
     # At least 4 per category in train
     for cat in CATEGORIES:
         if train_cats.get(cat, 0) < 4:
-            report["errors"].append(f"Train category '{cat}' count {train_cats.get(cat, 0)} < 4 required minimum")
+            report["errors"].append(
+                f"Train category '{cat}' count {train_cats.get(cat, 0)} < 4 required minimum"
+            )
         if held_cats.get(cat, 0) < 2:
-            report["errors"].append(f"Held-out category '{cat}' count {held_cats.get(cat, 0)} < 2 required minimum")
+            report["errors"].append(
+                f"Held-out category '{cat}' count {held_cats.get(cat, 0)} < 2 required minimum"
+            )
 
     if report["errors"]:
         report["status"] = "FAIL"
