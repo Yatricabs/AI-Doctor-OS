@@ -10,7 +10,8 @@ from ai_upchar_llm.inference.model_registry import (
 from ai_upchar_llm.inference.server import create_app, validate_request, vllm_command
 
 def test_required_api_input():
-    with pytest.raises(ValueError): validate_request({"current_answer":"pain"})
+    with pytest.raises(ValueError):
+        validate_request({"current_answer": "pain"})
 
 def test_output_contract():
     validate_reasoning_response(
@@ -49,7 +50,10 @@ def test_wrong_types_are_rejected_without_coercion():
         )
 
 def test_disallowed_state_mutation_action():
-    with pytest.raises(ValueError): validate_reasoning_response({"semantic_interpretation":{},"recommended_action":"SET_DIAGNOSIS"})
+    with pytest.raises(ValueError):
+        validate_reasoning_response(
+            {"semantic_interpretation": {}, "recommended_action": "SET_DIAGNOSIS"}
+        )
 
 def test_vllm_requires_verified_v16_candidate(tmp_path, monkeypatch):
     adapter = tmp_path / "v16-adapter"

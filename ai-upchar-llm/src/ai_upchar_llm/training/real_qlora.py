@@ -177,7 +177,8 @@ def run_real_qlora_validation(config: dict) -> dict:
     eval_metrics = trainer.evaluate()
     gate_a["evaluation_completed"] = True
     gate_a["evaluation_metrics"] = {key: float(value) for key, value in eval_metrics.items() if isinstance(value, (int, float))}
-    trainer.save_model(output_dir); tokenizer.save_pretrained(output_dir)
+    trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
     gate_a["adapter_saved"] = (output_dir / "adapter_config.json").exists()
     del trainer, model
     torch.cuda.empty_cache()

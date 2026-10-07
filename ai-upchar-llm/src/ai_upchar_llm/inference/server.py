@@ -40,7 +40,7 @@ def create_app():
         if not model_path:
             raise HTTPException(503, "MODEL_PATH is not configured")
         try:
-            verified_model_path = validate_v16_adapter_path(model_path)
+            validate_v16_adapter_path(model_path)
         except ModelRegistryError as error:
             raise HTTPException(503, f"Model candidate rejected: {error}") from error
         payload = request

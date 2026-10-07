@@ -10,5 +10,6 @@ def deduplicate(documents: list[str]) -> tuple[list[str], int]:
     for document in documents:
         digest = content_hash(document)
         if digest not in seen:
-            seen.add(digest); kept.append(document)
+            seen.add(digest)
+            kept.append(document)
     return kept, len(documents) - len(kept)

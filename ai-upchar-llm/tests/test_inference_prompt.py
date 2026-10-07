@@ -5,7 +5,6 @@ assistant turn (consistent with SFT training), that the JSON-only instruction is
 present, that the legacy raw-string inference path is gone, and that the Gate B
 evaluator is unchanged. No Qwen weights and no CUDA are required."""
 
-import inspect
 from pathlib import Path
 
 from ai_upchar_llm.training.real_qlora import (
