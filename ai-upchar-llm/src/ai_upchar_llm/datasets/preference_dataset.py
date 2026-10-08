@@ -9,5 +9,8 @@ class PreferenceExample:
     reason: str
 
     def validate(self) -> None:
-        if not all((self.prompt, self.chosen, self.rejected, self.reason)) or self.chosen == self.rejected:
+        if (
+            not all((self.prompt, self.chosen, self.rejected, self.reason))
+            or self.chosen == self.rejected
+        ):
             raise ValueError("Preference records require distinct chosen/rejected responses")

@@ -11,7 +11,13 @@ from ai_upchar_llm.inference.model_registry import (
     validate_v16_adapter_path,
 )
 
-REQUIRED_INPUT = {"patient_context", "current_answer", "semantic_context", "safety_state", "retrieved_evidence"}
+REQUIRED_INPUT = {
+    "patient_context",
+    "current_answer",
+    "semantic_context",
+    "safety_state",
+    "retrieved_evidence",
+}
 
 
 def validate_request(payload: dict) -> None:
@@ -45,13 +51,35 @@ def create_app():
             raise HTTPException(503, f"Model candidate rejected: {error}") from error
         payload = request
         upstream = os.environ.get("VLLM_BASE_URL", "http://127.0.0.1:8000/v1").rstrip("/")
-        body = json.dumps({"model": V16_MODEL_VERSION, "messages": [{"role": "system", "content": "Return only the AI UPCHAR clinical reasoning JSON contract. Never diagnose, prescribe, or mutate state."}, {"role": "user", "content": build_prompt(payload)}], "temperature": 0, "max_tokens": 800}).encode()
+        body = json.dumps(
+            {
+                "model": V16_MODEL_VERSION,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Return only the AI UPCHAR clinical reasoning JSON contract. Never diagnose, prescribe, or mutate state.",
+                    },
+                    {"role": "user", "content": build_prompt(payload)},
+                ],
+                "temperature": 0,
+                "max_tokens": 800,
+            }
+        ).encode()
         try:
-            response = urlopen(Request(f"{upstream}/chat/completions", data=body, headers={"Content-Type": "application/json"}), timeout=30)
+            response = urlopen(
+                Request(
+                    f"{upstream}/chat/completions",
+                    data=body,
+                    headers={"Content-Type": "application/json"},
+                ),
+                timeout=30,
+            )
             completion = json.loads(response.read())["choices"][0]["message"]["content"]
             return validate_and_guard(json.loads(completion), payload["safety_state"])
         except Exception as error:
-            raise HTTPException(502, f"Private model inference failed: {type(error).__name__}") from error
+            raise HTTPException(
+                502, f"Private model inference failed: {type(error).__name__}"
+            ) from error
 
     return app
 

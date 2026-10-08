@@ -3,7 +3,21 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-TaskType = Literal["clinical_knowledge", "semantic_extraction", "patient_context_reasoning", "temporal_reasoning", "next_best_question", "safety_prioritization", "clarification", "multiple_problem_reasoning", "medication_adverse_effect", "patient_reported_diagnosis", "clinical_summarization", "evidence_interpretation", "preference"]
+TaskType = Literal[
+    "clinical_knowledge",
+    "semantic_extraction",
+    "patient_context_reasoning",
+    "temporal_reasoning",
+    "next_best_question",
+    "safety_prioritization",
+    "clarification",
+    "multiple_problem_reasoning",
+    "medication_adverse_effect",
+    "patient_reported_diagnosis",
+    "clinical_summarization",
+    "evidence_interpretation",
+    "preference",
+]
 
 
 @dataclass(frozen=True)
@@ -46,5 +60,9 @@ class TrainingExample:
             raise ValueError("An example needs an id and at least two messages")
         if not self.source.license or self.source.quality_status.startswith("REJECTED"):
             raise ValueError("Source license and approved quality status are required")
-        if self.privacy.contains_patient_data or not self.privacy.deidentified or self.privacy.eligibility_status != "APPROVED":
+        if (
+            self.privacy.contains_patient_data
+            or not self.privacy.deidentified
+            or self.privacy.eligibility_status != "APPROVED"
+        ):
             raise ValueError("Only approved, deidentified, non-patient exports may train")

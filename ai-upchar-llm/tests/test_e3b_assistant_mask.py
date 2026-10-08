@@ -33,7 +33,9 @@ CHAT_TEMPLATE = (
 
 def _rows(relative_path: str):
     path = DATA_ROOT / relative_path
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
 
 
 def test_e3b_and_e2_have_non_empty_assistant_masks():

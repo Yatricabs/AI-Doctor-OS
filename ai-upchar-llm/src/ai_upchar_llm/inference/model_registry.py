@@ -41,9 +41,7 @@ def validate_v16_adapter_path(model_path: str | Path) -> Path:
         raise ModelRegistryError(f"V16 adapter is missing required files: {missing}")
 
     try:
-        manifest = json.loads(
-            (path / "part2_v16_manifest.json").read_text(encoding="utf-8")
-        )
+        manifest = json.loads((path / "part2_v16_manifest.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ModelRegistryError("V16 manifest cannot be read") from error
 

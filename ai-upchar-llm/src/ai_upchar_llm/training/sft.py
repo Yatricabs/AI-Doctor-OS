@@ -38,19 +38,29 @@ def configure_assistant_mask_chat_template(tokenizer):
 def train_sft(config: dict, smoke: bool = False) -> dict:
     if smoke:
         from .smoke import run_smoke_training
+
         return run_smoke_training(config)
     import torch
     from datasets import Dataset
     from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     from trl import SFTConfig, SFTTrainer
-    from ai_upchar_llm.datasets.sft_dataset import conversational_rows, load_candidate_conversations, load_sft
+    from ai_upchar_llm.datasets.sft_dataset import (
+        conversational_rows,
+        load_candidate_conversations,
+        load_sft,
+    )
     from ai_upchar_llm.training.real_qlora import _append_assistant_eos
 
     model_name = config["model"]["name"]
     quant = config["quantization"]
     compute_dtype = {"float16": torch.float16, "bfloat16": torch.bfloat16}[quant["compute_dtype"]]
-    bnb = BitsAndBytesConfig(load_in_4bit=quant["enabled"], bnb_4bit_quant_type=quant["quant_type"], bnb_4bit_use_double_quant=quant["double_quant"], bnb_4bit_compute_dtype=compute_dtype)
+    bnb = BitsAndBytesConfig(
+        load_in_4bit=quant["enabled"],
+        bnb_4bit_quant_type=quant["quant_type"],
+        bnb_4bit_use_double_quant=quant["double_quant"],
+        bnb_4bit_compute_dtype=compute_dtype,
+    )
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     device_map = _resolve_device_map(config)
     if device_map == {"": 0}:
@@ -70,12 +80,16 @@ def train_sft(config: dict, smoke: bool = False) -> dict:
             raise FileNotFoundError(
                 f"Initial adapter is incomplete at {initial_adapter_path}: {missing}"
             )
-        model = PeftModel.from_pretrained(
-            model, str(initial_adapter_path), is_trainable=True
-        )
+        model = PeftModel.from_pretrained(model, str(initial_adapter_path), is_trainable=True)
         peft_config = None
     else:
-        peft_config = LoraConfig(r=lora["rank"], lora_alpha=lora["alpha"], lora_dropout=lora["dropout"], target_modules=lora["target_modules"], task_type="CAUSAL_LM")
+        peft_config = LoraConfig(
+            r=lora["rank"],
+            lora_alpha=lora["alpha"],
+            lora_dropout=lora["dropout"],
+            target_modules=lora["target_modules"],
+            task_type="CAUSAL_LM",
+        )
 
     # Robust chat template to prevent token merging issues with assistant_only_loss
     configure_assistant_mask_chat_template(tokenizer)
@@ -86,14 +100,42 @@ def train_sft(config: dict, smoke: bool = False) -> dict:
         rows = conversational_rows(load_sft(config["data"]["sft_path"]))
     if config["training"].get("append_assistant_eos"):
         rows = _append_assistant_eos(rows, tokenizer.eos_token)
-    split = Dataset.from_list(rows).train_test_split(test_size=config["training"]["eval_split"], seed=config["project"]["seed"])
+    split = Dataset.from_list(rows).train_test_split(
+        test_size=config["training"]["eval_split"], seed=config["project"]["seed"]
+    )
     use_fp16 = quant["compute_dtype"] == "float16"
     use_bf16 = quant["compute_dtype"] == "bfloat16"
     eval_during_training = config["training"].get("eval_during_training", True)
-    eval_strategy = config["training"].get("eval_strategy", "epoch") if eval_during_training else "no"
+    eval_strategy = (
+        config["training"].get("eval_strategy", "epoch") if eval_during_training else "no"
+    )
     save_strategy = config["training"].get("save_strategy", "epoch")
-    args = SFTConfig(output_dir=config["training"]["output_dir"], num_train_epochs=config["training"]["epochs"], learning_rate=config["training"]["learning_rate"], per_device_train_batch_size=config["training"]["per_device_train_batch_size"], gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"], gradient_checkpointing=config["training"]["gradient_checkpointing"], gradient_checkpointing_kwargs={"use_reentrant": False}, max_length=config["model"]["max_sequence_length"], assistant_only_loss=config["training"]["assistant_only_loss"], eval_strategy=eval_strategy, save_strategy=save_strategy, logging_steps=config["training"]["logging_steps"], seed=config["project"]["seed"], fp16=use_fp16, bf16=use_bf16, report_to="none")
-    trainer = SFTTrainer(model=model, args=args, train_dataset=split["train"], eval_dataset=split["test"], processing_class=tokenizer, peft_config=peft_config)
+    args = SFTConfig(
+        output_dir=config["training"]["output_dir"],
+        num_train_epochs=config["training"]["epochs"],
+        learning_rate=config["training"]["learning_rate"],
+        per_device_train_batch_size=config["training"]["per_device_train_batch_size"],
+        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+        gradient_checkpointing=config["training"]["gradient_checkpointing"],
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        max_length=config["model"]["max_sequence_length"],
+        assistant_only_loss=config["training"]["assistant_only_loss"],
+        eval_strategy=eval_strategy,
+        save_strategy=save_strategy,
+        logging_steps=config["training"]["logging_steps"],
+        seed=config["project"]["seed"],
+        fp16=use_fp16,
+        bf16=use_bf16,
+        report_to="none",
+    )
+    trainer = SFTTrainer(
+        model=model,
+        args=args,
+        train_dataset=split["train"],
+        eval_dataset=split["test"],
+        processing_class=tokenizer,
+        peft_config=peft_config,
+    )
     train_result = trainer.train()
     # Persist the adapter/state before any post-training evaluation.  A CUDA
     # failure in eval must never discard a completed training run.

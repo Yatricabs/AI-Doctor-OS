@@ -5,7 +5,13 @@ from ai_upchar_llm.clinical.safety_contract import enforce_safety_floor
 
 
 def build_prompt(request: dict) -> str:
-    return json.dumps({"instruction": "Interpret context and recommend one action. Never diagnose, prescribe, or mutate application state.", "contract": request}, ensure_ascii=False)
+    return json.dumps(
+        {
+            "instruction": "Interpret context and recommend one action. Never diagnose, prescribe, or mutate application state.",
+            "contract": request,
+        },
+        ensure_ascii=False,
+    )
 
 
 def validate_and_guard(output: dict, safety_state: dict) -> dict:

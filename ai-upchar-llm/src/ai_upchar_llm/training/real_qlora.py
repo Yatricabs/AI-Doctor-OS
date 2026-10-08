@@ -27,7 +27,9 @@ INFERENCE_USER_MESSAGE = (
 INFERENCE_MAX_NEW_TOKENS = 512
 
 
-def _append_assistant_eos(rows: list[dict[str, object]], eos_token: str | None) -> list[dict[str, object]]:
+def _append_assistant_eos(
+    rows: list[dict[str, object]], eos_token: str | None
+) -> list[dict[str, object]]:
     """Return a copy of conversational SFT rows where assistant messages end
     with the tokenizer EOS token.
 
@@ -63,9 +65,7 @@ def build_inference_prompt(tokenizer) -> str:
     the assistant turn with add_generation_prompt=True. This does not alter or
     relax Gate B; it only makes the generation format consistent with training."""
     messages = [{"role": "user", "content": INFERENCE_USER_MESSAGE}]
-    return tokenizer.apply_chat_template(
-        messages, add_generation_prompt=True, tokenize=False
-    )
+    return tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
 
 
 def _strip_json_markdown_fence(text: str) -> str:
@@ -154,53 +154,121 @@ def run_real_qlora_validation(config: dict) -> dict:
     }
 
     rows = conversational_rows(load_sft(config["data"]["sft_path"]))
-    dtype = {"float16": torch.float16, "bfloat16": torch.bfloat16}[config["quantization"]["compute_dtype"]]
-    quantization = BitsAndBytesConfig(load_in_4bit=config["quantization"]["enabled"], bnb_4bit_quant_type=config["quantization"]["quant_type"], bnb_4bit_use_double_quant=config["quantization"]["double_quant"], bnb_4bit_compute_dtype=dtype)
-    gate_a["nf4_quantization_initialized"] = config["quantization"]["quant_type"] == "nf4" and config["quantization"]["enabled"]
-    tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=os.environ.get("TRANSFORMERS_CACHE"))
+    dtype = {"float16": torch.float16, "bfloat16": torch.bfloat16}[
+        config["quantization"]["compute_dtype"]
+    ]
+    quantization = BitsAndBytesConfig(
+        load_in_4bit=config["quantization"]["enabled"],
+        bnb_4bit_quant_type=config["quantization"]["quant_type"],
+        bnb_4bit_use_double_quant=config["quantization"]["double_quant"],
+        bnb_4bit_compute_dtype=dtype,
+    )
+    gate_a["nf4_quantization_initialized"] = (
+        config["quantization"]["quant_type"] == "nf4" and config["quantization"]["enabled"]
+    )
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name, cache_dir=os.environ.get("TRANSFORMERS_CACHE")
+    )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     if config["training"].get("append_assistant_eos"):
         rows = _append_assistant_eos(rows, tokenizer.eos_token)
-    split = Dataset.from_list(rows).train_test_split(test_size=config["training"]["eval_split"], seed=config["project"]["seed"])
-    model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=os.environ.get("TRANSFORMERS_CACHE"), quantization_config=quantization, device_map="auto")
+    split = Dataset.from_list(rows).train_test_split(
+        test_size=config["training"]["eval_split"], seed=config["project"]["seed"]
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        cache_dir=os.environ.get("TRANSFORMERS_CACHE"),
+        quantization_config=quantization,
+        device_map="auto",
+    )
     gate_a["model_downloaded_loaded"] = True
-    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=config["training"]["gradient_checkpointing"])
+    model = prepare_model_for_kbit_training(
+        model, use_gradient_checkpointing=config["training"]["gradient_checkpointing"]
+    )
     lora = config["lora"]
-    peft_config = LoraConfig(r=lora["rank"], lora_alpha=lora["alpha"], lora_dropout=lora["dropout"], target_modules=lora["target_modules"], task_type="CAUSAL_LM")
-    args = SFTConfig(output_dir=str(output_dir), max_steps=config["training"]["max_steps"], per_device_train_batch_size=config["training"]["per_device_train_batch_size"], gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"], gradient_checkpointing=config["training"]["gradient_checkpointing"], max_length=config["model"]["max_sequence_length"], eval_strategy="steps", eval_steps=1, save_strategy="steps", save_steps=config["training"]["save_steps"], logging_steps=config["training"]["logging_steps"], seed=config["project"]["seed"], fp16=dtype == torch.float16, bf16=dtype == torch.bfloat16, report_to="none")
-    trainer = SFTTrainer(model=model, args=args, train_dataset=split["train"], eval_dataset=split["test"], processing_class=tokenizer, peft_config=peft_config)
+    peft_config = LoraConfig(
+        r=lora["rank"],
+        lora_alpha=lora["alpha"],
+        lora_dropout=lora["dropout"],
+        target_modules=lora["target_modules"],
+        task_type="CAUSAL_LM",
+    )
+    args = SFTConfig(
+        output_dir=str(output_dir),
+        max_steps=config["training"]["max_steps"],
+        per_device_train_batch_size=config["training"]["per_device_train_batch_size"],
+        gradient_accumulation_steps=config["training"]["gradient_accumulation_steps"],
+        gradient_checkpointing=config["training"]["gradient_checkpointing"],
+        max_length=config["model"]["max_sequence_length"],
+        eval_strategy="steps",
+        eval_steps=1,
+        save_strategy="steps",
+        save_steps=config["training"]["save_steps"],
+        logging_steps=config["training"]["logging_steps"],
+        seed=config["project"]["seed"],
+        fp16=dtype == torch.float16,
+        bf16=dtype == torch.bfloat16,
+        report_to="none",
+    )
+    trainer = SFTTrainer(
+        model=model,
+        args=args,
+        train_dataset=split["train"],
+        eval_dataset=split["test"],
+        processing_class=tokenizer,
+        peft_config=peft_config,
+    )
     gate_a["lora_adapter_attached"] = True
     train_result = trainer.train()
     gate_a["training_steps"] = int(train_result.global_step)
-    gate_a["training_metrics"] = {"train_loss": float(train_result.training_loss), "global_step": int(train_result.global_step)}
+    gate_a["training_metrics"] = {
+        "train_loss": float(train_result.training_loss),
+        "global_step": int(train_result.global_step),
+    }
     eval_metrics = trainer.evaluate()
     gate_a["evaluation_completed"] = True
-    gate_a["evaluation_metrics"] = {key: float(value) for key, value in eval_metrics.items() if isinstance(value, (int, float))}
+    gate_a["evaluation_metrics"] = {
+        key: float(value) for key, value in eval_metrics.items() if isinstance(value, (int, float))
+    }
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
     gate_a["adapter_saved"] = (output_dir / "adapter_config.json").exists()
     del trainer, model
     torch.cuda.empty_cache()
-    base = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=os.environ.get("TRANSFORMERS_CACHE"), quantization_config=quantization, device_map="auto")
+    base = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        cache_dir=os.environ.get("TRANSFORMERS_CACHE"),
+        quantization_config=quantization,
+        device_map="auto",
+    )
     reloaded = PeftModel.from_pretrained(base, output_dir)
     gate_a["adapter_reloaded"] = True
     prompt = build_inference_prompt(tokenizer)
     inputs = tokenizer(prompt, return_tensors="pt").to(reloaded.device)
-    generated = tokenizer.decode(reloaded.generate(**inputs, max_new_tokens=INFERENCE_MAX_NEW_TOKENS, do_sample=False)[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
+    generated = tokenizer.decode(
+        reloaded.generate(**inputs, max_new_tokens=INFERENCE_MAX_NEW_TOKENS, do_sample=False)[0][
+            inputs["input_ids"].shape[1] :
+        ],
+        skip_special_tokens=True,
+    ).strip()
     gate_a["inference_executed"] = bool(generated)
 
-    gate_a["status"] = "SUCCESS" if (
-        gate_a["model_downloaded_loaded"]
-        and gate_a["nf4_quantization_initialized"]
-        and gate_a["lora_adapter_attached"]
-        and gate_a["training_steps"] > 0
-        and gate_a["training_metrics"] is not None
-        and gate_a["adapter_saved"]
-        and gate_a["adapter_reloaded"]
-        and gate_a["evaluation_completed"]
-        and gate_a["inference_executed"]
-    ) else "FAILED"
+    gate_a["status"] = (
+        "SUCCESS"
+        if (
+            gate_a["model_downloaded_loaded"]
+            and gate_a["nf4_quantization_initialized"]
+            and gate_a["lora_adapter_attached"]
+            and gate_a["training_steps"] > 0
+            and gate_a["training_metrics"] is not None
+            and gate_a["adapter_saved"]
+            and gate_a["adapter_reloaded"]
+            and gate_a["evaluation_completed"]
+            and gate_a["inference_executed"]
+        )
+        else "FAILED"
+    )
 
     # ---- Gate B: post-training behavioral JSON-contract validation ----------
     # Strict and independent. A prose/markdown/truncated/invalid generation is a
@@ -223,16 +291,30 @@ def run_real_qlora_validation(config: dict) -> dict:
         "evaluation_version": config["project"]["evaluation_version"],
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "hyperparameters": {"training": config["training"], "lora": config["lora"], "quantization": config["quantization"]},
-        "environment": {"torch": torch.__version__, "cuda": torch.version.cuda, "gpu": torch.cuda.get_device_name(0)},
+        "hyperparameters": {
+            "training": config["training"],
+            "lora": config["lora"],
+            "quantization": config["quantization"],
+        },
+        "environment": {
+            "torch": torch.__version__,
+            "cuda": torch.version.cuda,
+            "gpu": torch.cuda.get_device_name(0),
+        },
         "adapter_path": str(output_dir),
         "gate_a_infrastructure": gate_a,
         "gate_b_behavioral_contract": gate_b,
         # Overall success requires BOTH gates. Gate A can be SUCCESS while Gate B
         # remains NOT_VALIDATED; that is an honest, expected intermediate state.
-        "overall_status": "SUCCESS" if (gate_a["status"] == "SUCCESS" and gate_b["status"] == "SUCCESS") else "PARTIAL" if gate_a["status"] == "SUCCESS" else "FAILED",
+        "overall_status": "SUCCESS"
+        if (gate_a["status"] == "SUCCESS" and gate_b["status"] == "SUCCESS")
+        else "PARTIAL"
+        if gate_a["status"] == "SUCCESS"
+        else "FAILED",
     }
     if contract["valid"]:
         metadata["generated_output"] = contract["parsed"]
-    (output_dir / "training_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    (output_dir / "training_metadata.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
+    )
     return metadata

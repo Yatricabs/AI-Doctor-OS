@@ -26,11 +26,13 @@ class _FakeTokenizer:
         self.calls = []
 
     def apply_chat_template(self, messages, add_generation_prompt=False, tokenize=True):
-        self.calls.append({
-            "messages": messages,
-            "add_generation_prompt": add_generation_prompt,
-            "tokenize": tokenize,
-        })
+        self.calls.append(
+            {
+                "messages": messages,
+                "add_generation_prompt": add_generation_prompt,
+                "tokenize": tokenize,
+            }
+        )
         rendered = "".join(f"<|{m['role']}|>\n{m['content']}\n" for m in messages)
         if add_generation_prompt:
             rendered += "<|assistant|>\n"
@@ -98,7 +100,10 @@ def test_gate_b_evaluator_is_unchanged():
     assert evaluate_contract_json("just prose, no json here")["reason"] == "no_json_object_present"
 
     # Open brace, no closing brace anywhere -> truncated (unchanged behavior).
-    assert evaluate_contract_json('{"semantic_interpretation": "abc')["reason"] == "truncated_before_closing_brace"
+    assert (
+        evaluate_contract_json('{"semantic_interpretation": "abc')["reason"]
+        == "truncated_before_closing_brace"
+    )
 
     # Valid contract JSON -> valid (unchanged behavior).
     good = '{"semantic_interpretation": {"problems": []}, "recommended_action": "ASK_QUESTION"}'

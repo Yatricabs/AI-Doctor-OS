@@ -2,7 +2,16 @@ from typing import Any
 
 
 def semantic_contract() -> dict[str, Any]:
-    return {"problems": [], "temporal_facts": [], "anatomy": [], "severity": [], "triggers": [], "associated_symptoms": [], "patient_reported_diagnoses": [], "confirmed_diagnoses": []}
+    return {
+        "problems": [],
+        "temporal_facts": [],
+        "anatomy": [],
+        "severity": [],
+        "triggers": [],
+        "associated_symptoms": [],
+        "patient_reported_diagnoses": [],
+        "confirmed_diagnoses": [],
+    }
 
 
 def validate_semantic_output(value: dict[str, Any]) -> None:
