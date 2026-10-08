@@ -8,12 +8,21 @@ path, which produced empty assistant masks in TRL.
 import json
 from pathlib import Path
 
+import pytest
 from transformers import AutoTokenizer
 from ai_upchar_llm.training.real_qlora import _append_assistant_eos
 
 
 MODEL_ID = "Qwen/Qwen3-4B-Base"
 DATA_ROOT = Path(__file__).parents[1] / "data"
+EXTERNAL_E3B_PATHS = (
+    DATA_ROOT / "sft/e3b_patient_interview_sft.jsonl",
+    DATA_ROOT / "evaluation/e3b_patient_interview_held_out.jsonl",
+)
+pytestmark = pytest.mark.skipif(
+    not all(path.is_file() for path in EXTERNAL_E3B_PATHS),
+    reason="external E3B train/held-out package is unavailable",
+)
 
 CHAT_TEMPLATE = (
     "{% for message in messages %}"
@@ -33,6 +42,8 @@ CHAT_TEMPLATE = (
 
 def _rows(relative_path: str):
     path = DATA_ROOT / relative_path
+    if not path.is_file():
+        pytest.skip(f"external E3B data package is unavailable: {relative_path}")
     return [
         json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
     ]

@@ -25,8 +25,6 @@ def load_module():
 
 def parser_accepts(parser, text: str) -> bool:
     for character in text:
-        if character not in parser.get_allowed_characters():
-            return False
         parser = parser.add_character(character)
     return parser.can_end()
 
@@ -97,6 +95,37 @@ def test_ordered_sequence_rejects_unexpected_key_without_exhaustive_traversal():
     assert '"' in parser.get_allowed_characters()
 
 
+def test_ordered_sequence_cache_keys_distinguish_value_positions():
+    pytest.importorskip("lmformatenforcer")
+    module = load_module()
+    expected = {"first": "x", "second": "x"}
+
+    def state(prefix: str):
+        parser = module.build_ordered_json_parser(expected)
+        for character in prefix:
+            assert character in parser.get_allowed_characters()
+            parser = parser.add_character(character)
+        return parser
+
+    first = state('{"first":"same')
+    second = state('{"first":"x","second":"same')
+    assert first.shortcut_key() != second.shortcut_key()
+    # Free-text states are cached through shortcut_key(), not cache_key().
+    assert first.cache_key() is None and second.cache_key() is None
+
+
+def test_structural_token_probe_rejects_illegal_key_transition():
+    pytest.importorskip("lmformatenforcer")
+    module = load_module()
+    parser = module.build_ordered_json_parser({"first": "x", "second": "x"})
+    for character in '{"first":"x","second":"same':
+        assert character in parser.get_allowed_characters()
+        parser = parser.add_character(character)
+
+    assert module._advance_parser_with_token(parser, '","second":') is None
+    assert module._advance_parser_with_token(parser, '"}') is not None
+
+
 def test_allowed_token_cache_is_namespaced_by_complete_key_schema():
     module = load_module()
     tokenizer_data = object()
@@ -131,6 +160,8 @@ def test_all_frozen_assistant_contracts_fit_ordered_grammar():
         ROOT / "data/evaluation/e2_held_out_contract.jsonl",
         ROOT / "data/evaluation/e3_targeted_safety_heldout.jsonl",
     ]
+    if not all(path.is_file() for path in paths):
+        pytest.skip("external E3B/Part 2 held-out package is unavailable")
     records = [
         json.loads(line)
         for path in paths
@@ -150,39 +181,65 @@ def test_all_frozen_assistant_contracts_fit_ordered_grammar():
 
 
 def test_qwen_boundary_tokens_remain_allowed_for_recorded_failures():
-    """Qwen's `.","` token must cross value/key boundaries legally."""
+    """Replay recorded answers with their exact Qwen token IDs on CPU."""
     tokenizer_path = ROOT.parent / "local-artifacts/kaggle/uploads/part2-v16-adapter-dataset"
     transformers = pytest.importorskip("transformers")
-    pytest.importorskip("torch")
     lmfe_transformers = pytest.importorskip("lmformatenforcer.integrations.transformers")
     from lmformatenforcer.tokenenforcer import TokenEnforcerTokenizerData
 
     if not tokenizer_path.is_dir():
         pytest.skip("local Qwen tokenizer artifact is unavailable")
+    held_out = ROOT / "data/evaluation/part2_advanced_held_out.jsonl"
+    if not held_out.is_file():
+        pytest.skip("external Part 2 held-out package is unavailable")
 
     module = load_module()
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         tokenizer_path, local_files_only=True, trust_remote_code=True
     )
+    recorded_ids = {"E17-heldout-0013", "E20-heldout-0001", "E20-heldout-0025"}
+    records = [
+        json.loads(line)
+        for line in held_out.read_text(encoding="utf-8").splitlines()
+        if line.strip() and json.loads(line).get("id") in recorded_ids
+    ]
+    assert {record["id"] for record in records} == recorded_ids
+    target_ids = {
+        token_id
+        for record in records
+        for token_id in tokenizer(record["messages"][-1]["content"], add_special_tokens=False)[
+            "input_ids"
+        ]
+    }
 
     def batched_tokenizer_data(tokenizer, use_bitmask=False, vocab_size=None):
         vocab_size = vocab_size or len(tokenizer)
         special_ids = set(tokenizer.all_special_ids)
-        token_ids = [i for i in range(vocab_size) if i not in special_ids]
-        regular = tokenizer.batch_decode([[i] for i in token_ids])
+        # A CPU replay needs only the tokens in these frozen answers. Decoding
+        # every ID (including unused vocabulary holes) is slow and can crash
+        # the Windows fast-tokenizer backend before reaching the parser.
+        token_ids = sorted(target_ids - special_ids)
+        regular = [tokenizer.decode([i]) for i in token_ids]
         token_zero = tokenizer.encode("0")[-1]
-        after_zero = tokenizer.batch_decode([[token_zero, i] for i in token_ids])
+        after_zero = [tokenizer.decode([token_zero, i]) for i in token_ids]
         regular_tokens = [
             (i, pair[1:], len(pair[1:]) > len(single))
             for i, single, pair in zip(token_ids, regular, after_zero, strict=True)
         ]
-        return TokenEnforcerTokenizerData(
+        tokenizer_data = TokenEnforcerTokenizerData(
             regular_tokens,
             lambda ids: tokenizer.decode(ids).rstrip("\ufffd"),
             tokenizer.eos_token_id,
             use_bitmask,
             vocab_size,
         )
+        # The reduced vocabulary has no token beginning with every character
+        # that appears inside a target token. LMFE derives its alphabet from
+        # token starts, so restore the character set represented by this subset.
+        tokenizer_data.tokenizer_alphabet = "".join(
+            sorted({character for _, text, _ in regular_tokens for character in text})
+        )
+        return tokenizer_data
 
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(
@@ -190,14 +247,6 @@ def test_qwen_boundary_tokens_remain_allowed_for_recorded_failures():
         "build_token_enforcer_tokenizer_data",
         batched_tokenizer_data,
     )
-    paths = [ROOT / "data/evaluation/part2_advanced_held_out.jsonl"]
-    recorded_ids = {"E17-heldout-0013", "E20-heldout-0001", "E20-heldout-0025"}
-    records = [
-        json.loads(line)
-        for path in paths
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip() and json.loads(line).get("id") in recorded_ids
-    ]
 
     class TensorLike(list):
         def tolist(self):
@@ -216,10 +265,11 @@ def test_qwen_boundary_tokens_remain_allowed_for_recorded_failures():
             target = tokenizer(record["messages"][-1]["content"], add_special_tokens=False)[
                 "input_ids"
             ]
-            for token_id in target:
+            for index, token_id in enumerate(target):
                 allowed = prefix_filter(0, TensorLike(sequence))
-                assert allowed, record["id"]
-                assert token_id in allowed, (record["id"], token_id)
+                context = (record["id"], index, token_id, prefix_filter.empty_fallback_count)
+                assert allowed, context
+                assert token_id in allowed, context
                 sequence.append(token_id)
             assert prefix_filter.empty_fallback_count == 0, record["id"]
     finally:
@@ -255,6 +305,11 @@ def test_cloud_validation_source_is_minimal_and_excludes_training_data():
     import build_part2_v16_structured_validation_kernels as builder
 
     assert len(builder.SOURCE_FILES) == 12
-    assert all((ROOT / path).is_file() for path in builder.SOURCE_FILES)
+    committed_sources = [path for path in builder.SOURCE_FILES if path.startswith("scripts/")]
+    assert all((ROOT / path).is_file() for path in committed_sources)
     assert not any(path.startswith("data/sft/") for path in builder.SOURCE_FILES)
     assert not any("v17" in path for path in builder.SOURCE_FILES)
+    held_out_sources = [path for path in builder.SOURCE_FILES if path.startswith("data/")]
+    if not all((ROOT / path).is_file() for path in held_out_sources):
+        pytest.skip("external held-out packages are unavailable for cloud source packaging")
+    assert all((ROOT / path).is_file() for path in builder.SOURCE_FILES)

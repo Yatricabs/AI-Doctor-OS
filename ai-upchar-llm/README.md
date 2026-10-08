@@ -53,3 +53,20 @@ worker and `scripts/serve.py` for the `/v1/clinical/reason` gateway. Both bind
 to `127.0.0.1`; expose only the gateway through application authentication.
 
 Large training, push, and deployment are never performed by the smoke commands.
+
+## Reproducible local validation
+
+The repository contains the evaluation code and frozen E2/E3 contracts. The
+approved E3B and Part 2 train/held-out JSONL packages are kept outside Git.
+Tests that require those packages report an explicit skip when the files are
+absent; their frozen count, ID, and safety assertions still run when the files
+are present. A green clean-checkout test run with skips is not a full clinical
+validation result.
+
+From this directory, run `python -m pytest tests -q -rs`. To exercise the
+structured grammar locally, install `lm-format-enforcer==0.11.3` in a CPU test
+environment and rerun `tests/test_structured_json_generation.py`. The offline
+Qwen tokenizer integration test also requires the local tokenizer
+artifact. Its CPU replay uses the recorded answer tokens, not the full Qwen
+vocabulary. Full model generation and cloud validation are separate gates; no
+GPU is required for these local tests.

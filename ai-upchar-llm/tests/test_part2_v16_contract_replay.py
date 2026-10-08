@@ -4,6 +4,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 from ai_upchar_llm.config import load_config
 
 
@@ -24,6 +26,8 @@ def load_builder():
 
 def test_v16_replays_only_approved_train_rows() -> None:
     builder = load_builder()
+    if not builder.SOURCE.is_file():
+        pytest.skip("external Part 2 training package is unavailable")
     rows, audit = builder.build_dataset()
     assert audit["status"] == "PASS"
     assert audit["source_rows"] == 1192

@@ -23,6 +23,26 @@ PRIVACY_CONTRACT_KEYS = (
     "clinical_focus",
 )
 
+_UNSAFE_NEGATED_SAFEGUARD = re.compile(
+    r"\b(?:do not|don't|never|avoid)\s+(?:protect|preserve|redact|omit|minimi[sz]e)\b",
+    re.I,
+)
+_UNSAFE_DISCLOSURE = re.compile(
+    r"\b(?:expose|repeat|share|disclose|publish|include)\b.{0,60}"
+    r"\b(?:identifiers?|sensitive|personal|address|date of birth)\b",
+    re.I,
+)
+_NEGATED_UNSAFE_ACTION = re.compile(r"\b(?:do not|don't|never|avoid)\s*$", re.I)
+
+
+def _has_unsafe_privacy_instruction(text: str) -> bool:
+    if _UNSAFE_NEGATED_SAFEGUARD.search(text):
+        return True
+    for match in _UNSAFE_DISCLOSURE.finditer(text):
+        if not _NEGATED_UNSAFE_ACTION.search(text[max(0, match.start() - 20) : match.start()]):
+            return True
+    return False
+
 
 def _contains_all_concepts(text: str, concept_groups: tuple[tuple[str, ...], ...]) -> bool:
     lowered = text.casefold()
@@ -47,12 +67,19 @@ def find_contract_semantic_violations(expected: dict, parsed: object) -> list[st
     }
     violations: list[str] = []
 
+    for key, value in values.items():
+        if key in PRIVACY_CONTRACT_KEYS and _has_unsafe_privacy_instruction(value):
+            violations.append(f"{key}_unsafe_privacy_instruction")
+
     privacy_action = values.get("privacy_action", "")
-    if re.search(
+    privacy_dismissal = re.search(
         r"\b(?:ignore|disregard|dismiss)\b.{0,80}"
         r"\b(?:privacy concern|clinical message)\b",
         privacy_action,
         re.I,
+    )
+    if privacy_dismissal and not _NEGATED_UNSAFE_ACTION.search(
+        privacy_action[max(0, privacy_dismissal.start() - 20) : privacy_dismissal.start()]
     ):
         violations.append("privacy_action_ignores_privacy_or_clinical_message")
     if not _contains_all_concepts(

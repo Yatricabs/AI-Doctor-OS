@@ -19,6 +19,17 @@ STRUCTURED_DECODING_IMPLEMENTATION = (
 _TOKENIZER_ALLOWED_TOKEN_CACHES: dict[tuple[int, tuple[str, ...]], dict[Any, Any]] = {}
 
 
+def _advance_parser_with_token(parser: Any, token_text: str) -> Any | None:
+    """Accept a token only when every character is legal in the current state."""
+    if not token_text:
+        return None
+    for character in token_text:
+        if character not in parser.get_allowed_characters():
+            return None
+        parser = parser.add_character(character)
+    return parser if parser.can_end() or parser.get_allowed_characters() else None
+
+
 def _allowed_token_cache_namespace(
     tokenizer_data: Any, key_names: tuple[str, ...]
 ) -> tuple[int, tuple[str, ...]]:
@@ -141,6 +152,7 @@ def build_ordered_json_parser(expected: Mapping[str, Any], *, alphabet: str | No
                 "ai_upchar_json_freetext",
                 *shortcut[1:],
                 parsed_string[-128:],
+                len(self.parsers),
             )
 
         def cache_key(self):
@@ -149,7 +161,7 @@ def build_ordered_json_parser(expected: Mapping[str, Any], *, alphabet: str | No
             first_cache_key = self.parsers[0].cache_key()
             if first_cache_key is None:
                 return None
-            return ("ordered-json-first", first_cache_key)
+            return ("ordered-json-first", len(self.parsers), first_cache_key)
 
     parsers = []
     for index, key in enumerate(_ordered_keys(expected)):
@@ -266,7 +278,7 @@ def build_json_prefix_allowed_tokens_fn(tokenizer: Any, expected: Mapping[str, A
                     parser, tree_node, allowed_tokens, shortcut_key
                 )
 
-            _, cur_len, min_len, max_len, recent = shortcut_key
+            _, cur_len, min_len, max_len, recent, _remaining_parsers = shortcut_key
             allowed_tokens.extend(
                 token_id
                 for token_id in tree_node.tokens
@@ -295,11 +307,7 @@ def build_json_prefix_allowed_tokens_fn(tokenizer: Any, expected: Mapping[str, A
             if structural_allowed is None:
                 structural_allowed_ids = []
                 for token_id, token_text in self.structural_token_texts:
-                    candidate_parser = parser
-                    try:
-                        for character in token_text:
-                            candidate_parser = candidate_parser.add_character(character)
-                    except Exception:
+                    if _advance_parser_with_token(parser, token_text) is None:
                         continue
                     if not self.token_contains_key_fragment(recent, token_id):
                         structural_allowed_ids.append(token_id)
