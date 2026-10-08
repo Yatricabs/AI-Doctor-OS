@@ -4,6 +4,7 @@ import {
   Activity, ShieldCheck, Sparkles, UserCheck, Stethoscope, 
   FileText, ArrowRight, CheckCircle2, Clock, Brain, Zap, Lock, Mic, Cpu, MessageSquare 
 } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function AIUpcharLandingEnhanced() {
   const [activeTab, setActiveTab] = useState<'scribe' | 'safety' | 'brief'>('scribe');
@@ -18,9 +19,7 @@ export default function AIUpcharLandingEnhanced() {
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#080D14]/80 border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-500 flex items-center justify-center text-slate-950 shadow-lg shadow-emerald-500/20">
-              <Activity className="w-6 h-6 stroke-[2.5]" />
-            </div>
+            <BrandLogo className="h-10 w-14 rounded-xl bg-[#071a32] shadow-lg shadow-emerald-500/20" alt="" priority />
             <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
               AI UPCHAR
             </span>
@@ -208,7 +207,7 @@ export default function AIUpcharLandingEnhanced() {
       <footer className="border-t border-white/5 py-12 bg-[#05080E]">
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-3">
-            <Activity className="w-5 h-5 text-emerald-400" />
+            <BrandLogo className="h-8 w-11 rounded-lg bg-[#071a32]" alt="" />
             <span className="font-bold text-slate-300 text-sm">AI UPCHAR</span>
           </div>
           <p className="text-xs text-slate-500">

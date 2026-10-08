@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { CheckCircle2, Clock, RefreshCw, Search, Stethoscope, UserCheck, Users, UserPlus, AlertTriangle } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 
 type Patient = { id: string; name: string; initials: string; appointment: string; status: string; phone?: string };
 type QueueEntry = { id: string; patientId: string; patientName?: string; tokenNumber?: string; priority: string; status: string; position?: number; estimatedWaitMinutes?: number; isWalkIn: number };
@@ -69,7 +70,7 @@ export default function CheckInPage() {
       <header className="border-b border-[#e4ebe7] bg-white px-5 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#078d79] text-white"><Stethoscope className="h-4 w-4" /></span>
+            <BrandLogo className="h-8 w-11 rounded-lg bg-[#071a32]" alt="" />
             <span className="text-lg font-bold tracking-tight text-[#193d3a]">AI UPCHAR</span>
           </Link>
           <div className="flex items-center gap-2">

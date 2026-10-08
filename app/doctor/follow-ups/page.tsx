@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { Calendar, CheckCircle2, Clock, Inbox, LayoutDashboard, ListTodo, Plus, RefreshCw, Stethoscope, Users, X, AlertTriangle } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 
 type FollowUp = {
   id: string;
@@ -92,7 +93,7 @@ export default function FollowUpsPage() {
     <main className="min-h-screen bg-[#f7faf8] text-[#183b39]">
       <aside className="fixed inset-y-0 left-0 z-40 flex w-[78px] flex-col border-r border-[#dce9e3] bg-[#edf8f3] px-3 py-5 md:w-[260px] md:px-6 md:py-8">
         <Link href="/demo" className="flex items-center gap-3 px-2">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#078d79] text-white"><Stethoscope className="h-5 w-5" /></span>
+          <BrandLogo className="h-10 w-14 rounded-xl bg-[#071a32]" alt="" />
           <span className="hidden text-[20px] font-bold tracking-[-0.05em] text-[#193d3a] md:inline">AI UPCHAR</span>
         </Link>
         <nav className="mt-8 space-y-1">

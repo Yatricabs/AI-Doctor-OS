@@ -5,6 +5,7 @@ import type { MouseEvent } from "react";
 import Link from "next/link";
 import { Menu, Stethoscope, X } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
+import BrandLogo from "@/components/BrandLogo";
 
 const navItems = [
   { label: "Home", id: "home", href: "/#home" },
@@ -37,7 +38,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b border-white/5 bg-[#080D14]/80 backdrop-blur-md">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
         <Link href="/#home" onClick={closeMobile} className="flex min-w-0 shrink items-center gap-2 sm:gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-400 to-teal-500 text-slate-950 shadow-lg shadow-emerald-500/20"><Stethoscope className="h-6 w-6" strokeWidth={2.5} /></span>
+          <BrandLogo className="h-10 w-14 rounded-xl bg-[#071a32] shadow-lg shadow-emerald-500/20" alt="" priority />
           <span className="whitespace-nowrap text-[17px] font-extrabold tracking-tight text-white sm:text-xl">AI UPCHAR</span>
         </Link>
 

@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { Loader2, LogOut, ShieldCheck, Sparkles, Stethoscope, TriangleAlert } from "lucide-react";
 import { usePuterAuth } from "@/lib/usePuterAuth";
+import BrandLogo from "@/components/BrandLogo";
 
 type Props = {
   children: React.ReactNode;
@@ -50,9 +51,7 @@ export default function PuterLoginGate({
     <main className="flex min-h-screen items-center justify-center bg-[#f7faf8] px-5 py-10 text-[#183b39]">
       <div className="w-full max-w-md rounded-2xl border border-[#e1e9e5] bg-white p-7 shadow-sm">
         <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#078d79] text-white">
-            <Stethoscope className="h-4 w-4" />
-          </span>
+          <BrandLogo className="h-9 w-12 rounded-lg bg-[#071a32]" alt="" />
           <span className="text-lg font-bold tracking-tight text-[#193d3a]">AI UPCHAR</span>
         </div>
 

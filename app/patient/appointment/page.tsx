@@ -10,6 +10,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { CalendarCheck2, CheckCircle2, FileText, Loader2, Paperclip, Send, Stethoscope } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 import { MODELS } from "@/lib/puterClient";
 import { serverAiAnalyzeImage, serverAiChat, serverAiChatStream } from "@/lib/serverAiClient";
 import {
@@ -789,7 +790,7 @@ function AppointmentFlow() {
       <header className="border-b border-[#e4ebe7] bg-white px-5 py-4">
         <div className="mx-auto flex max-w-xl items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#078d79] text-white"><Stethoscope className="h-4 w-4" /></span>
+            <BrandLogo className="h-8 w-11 rounded-lg bg-[#071a32]" alt="" />
             <span className="text-lg font-bold tracking-tight text-[#193d3a]">AI UPCHAR</span>
           </Link>
           <button onClick={() => setLang((l) => (l === "hinglish" ? "english" : "hinglish"))} disabled={turns.length > 1} className="rounded-lg border border-[#e4ebe7] px-2.5 py-1.5 text-xs font-semibold text-[#54716d] hover:bg-[#f0f6f3] disabled:opacity-50">
@@ -805,7 +806,7 @@ function AppointmentFlow() {
         {phase !== "done" && (
           <div className="flex h-[74vh] flex-col overflow-hidden rounded-2xl border border-[#e1e9e5] bg-white shadow-sm">
             <div className="flex items-center gap-3 border-b border-[#eef4f1] bg-[#f7fbf9] px-4 py-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#07947f] text-white"><Stethoscope className="h-4 w-4" /></span>
+              <BrandLogo className="h-9 w-12 rounded-full bg-[#071a32]" alt="AI UPCHAR assistant" />
               <div>
                 <p className="text-sm font-bold text-[#1f3a37]">Book with AI Upchar</p>
                 <p className="flex items-center gap-1.5 text-[11px] text-[#5a967e]"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Appointment + pre-visit intake</p>
@@ -815,7 +816,7 @@ function AppointmentFlow() {
             <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-[#fbfdfc] px-4 py-5">
               {turns.map((t, i) => t.role === "assistant" ? (
                 <div key={i} className="flex items-end gap-2">
-                  <span className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e2f1ea] text-[#07947f]"><Stethoscope className="h-3.5 w-3.5" /></span>
+                  <BrandLogo className="mb-1 h-7 w-9 shrink-0 rounded-full bg-[#071a32]" alt="AI UPCHAR assistant" />
                   <div className="max-w-[80%] rounded-2xl rounded-bl-md border border-[#e4efe9] bg-white px-4 py-2.5 text-sm leading-6 text-[#2f4a43] shadow-sm">{t.content}</div>
                 </div>
               ) : (
@@ -824,7 +825,7 @@ function AppointmentFlow() {
 
               {(busy || analyzing || phase === "finalizing") && (
                 <div className="flex items-end gap-2">
-                  <span className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e2f1ea] text-[#07947f]"><Stethoscope className="h-3.5 w-3.5" /></span>
+                  <BrandLogo className="mb-1 h-7 w-9 shrink-0 rounded-full bg-[#071a32]" alt="AI UPCHAR assistant" />
                   <div className="flex items-center gap-2 rounded-2xl rounded-bl-md border border-[#e4efe9] bg-white px-4 py-3 shadow-sm">
                     {phase === "finalizing" ? <><Loader2 className="h-3.5 w-3.5 animate-spin text-[#07947f]" /><span className="text-xs text-[#5a967e]">{finalizeMsg}</span></> : (
                       <>

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { CalendarDays, LayoutDashboard, Package, Receipt, Stethoscope, Users } from "lucide-react";
 import DashboardScreen from "./workspace/DashboardScreen";
 import AppointmentsScreen from "./workspace/AppointmentsScreen";
+import BrandLogo from "@/components/BrandLogo";
 import PatientsScreen from "./workspace/PatientsScreen";
 import InventoryScreen from "./workspace/InventoryScreen";
 import BillingScreen from "./workspace/BillingScreen";
@@ -57,7 +58,7 @@ export default function DoctorWorkspace() {
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 z-40 flex w-[76px] flex-col border-r border-[#dce9e3] bg-[#edf8f3] px-3 py-5 md:w-[264px] md:px-5 md:py-8">
         <Link href="/" className="flex items-center gap-3 px-2">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#078d79] text-white"><Stethoscope className="h-6 w-6" /></span>
+          <BrandLogo className="h-11 w-14 rounded-xl bg-[#071a32]" alt="" />
           <span className="hidden text-[22px] font-bold tracking-[-0.05em] text-[#193d3a] md:inline">AI UPCHAR</span>
         </Link>
         <p className="mt-10 hidden px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#86a09a] md:block">Workspace</p>

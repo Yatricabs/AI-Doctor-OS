@@ -7,6 +7,7 @@ import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import type { AppDispatch, RootState } from '@/lib/store'
 import { closeAppointmentDialog, openAppointmentDialog, setActiveSection } from '@/lib/landingSlice'
 import PatientIntakeChat from '@/components/ops/PatientIntakeChat'
+import BrandLogo from '@/components/BrandLogo'
 
 /* ---------------------------------- Images --------------------------------- */
 const IMG = {
@@ -146,20 +147,7 @@ const Heart = (p: IconProps) => (
 function Logo() {
   return (
     <a href="#" className="flex items-center gap-2.5">
-      <span className="relative grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[var(--color-teal)] to-[var(--color-brand)] text-white shadow-sm">
-        <Heart width={16} height={16} className="text-white/90" />
-        <span className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-white text-[var(--color-brand)] shadow">
-          <Chat width={10} height={10} />
-        </span>
-      </span>
-      <span className="leading-none">
-        <span className="block font-display text-[19.5px] font-extrabold tracking-tight text-[var(--color-ink)]">
-          AI UPCHAR
-        </span>
-        <span className="block text-[11.5px] font-medium text-[var(--color-teal-deep)]">
-          Better Conversations. Healthier Lives.
-        </span>
-      </span>
+      <BrandLogo className="h-14 w-20 rounded-lg bg-[#071a32] shadow-sm" alt="AI UPCHAR" priority />
     </a>
   )
 }
@@ -412,9 +400,7 @@ function Hero() {
               </div>
               <div className="flex items-center gap-1.5 border-b border-[var(--color-sky-line)] px-3 py-1.5">
                 <ArrowRight width={11} height={11} className="rotate-180 text-[var(--color-body)]" />
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-gradient-to-br from-[var(--color-teal)] to-[var(--color-brand)] text-white">
-                  <Heart width={10} height={10} />
-                </span>
+                <BrandLogo className="h-5 w-7 rounded-full bg-[#071a32]" alt="" />
                 <span className="font-display text-[11.5px] font-bold text-[var(--color-ink)]">AI UPCHAR</span>
               </div>
               <div className="flex flex-1 flex-col gap-1.5 overflow-hidden bg-[var(--color-hero)]/40 p-2.5">

@@ -10,6 +10,7 @@ import AppointmentsView from "./AppointmentsView";
 import PatientsView from "./PatientsView";
 import ReportsView from "./ReportsView";
 import InventoryView from "./InventoryView";
+import BrandLogo from "@/components/BrandLogo";
 import BillingView from "./BillingView";
 import AnalyticsView from "./AnalyticsView";
 import SettingsView from "./SettingsView";
@@ -53,7 +54,7 @@ export default function OperationsShell() {
     <div className="flex min-h-screen" style={{ background: tone.bg }}>
       <aside className="sticky top-0 flex h-screen w-16 flex-col items-center gap-1 border-r py-5 md:w-60 md:items-stretch md:px-4" style={{ borderColor: tone.border, background: "#f0f4f2" }}>
         <Link href="/" className="mb-6 flex items-center justify-center gap-2 px-2 md:justify-start">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg text-white" style={{ background: tone.primaryDark }}><Stethoscope className="h-5 w-5" /></span>
+          <BrandLogo className="h-9 w-12 rounded-lg bg-[#071a32]" alt="" />
           <span className="hidden text-sm font-extrabold md:inline" style={{ color: tone.ink }}>AI UPCHAR</span>
         </Link>
         <nav className="space-y-1">

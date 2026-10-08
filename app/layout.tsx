@@ -6,6 +6,7 @@ import ReduxProvider from "@/components/ReduxProvider";
 import AuthProvider from "@/components/AuthProvider";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://aiupchar.com"),
   title: "AI UPCHAR — Better Conversations. Healthier Lives.",
   description:
     "AI UPCHAR connects patients and doctors through better conversations, intelligent intake, clinical context, and safer care workflows.",
@@ -13,14 +14,22 @@ export const metadata: Metadata = {
   authors: [{ name: "AI UPCHAR" }],
   creator: "AI UPCHAR",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: "/ai-upchar-logo.png",
+    shortcut: "/ai-upchar-logo.png",
+    apple: "/ai-upchar-logo.png",
   },
   openGraph: {
     title: "AI UPCHAR — Better Conversations. Healthier Lives.",
     description: "Better patient conversations and clinician-controlled care workflows in one connected experience.",
     type: "website",
     siteName: "AI UPCHAR",
+    images: [{ url: "/ai-upchar-logo.png", alt: "AI UPCHAR logo" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AI UPCHAR — Better Conversations. Healthier Lives.",
+    description: "Better patient conversations and clinician-controlled care workflows in one connected experience.",
+    images: ["/ai-upchar-logo.png"],
   },
 };
 
