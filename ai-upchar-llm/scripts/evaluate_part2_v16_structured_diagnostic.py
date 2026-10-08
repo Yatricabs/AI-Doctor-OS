@@ -9,7 +9,6 @@ from evaluate_part2_v12_focused import generate_record, load_records
 from evaluate_part2_v12_full import normalized_user
 from structured_json_generation import STRUCTURED_DECODING_IMPLEMENTATION
 
-
 UNIQUE_FAILURE_IDS = ("E17-heldout-0013", "E20-heldout-0001")
 DUPLICATE_FAILURE_ID = "E20-heldout-0025"
 
@@ -20,9 +19,7 @@ def select_unique_failures(records: list[dict[str, Any]]) -> list[dict[str, Any]
     missing = sorted(required - set(by_id))
     if missing:
         raise ValueError(f"Missing frozen V16 failure probes: {missing}")
-    if normalized_user(by_id["E20-heldout-0001"]) != normalized_user(
-        by_id[DUPLICATE_FAILURE_ID]
-    ):
+    if normalized_user(by_id["E20-heldout-0001"]) != normalized_user(by_id[DUPLICATE_FAILURE_ID]):
         raise ValueError("Expected E20-heldout-0025 to duplicate E20-heldout-0001")
     return [by_id[record_id] for record_id in UNIQUE_FAILURE_IDS]
 
@@ -32,9 +29,7 @@ def main() -> None:
     parser.add_argument("--adapter", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--base-model", default="Qwen/Qwen3-4B-Base")
-    parser.add_argument(
-        "--part2-heldout", default="data/evaluation/part2_advanced_held_out.jsonl"
-    )
+    parser.add_argument("--part2-heldout", default="data/evaluation/part2_advanced_held_out.jsonl")
     args = parser.parse_args()
 
     import torch
@@ -69,9 +64,7 @@ def main() -> None:
         "covered_failure_ids": [*UNIQUE_FAILURE_IDS, DUPLICATE_FAILURE_ID],
         "results": results,
     }
-    Path(args.output).write_text(
-        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    Path(args.output).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2), flush=True)
     if status != "PASS":
         raise SystemExit(1)

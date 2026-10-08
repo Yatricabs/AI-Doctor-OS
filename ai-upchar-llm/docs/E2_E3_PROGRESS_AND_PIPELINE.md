@@ -529,3 +529,26 @@ evaluation boundary.
 - **Execution**: Uploaded source to Kaggle Dataset (yatricabs/ai-upchar-e3b-behavioral-source) and pushed Training Notebook Kernel (yatricabs/ai-upchar-phase-e3b-behavioral) to execute training, artifact packaging, and evaluation.
 - **V23 Status**: Corrected training completed on Kaggle with assistant EOS application. Gate A termination passed, E2 frozen regression passed 6/6, and the available E3B held-out set passed 5/5 contract and safety checks. See `docs/E3B_V23_VALIDATION_REPORT.md`.
 - **Limitation**: The current held-out set contains 5 records after the earlier deduplication; the original 12-case E2.1 safety report was not rerun in this validation kernel. Do not treat this as unrestricted production approval.
+
+## Part 2 Advanced: V16 corrective validation (2026-10-07)
+
+Part 2 training produced the immutable V16 adapter, but final validation is not
+complete and the candidate is **not production-ready**. A corrected audit found
+that the earlier `387/390` result missed E20 privacy-semantic failures: 28
+syntactically valid E20 outputs violated deterministic privacy invariants, and
+two additional E20 outputs had invalid JSON.
+
+The local corrective stack now uses ordered structured decoding, exact SFT
+prompt parity, an E20 privacy semantic gate, schema-namespaced decoder caches,
+and case-level EOS fallback reporting. The latest local Python suite passes
+63 tests with 6 skips, and all 413 frozen target contracts pass exact-tokenizer/parser
+preflight.
+
+Clean diagnostic, E20 privacy, focused, and full kernel packages are staged
+with source SHA256
+`52bb2332b9d8e63b353f37b6a187689246103f1d2cd493956b36ea150a440598`.
+They were deliberately not launched because the user reported that the Kaggle
+GPU quota is exhausted. After quota refresh, run those four gates in that order
+and stop immediately on the first failure. Do not retrain or claim production
+readiness before the corrected full matrix passes. See
+`docs/PART2_V16_VALIDATION_STATUS.md` for evidence and limitations.
