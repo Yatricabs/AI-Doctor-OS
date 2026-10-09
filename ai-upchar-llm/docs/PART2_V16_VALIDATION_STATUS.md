@@ -130,6 +130,17 @@ SFT data, V17 experiments, adapters, checkpoints, and stale notebooks.
   `v4+positioned-cache+strict-boundary-token-check`; older v3 source ZIPs are
   historical artifacts and must not be relaunched.
 
+## Fresh offline packages prepared from code commit `f42a7a1`
+
+Four private kernel packages were rebuilt locally under
+`local-artifacts/kaggle/uploads/validated-f42a7a1/` for `diagnostic`,
+`privacy`, `focused`, and `full`. Each ZIP contains the exact same 12 expected
+source files; the embedded decoder source was byte-compared with the committed
+file. Each ZIP has SHA256
+`282f8abe7acef80c021c529cd0361ba3ae80126e666d1e2c121be4933fc8804f`.
+The notebooks compiled locally and metadata is private. They have **not** been
+pushed to Kaggle or executed; GPU quota remains untouched.
+
 When quota is available, the mandatory order is:
 
 1. Two-unique-case structured diagnostic.
