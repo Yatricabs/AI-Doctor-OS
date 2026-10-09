@@ -62,12 +62,12 @@ corrective matrix.
 - A dedicated E20 gate covers all 30 frozen records while generating only the
   24 unique deterministic prompts.
 
-## Local evidence
+## Historical local evidence (before the 2026-10-09 parser correction)
 
 - Full Python suite: **63 passed, 6 skipped**, with one unrelated Starlette deprecation warning.
 - Python compilation and `git diff --check`: passed.
-- Exact Qwen tokenizer/parser preflight: **413/413** frozen contracts accepted;
-  zero tokenizer round-trip failures.
+- The previous preflight report recorded **413/413** frozen contract parser
+  acceptances. This does not establish full model generation success.
 - Approved E20 reference-contract audit: **30/30** passed the new semantic
   invariants.
 - Previously generated E20-0001 output (`Ignore the privacy concern ...`) is
@@ -87,15 +87,45 @@ local-artifacts/reports/part2_train_heldout_exact_leakage_audit.json
 local-artifacts/reports/part2_v16_corrective_validation_build_manifest.json
 ```
 
-## Prepared but not launched
+## Previously prepared packages (stale after the 2026-10-09 correction)
 
 All four clean kernel packages contain the same 12-file source set and exclude
 SFT data, V17 experiments, adapters, checkpoints, and stale notebooks.
 
-- Corrective source SHA256:
+- Historical source SHA256 (must not be reused for a new validation run):
   `52bb2332b9d8e63b353f37b6a187689246103f1d2cd493956b36ea150a440598`
 - Modes: `diagnostic`, `privacy`, `focused`, and `full`.
-- GPU launch status: **not launched because quota is exhausted**.
+- GPU launch status: **not launched**. These packages predate the parser and
+  privacy-evaluator fixes below and require a fresh source build and hash check.
+
+## 2026-10-09 local correction and verification
+
+- Verified defects in the custom decoder: free-text shortcut cache keys omitted the
+  current ordered-field position. Two different legal JSON positions could
+  therefore share a cached token set. The structural-token probe also assumed
+  that an illegal character would raise; LMFE instead returns a dead parser
+  state. The fix includes the remaining sequence position in the cache key and
+  verifies every character of a boundary token before allowing it. These
+  defects can produce invalid token states; the historical Kaggle failure has
+  not been reproduced with a full model run after the correction.
+- E20 semantic validation now rejects explicit instructions to negate privacy
+  safeguards or disclose sensitive details. It also accepts a negated unsafe
+  instruction such as "do not ignore privacy concerns". All 30 approved E20
+  held-out answers remain unflagged by these deterministic checks.
+- The 413 frozen target JSON objects pass the ordered grammar on CPU. A local
+  Qwen tokenizer replay of the three recorded E17/E20 failures passes using
+  their exact target token IDs and a reduced test vocabulary. This is a parser
+  regression check, not a full-vocabulary or model-generation result.
+- Local Python suite: **69 passed, 8 skipped** (the system interpreter lacks
+  LMFE). In the offline LMFE 0.11.3 environment, all **13 structured-generation
+  tests passed**. A clean committed checkout produced **50 passed, 18 explicit
+  skips**; the skips are for external approved datasets and unavailable local
+  dependencies, not clinical validation passes.
+- The missing source scripts used by committed tests are now versioned. The
+  approved E3B/Part 2 JSONL packages remain outside Git; data-dependent tests
+  retain their original assertions when those packages are present.
+- No new Kaggle run or GPU training was launched. Cloud focused and full
+  validation, model behavior, and release readiness remain **unverified**.
 
 When quota is available, the mandatory order is:
 
