@@ -12,9 +12,7 @@ WORKSPACE = ROOT.parent
 UPLOAD_ROOT = WORKSPACE / "local-artifacts/kaggle/uploads"
 ADAPTER_DATASET = "yatricabs/ai-upchar-part2-v16-adapter"
 EXPECTED_ADAPTER_SHA256 = "66d714f982be9565c779e1847d3613614caa3c7ccf7f5c5fe746d7b11027e79d"
-STRUCTURED_DECODING = (
-    "ai-upchar-ordered-json-sequence-v3+cross-boundary-token-check+lm-format-enforcer==0.11.3"
-)
+STRUCTURED_DECODING = "ai-upchar-ordered-json-sequence-v4+positioned-cache+strict-boundary-token-check+lm-format-enforcer==0.11.3"
 DEPENDENCIES = (
     "transformers==4.57.3",
     "peft==0.18.0",

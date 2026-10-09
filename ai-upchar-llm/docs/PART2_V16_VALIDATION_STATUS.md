@@ -126,6 +126,9 @@ SFT data, V17 experiments, adapters, checkpoints, and stale notebooks.
   retain their original assertions when those packages are present.
 - No new Kaggle run or GPU training was launched. Cloud focused and full
   validation, model behavior, and release readiness remain **unverified**.
+- Fresh local validation packages must report structured decoder version
+  `v4+positioned-cache+strict-boundary-token-check`; older v3 source ZIPs are
+  historical artifacts and must not be relaunched.
 
 When quota is available, the mandatory order is:
 

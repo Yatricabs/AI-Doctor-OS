@@ -11,9 +11,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-STRUCTURED_DECODING_IMPLEMENTATION = (
-    "ai-upchar-ordered-json-sequence-v3+cross-boundary-token-check+lm-format-enforcer==0.11.3"
-)
+STRUCTURED_DECODING_IMPLEMENTATION = "ai-upchar-ordered-json-sequence-v4+positioned-cache+strict-boundary-token-check+lm-format-enforcer==0.11.3"
 
 
 _TOKENIZER_ALLOWED_TOKEN_CACHES: dict[tuple[int, tuple[str, ...]], dict[Any, Any]] = {}
