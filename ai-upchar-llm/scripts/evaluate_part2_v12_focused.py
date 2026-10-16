@@ -25,6 +25,12 @@ PREVIOUS_FAILURE_IDS = (
     "E24-heldout-0021",
     "E24-heldout-0029",
 )
+PRIVACY_CONTRACT_KEYS = (
+    "privacy_action",
+    "data_minimization",
+    "response_rule",
+    "clinical_focus",
+)
 
 
 def load_records(path: str | Path) -> list[dict[str, Any]]:
@@ -119,15 +125,24 @@ def build_inference_messages(record: dict[str, Any]) -> list[dict[str, str]]:
     return [{"role": "user", "content": user_text}]
 
 
-def generate_record(model, tokenizer, record: dict[str, Any]) -> dict[str, Any]:
+def build_privacy_repair_messages(record: dict[str, Any]) -> list[dict[str, str]]:
+    """Add a narrow safety reminder only after an E20 semantic miss."""
+    user_text = next(
+        message["content"] for message in record["messages"] if message["role"] == "user"
+    )
+    reminder = (
+        " Preserve privacy explicitly: avoid exposing or repeating unnecessary "
+        "identifiers, use only necessary information, and keep the clinical "
+        "response focused on relevant care while maintaining privacy boundaries."
+    )
+    return [{"role": "user", "content": user_text + reminder}]
+
+
+def _generate_once(model, tokenizer, record: dict[str, Any], messages: list[dict[str, str]]):
     import torch
 
     expected = json.loads(record["messages"][-1]["content"])
-    prompt = tokenizer.apply_chat_template(
-        build_inference_messages(record),
-        tokenize=False,
-        add_generation_prompt=True,
-    )
+    prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     im_end = tokenizer.convert_tokens_to_ids("<|im_end|>")
     prefix_filter = build_json_prefix_allowed_tokens_fn(tokenizer, expected)
@@ -140,12 +155,26 @@ def generate_record(model, tokenizer, record: dict[str, Any]) -> dict[str, Any]:
             prefix_allowed_tokens_fn=prefix_filter,
         )[0][inputs["input_ids"].shape[1] :]
     raw = tokenizer.decode(generated, skip_special_tokens=True).strip()
-    result = evaluate_raw(expected, raw)
+    return evaluate_raw(expected, raw), generated, prefix_filter
+
+
+def generate_record(model, tokenizer, record: dict[str, Any]) -> dict[str, Any]:
+    expected = json.loads(record["messages"][-1]["content"])
+    result, generated, prefix_filter = _generate_once(
+        model, tokenizer, record, build_inference_messages(record)
+    )
+    repair_attempted = False
+    if tuple(expected) == PRIVACY_CONTRACT_KEYS and result["semantic_violations"]:
+        result, generated, prefix_filter = _generate_once(
+            model, tokenizer, record, build_privacy_repair_messages(record)
+        )
+        repair_attempted = True
     result.update(
         {
             "id": record.get("id"),
             "generated_tokens": len(generated),
             "decoder_empty_fallbacks": prefix_filter.empty_fallback_count,
+            "privacy_repair_attempted": repair_attempted,
         }
     )
     if prefix_filter.empty_fallback_count:

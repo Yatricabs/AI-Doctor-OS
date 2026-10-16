@@ -208,6 +208,19 @@ def test_inference_prompt_exactly_matches_sft_user_message():
     ]
 
 
+def test_privacy_repair_prompt_is_narrow_and_preserves_original_request():
+    evaluator = load_evaluator()
+    record = {
+        "messages": [
+            {"role": "user", "content": "Clinical concern with unnecessary identifier"},
+        ]
+    }
+    repaired = evaluator.build_privacy_repair_messages(record)
+    assert repaired[0]["content"].startswith("Clinical concern with unnecessary identifier")
+    assert "avoid exposing or repeating unnecessary identifiers" in repaired[0]["content"]
+    assert "privacy boundaries" in repaired[0]["content"]
+
+
 def test_validation_kernel_selects_manifest_root_and_ignores_checkpoints():
     spec = importlib.util.spec_from_file_location(
         "build_part2_v12_validation_kernels",
