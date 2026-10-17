@@ -15,6 +15,7 @@ from structured_json_generation import (
     STRUCTURED_DECODING_IMPLEMENTATION,
     build_json_prefix_allowed_tokens_fn,
 )
+from privacy_fail_closed import is_privacy_contract, privacy_fail_closed
 
 PREVIOUS_FAILURE_IDS = (
     "E14-heldout-0017",
@@ -138,9 +139,16 @@ def _generate_once(model, tokenizer, record: dict[str, Any], messages: list[dict
 
 
 def generate_record(model, tokenizer, record: dict[str, Any]) -> dict[str, Any]:
+    expected = json.loads(record["messages"][-1]["content"])
     result, generated, prefix_filter = _generate_once(
         model, tokenizer, record, build_inference_messages(record)
     )
+    if result["semantic_violations"] and is_privacy_contract(expected):
+        result["fail_closed"] = privacy_fail_closed(
+            expected,
+            result.get("output"),
+            result["semantic_violations"],
+        )
     result.update(
         {
             "id": record.get("id"),
