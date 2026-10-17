@@ -155,8 +155,12 @@ if process.returncode != 0:
 def build(mode: str) -> dict[str, str]:
     if mode not in MODES:
         raise ValueError(f"Unsupported mode: {mode}")
-    slug = f"yatricabs/ai-upchar-part2-v16-structured-{mode}"
-    if mode != "diagnostic":
+    slug = (
+        "yatricabs/ai-upchar-part2-v16-e20-privacy-diagnostic"
+        if mode == "privacy"
+        else f"yatricabs/ai-upchar-part2-v16-structured-{mode}"
+    )
+    if mode not in {"diagnostic", "privacy"}:
         slug += "-validation"
     upload = UPLOAD_ROOT / f"part2-v16-structured-{mode}-kernel"
     upload.mkdir(parents=True, exist_ok=True)
