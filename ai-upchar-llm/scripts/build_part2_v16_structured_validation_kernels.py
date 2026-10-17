@@ -52,6 +52,7 @@ SOURCE_FILES = (
     "scripts/evaluate_part2_v16_structured_diagnostic.py",
     "scripts/evaluate_part2_v16_structured_focused.py",
     "scripts/evaluate_part2_v16_privacy_diagnostic.py",
+    "scripts/privacy_fail_closed.py",
     "data/evaluation/part2_advanced_held_out.jsonl",
     "data/evaluation/e2_held_out_contract.jsonl",
     "data/evaluation/e3_targeted_safety_heldout.jsonl",
